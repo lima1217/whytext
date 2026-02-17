@@ -1,5 +1,7 @@
 # WhyText
 
+[中文](README.zh-CN.md) | [English](README.en.md)
+
 WhyText 是一个 macOS 菜单栏翻译工具：选中文本后，用快捷键一键翻译。
 
 ## 功能

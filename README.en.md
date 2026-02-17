@@ -1,5 +1,7 @@
 # WhyText
 
+[中文](README.zh-CN.md) | [English](README.en.md)
+
 WhyText is a macOS menu bar translation utility: select text anywhere and translate it with a global shortcut.
 
 ## Features

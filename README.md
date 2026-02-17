@@ -1,13 +1,13 @@
 # WhyText
 
-Choose your preferred language:
+<p align="center">
+  <a href="README.zh-CN.md"><img alt="中文" src="https://img.shields.io/badge/语言-中文-red"></a>
+  <a href="README.en.md"><img alt="English" src="https://img.shields.io/badge/Language-English-blue"></a>
+</p>
 
-- 中文：`README.zh-CN.md`
-- English: `README.en.md`
+<p align="center">
+  Select your preferred documentation language.
+</p>
 
----
-
-WhyText is a macOS menu bar translation utility for selected text.
-
-- 中文文档：请查看 `README.zh-CN.md`
-- English docs: see `README.en.md`
+- 中文文档：<a href="README.zh-CN.md">README.zh-CN.md</a>
+- English docs: <a href="README.en.md">README.en.md</a>
