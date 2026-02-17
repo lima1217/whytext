@@ -1,71 +1,105 @@
 # WhyText
 
-一个自用的 macOS 菜单栏小工具：
+WhyText 是一个 macOS 菜单栏翻译工具：选中文本后，用快捷键一键翻译。
 
-- 选中文本后按全局快捷键弹出浮窗
-- 浮窗只做一件事：翻译
-- 翻译走 DeepSeek 官方 API（在线）
-- 本地保存历史记录，API Key 本地保存在 Keychain
+## 功能
 
-## 使用方式
+- 菜单栏常驻，轻量使用
+- 全局快捷键触发（默认 `⌥ + Space`）
+- 可选「选中文本后显示浮点」模式，点击浮点再翻译
+- 支持流式输出（Provider 支持时）
+- 长文本自动分段或截断
+- 结果一键复制（支持纯文本复制）
+- 自定义翻译提示词模板（`{{text}}` 占位符）
+- 多 Provider 配置（Base URL / Model / API Mode）
+- API Key 保存在 macOS Keychain
+- 历史记录本地存储，可随时清空
 
-1. 首次运行后，先到「WhyText → 设置…」
-2. 在「通用」里设置全局快捷键
-3. 在「辅助功能权限」里打开系统设置并授权 WhyText（否则无法读取选中文本）
-4. 在「Provider」里配置 DeepSeek：
-   - `Base URL`：`https://api.deepseek.com`
-   - `Model`：`deepseek-chat`（可改）
-   - 填写 API Key（保存在本机 Keychain）
-5. 在任意 App 里选中文本，按你设置的快捷键呼出浮窗 → 点「翻译」
+## 系统要求
 
-默认在「通用」里开启“选中文本后显示翻译浮点”：选中后先出现一个浮点按钮，点击才会弹出窗口并翻译；不点击则不翻译。
+- macOS 13+
+- Swift 5.10（Command Line Tools 即可）
 
-浮窗支持：
+安装命令行工具（如未安装）：
 
-- 一键复制翻译结果
-- 可调整窗口大小（会记住上次尺寸）
+```bash
+xcode-select --install
+```
 
-## 提示词
+## 快速开始
 
-「提示词」里可以自定义翻译提示词模板：
+1. 构建并启动应用（见下方“运行与构建”）。
+2. 打开菜单栏 `WhyText -> 设置...`。
+3. 在「通用」设置全局快捷键。
+4. 在「辅助功能权限」中给 WhyText 授权（否则无法读取选中文本）。
+5. 在「Providers」配置模型（以 DeepSeek 为例）：
+   - Base URL: `https://api.deepseek.com`
+   - Model: `deepseek-chat`
+   - API Mode: `Chat Completions`（默认）
+   - 填写 API Key（保存到 Keychain）
+6. 在任意应用选中文本后按快捷键，即可翻译。
 
-- 用 `{{text}}` 代表当前选中的文本
-
-## 历史记录
-
-- 默认保存在 `~/Library/Application Support/WhyText/history.json`
-- 在「历史」页可以清空
-
-## 运行/构建
-
-> 你不需要安装 Xcode。
-> 
-> 只要安装 Apple Command Line Tools 即可（如果还没装：`xcode-select --install`）。
+## 运行与构建
 
 ### 方式 A：Xcode（推荐）
 
-- 直接用 Xcode 打开 `Package.swift`，点击 Run。
+直接用 Xcode 打开 `Package.swift`，点击 Run。
 
-### 方式 B：命令行
+### 方式 B：命令行运行
 
 ```bash
 CLANG_MODULE_CACHE_PATH=/tmp/clang-module-cache \
   swift build --cache-path /tmp/swiftpm-cache
+
+.build/debug/WhyText
 ```
 
-构建产物会在 `.build/` 目录下生成可执行文件（例如 `.build/debug/WhyText`）。
-
-### 方式 C：生成可双击运行的 .app（无 Xcode）
+### 方式 C：生成 .app（无 Xcode）
 
 ```bash
 ./scripts/build-app.sh
 open ./dist/WhyText.app
 ```
 
-这种方式更适合测试辅助功能权限（系统设置里会把它当成一个 App）。
+## 配置说明
 
-## 已知限制
+- 翻译提示词：在「提示词」页编辑模板，必须包含 `{{text}}`。
+- 流式输出：在「通用」里可开关。
+- 长文本策略：可配置最大输入长度与分段/截断策略。
+- Provider 连接测试：在设置中可快速验证 Base URL / API Key / Model 是否可用。
 
-- 不是所有应用都能通过辅助功能拿到选中文本；如果遇到「没有检测到选中文本」，可以换个 App 试试。
-- 流式输出依赖 Provider 是否支持 SSE；不支持时会自动退回非流式。
-- 超长文本会按设置进行“分段”或“截断”。
+## 数据与隐私
+
+- API Key：存储在 macOS Keychain。
+- 其他设置：保存在 `UserDefaults`。
+- 历史记录：默认保存在 `~/Library/Application Support/WhyText/history.json`。
+- WhyText 不内置第三方数据上报逻辑。
+
+## 项目结构
+
+```text
+Sources/WhyText/
+  WhyTextApp.swift          # 应用入口（MenuBarExtra）
+  AppModel.swift            # 主状态与业务流程
+  Services/                 # 选区读取、快捷键、浮窗、LLM 请求等
+  Stores/                   # 设置与历史记录
+  UI/                       # 各设置页与浮窗视图
+  Utils/                    # 工具函数
+scripts/build-app.sh        # 打包 .app 脚本
+```
+
+## 常见问题
+
+- 提示“未读取到选中文本”
+  - 检查是否已授予辅助功能权限。
+  - 某些应用不支持通过辅助功能读取选区，可换应用测试。
+
+- 没有流式输出
+  - 取决于 Provider 和接口模式是否支持 SSE，应用会自动回退到非流式。
+
+- 提示 API Key 无效
+  - 检查 Key 是否正确、是否过期、是否有模型访问权限。
+
+## License
+
+暂未指定（All rights reserved by default）。如需开源，请补充 `LICENSE` 文件。
