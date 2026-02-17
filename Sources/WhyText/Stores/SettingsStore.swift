@@ -92,8 +92,6 @@ final class SettingsStore: ObservableObject {
             self.autoPopupOnSelection = true
         }
 
-        hydrateProviderAPIKeysFromKeychain()
-
         bindAutoSave()
 
         if didMigratePlaintextAPIKey {
@@ -235,11 +233,6 @@ final class SettingsStore: ObservableObject {
         return migrated
     }
 
-    private func hydrateProviderAPIKeysFromKeychain() {
-        for idx in providers.indices {
-            providers[idx].apiKey = apiKeychainStore.apiKey(for: providers[idx].id) ?? ""
-        }
-    }
 }
 
 private struct PersistedSettings: Codable {

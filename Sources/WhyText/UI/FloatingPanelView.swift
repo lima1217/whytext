@@ -60,6 +60,8 @@ struct FloatingPanelView: View {
         )
         .shadow(color: .black.opacity(0.10), radius: PanelTokens.shadowRadius, x: 0, y: PanelTokens.shadowY)
         .offset(x: shakeOffset)
+        .contentShape(Rectangle())
+        .onTapGesture { copyResultIfPossible() }
         .onExitCommand { appModel.closePanel() }
     }
 
@@ -149,6 +151,11 @@ struct FloatingPanelView: View {
     }
 
     // MARK: - Helpers
+
+    private func copyResultIfPossible() {
+        guard !appModel.panelState.isLoading, hasResult else { return }
+        appModel.copyResultPlainTextToPasteboard()
+    }
 
     private var contentStateKey: String {
         if let error = appModel.panelState.errorMessage, !error.isEmpty {

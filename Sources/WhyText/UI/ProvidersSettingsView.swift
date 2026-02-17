@@ -215,6 +215,7 @@ private struct ProviderDetailView: View {
     @State private var showAPIKey: Bool = false
     @State private var isTestingConnectivity = false
     @State private var connectivityReport: ProviderConnectivityReport?
+    @State private var keychainRepairMessage: String?
     @State private var autoSaveTask: Task<Void, Never>?
 
     var body: some View {
@@ -275,9 +276,19 @@ private struct ProviderDetailView: View {
                             apiKeyDraft = NSPasteboard.general.string(forType: .string) ?? ""
                         }
 
+                        Button("修复钥匙串") {
+                            repairKeychainEntry()
+                        }
+
                         Button("清除") {
                             apiKeyDraft = ""
                         }
+                    }
+
+                    if let keychainRepairMessage, !keychainRepairMessage.isEmpty {
+                        Text(keychainRepairMessage)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
                     }
                 }
                 .padding(.top, 4)
@@ -312,9 +323,11 @@ private struct ProviderDetailView: View {
         .onAppear {
             apiKeyDraft = loadAPIKey()
             connectivityReport = nil
+            keychainRepairMessage = nil
         }
         .onChange(of: apiKeyDraft) { newValue in
             connectivityReport = nil
+            keychainRepairMessage = nil
             // Auto-save with debounce
             autoSaveTask?.cancel()
             autoSaveTask = Task {
@@ -358,6 +371,17 @@ private struct ProviderDetailView: View {
                 .textFieldStyle(.roundedBorder)
                 .font(monospaced ? .system(.body, design: .monospaced) : .body)
         }
+    }
+
+    private func repairKeychainEntry() {
+        let trimmed = apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            keychainRepairMessage = "请先填写 API Key，再执行修复。"
+            return
+        }
+
+        saveAPIKey(trimmed)
+        keychainRepairMessage = "已重新保存到新钥匙串项。"
     }
 
     private func runConnectivityTest() {

@@ -65,10 +65,10 @@ struct UnifiedTranslationResponse {
 }
 
 final class LLMClient {
-    private let session: URLSession
+    private let injectedSession: URLSession?
 
-    init(session: URLSession = .shared) {
-        self.session = session
+    init(session: URLSession? = nil) {
+        self.injectedSession = session
     }
 
     func complete(prompt: String, provider: LLMProvider, apiKey: String) async throws -> String {
@@ -95,7 +95,7 @@ final class LLMClient {
             var httpRequest = makeRequest(url: url, apiKey: apiKey)
             httpRequest.httpBody = try adapter.requestBody(from: request, stream: false)
 
-            let (data, response) = try await session.data(for: httpRequest)
+            let (data, response) = try await performDataRequest(httpRequest)
             try Task.checkCancellation()
 
             guard let http = response as? HTTPURLResponse else {
@@ -158,7 +158,7 @@ final class LLMClient {
                     httpRequest.setValue("text/event-stream", forHTTPHeaderField: "Accept")
                     httpRequest.httpBody = try adapter.requestBody(from: request, stream: true)
 
-                    let (bytes, response) = try await session.bytes(for: httpRequest)
+                    let (bytes, response) = try await activeSession().bytes(for: httpRequest)
                     try Task.checkCancellation()
 
                     guard let http = response as? HTTPURLResponse else {
@@ -222,11 +222,40 @@ final class LLMClient {
     private func makeRequest(url: URL, apiKey: String) -> URLRequest {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         return request
     }
 
+    private func activeSession() -> URLSession {
+        if let injectedSession {
+            return injectedSession
+        }
+        return Self.makeURLSession()
+    }
+
+    private func performDataRequest(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        let session = activeSession()
+        let (data, response) = try await session.data(for: request)
+
+        guard let http = response as? HTTPURLResponse,
+              [502, 503, 504].contains(http.statusCode),
+              injectedSession == nil else {
+            return (data, response)
+        }
+
+        try? await Task.sleep(nanoseconds: 250_000_000)
+        return try await URLSession.shared.data(for: request)
+    }
+
+    private static func makeURLSession() -> URLSession {
+        let configuration = URLSessionConfiguration.default
+        configuration.waitsForConnectivity = true
+        configuration.timeoutIntervalForRequest = 60
+        configuration.timeoutIntervalForResource = 120
+        return URLSession(configuration: configuration)
+    }
 
     private func mapRemoteError(statusCode: Int, body: Data) -> LLMError {
         let message = parseErrorMessage(from: body)
