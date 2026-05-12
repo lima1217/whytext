@@ -14,8 +14,11 @@ final class SettingsStore: ObservableObject {
     @Published var autoPopupOnSelection: Bool
 
     private var cancellables = Set<AnyCancellable>()
+    private var persistWorkItem: DispatchWorkItem?
     private let userDefaultsKey = "WhyText.Settings.v1"
     private let apiKeychainStore: APIKeychainStore
+
+    private static let persistDebounceInterval: TimeInterval = 0.35
 
     private static func defaultDeepSeekProvider() -> LLMProvider {
         LLMProvider(
@@ -164,43 +167,54 @@ final class SettingsStore: ObservableObject {
     private func bindAutoSave() {
         $providers
             .dropFirst()
-            .sink { [weak self] _ in self?.persist() }
+            .sink { [weak self] _ in self?.schedulePersist() }
             .store(in: &cancellables)
 
         $selectedProviderID
             .dropFirst()
-            .sink { [weak self] _ in self?.persist() }
+            .sink { [weak self] _ in self?.schedulePersist() }
             .store(in: &cancellables)
 
         $translatePromptTemplate
             .dropFirst()
-            .sink { [weak self] _ in self?.persist() }
+            .sink { [weak self] _ in self?.schedulePersist() }
             .store(in: &cancellables)
 
         $hotKeyShortcut
             .dropFirst()
-            .sink { [weak self] _ in self?.persist() }
+            .sink { [weak self] _ in self?.schedulePersist() }
             .store(in: &cancellables)
 
         $enableStreaming
             .dropFirst()
-            .sink { [weak self] _ in self?.persist() }
+            .sink { [weak self] _ in self?.schedulePersist() }
             .store(in: &cancellables)
 
         $maxInputCharacters
             .dropFirst()
-            .sink { [weak self] _ in self?.persist() }
+            .sink { [weak self] _ in self?.schedulePersist() }
             .store(in: &cancellables)
 
         $splitLongInput
             .dropFirst()
-            .sink { [weak self] _ in self?.persist() }
+            .sink { [weak self] _ in self?.schedulePersist() }
             .store(in: &cancellables)
 
         $autoPopupOnSelection
             .dropFirst()
-            .sink { [weak self] _ in self?.persist() }
+            .sink { [weak self] _ in self?.schedulePersist() }
             .store(in: &cancellables)
+    }
+
+    private func schedulePersist() {
+        persistWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.persist()
+        }
+
+        persistWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.persistDebounceInterval, execute: workItem)
     }
 
     private func persist() {
@@ -233,6 +247,10 @@ final class SettingsStore: ObservableObject {
         return migrated
     }
 
+    deinit {
+        persistWorkItem?.cancel()
+        persist()
+    }
 }
 
 private struct PersistedSettings: Codable {

@@ -8,22 +8,25 @@ enum TextChunker {
 
     static func chunk(text: String, maxCharacters: Int, splitLongInput: Bool) -> Result {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let paragraphs = splitIntoParagraphs(trimmed)
+
         guard maxCharacters > 0 else {
-            return Result(chunks: [trimmed], wasTruncated: false)
+            return Result(chunks: paragraphs.isEmpty ? [trimmed] : paragraphs, wasTruncated: false)
         }
 
         if !splitLongInput {
             if trimmed.count <= maxCharacters {
-                return Result(chunks: [trimmed], wasTruncated: false)
+                return Result(chunks: paragraphs.isEmpty ? [trimmed] : paragraphs, wasTruncated: false)
             }
             return Result(chunks: [String(trimmed.prefix(maxCharacters))], wasTruncated: true)
         }
 
         if trimmed.count <= maxCharacters {
+            if paragraphs.count > 1 {
+                return Result(chunks: paragraphs, wasTruncated: false)
+            }
             return Result(chunks: [trimmed], wasTruncated: false)
         }
-
-        let paragraphs = splitIntoParagraphs(trimmed)
 
         var chunks = splitParagraphsIntoChunks(
             paragraphs: paragraphs,

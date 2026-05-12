@@ -5,9 +5,12 @@ import Foundation
 @MainActor
 final class AppModel: ObservableObject {
     @Published var panelState = PanelState()
+    @Published var selectionDiagnosticsReport: String = ""
+    @Published var selectionDiagnosticsTextPreview: String = ""
+    @Published var selectionDiagnosticsUpdatedAt: Date?
+    @Published var selectionDiagnosticsPending: Bool = false
 
     var settingsStore: SettingsStore
-    var historyStore: HistoryStore
 
     private let selectionService: AccessibilitySelectionService
     private let selectionReader: SelectionReader
@@ -31,7 +34,6 @@ final class AppModel: ObservableObject {
 
     init(
         settingsStore: SettingsStore = SettingsStore(),
-        historyStore: HistoryStore = HistoryStore(),
         selectionService: AccessibilitySelectionService = AccessibilitySelectionService(),
         selectionReader: SelectionReader = SelectionReader(),
         llmClient: LLMClient = LLMClient(),
@@ -39,7 +41,6 @@ final class AppModel: ObservableObject {
         selectionBubbleController: SelectionBubbleController = SelectionBubbleController()
     ) {
         self.settingsStore = settingsStore
-        self.historyStore = historyStore
         self.selectionService = selectionService
         self.selectionReader = selectionReader
         self.llmClient = llmClient
@@ -51,10 +52,6 @@ final class AppModel: ObservableObject {
         self.hotKeyManager = HotKeyManager()
 
         settingsStore.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &cancellables)
-
-        historyStore.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
 
@@ -125,41 +122,14 @@ final class AppModel: ObservableObject {
     }
 
     private func openPanelFromSelectionBubble() {
-        selectionBubbleController.hide()
-
         let selectedText = sanitizeSelectedText(pendingSelectionText)
         guard !selectedText.isEmpty else { return }
 
-        runningTask?.cancel()
-        panelState = PanelState()
-        panelState.phase = .choose
-        panelState.selectedText = selectedText
-
-        let point = NSEvent.mouseLocation
-        panelController.show(at: point) {
-            FloatingPanelView()
-                .environmentObject(self)
-        }
-
+        presentPanel(selectedText: selectedText)
         run(action: .translate)
     }
 
     private func openPanelFlow() async {
-        selectionBubbleController.hide()
-        runningTask?.cancel()
-        panelState = PanelState()
-        panelState.phase = .choose
-        panelState.isLoading = true
-
-        let point = NSEvent.mouseLocation
-
-        panelController.show(at: point) {
-            FloatingPanelView()
-                .environmentObject(self)
-        }
-
-        let feedbackStart = Date()
-
         var selectedText: String = ""
         var selectionError: String?
 
@@ -170,31 +140,32 @@ final class AppModel: ObservableObject {
             selectionError = userFacingErrorMessage(for: error)
         }
 
-        let minimumFeedback: TimeInterval = 0.2
-        let elapsed = Date().timeIntervalSince(feedbackStart)
-        if elapsed < minimumFeedback {
-            try? await Task.sleep(nanoseconds: UInt64((minimumFeedback - elapsed) * 1_000_000_000))
-        }
-
-        guard panelController.isVisible else { return }
-
-        if let selectionError {
-            panelState.isLoading = false
-            panelState.noticeMessage = nil
-            panelState.errorMessage = selectionError
-            return
-        }
-
         let trimmed = sanitizeSelectedText(selectedText)
-        guard !trimmed.isEmpty else {
-            panelState.isLoading = false
-            panelState.noticeMessage = nil
-            panelState.errorMessage = "未读取到选中文本"
+        presentPanel(selectedText: trimmed, errorMessage: selectionError ?? (trimmed.isEmpty ? "未读取到选中文本" : nil))
+
+        guard selectionError == nil, !trimmed.isEmpty else {
             return
         }
 
-        panelState.selectedText = trimmed
         run(action: .translate)
+    }
+
+    private func presentPanel(selectedText: String = "", errorMessage: String? = nil) {
+        selectionBubbleController.hide()
+        runningTask?.cancel()
+
+        panelState = PanelState()
+        panelState.phase = .choose
+        panelState.selectedText = selectedText
+        panelState.errorMessage = errorMessage
+        panelState.noticeMessage = nil
+        panelState.isLoading = false
+
+        let point = NSEvent.mouseLocation
+        panelController.show(at: point) {
+            FloatingPanelView()
+                .environmentObject(self)
+        }
     }
 
     func closePanel() {
@@ -409,15 +380,16 @@ final class AppModel: ObservableObject {
             self?.mouseDownLocation = NSEvent.mouseLocation
         }
 
-        selectionMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseUp]) { [weak self] _ in
+        selectionMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseUp]) { [weak self] event in
             guard let self else { return }
+            let clickCount = event.clickCount
             Task { @MainActor in
-                await self.autoPopupOnSelectionIfNeeded()
+                await self.autoPopupOnSelectionIfNeeded(mouseUpClickCount: clickCount)
             }
         }
     }
 
-    private func autoPopupOnSelectionIfNeeded() async {
+    private func autoPopupOnSelectionIfNeeded(mouseUpClickCount: Int) async {
         // Avoid fighting the user when the panel is already visible.
         if panelController.isVisible {
             return
@@ -428,27 +400,27 @@ final class AppModel: ObservableObject {
             return
         }
 
-        // If the mouse barely moved between down and up, it's a click — not a selection drag.
-        // Skip to avoid showing the bubble on stale/previous selection text.
+        // Ignore ordinary clicks so stale selections do not summon the bubble.
+        // Multi-clicks can create selections, so let those continue through detection.
         let mouseUpLocation = NSEvent.mouseLocation
         if let downLocation = mouseDownLocation {
             let dx = mouseUpLocation.x - downLocation.x
             let dy = mouseUpLocation.y - downLocation.y
             let distance = sqrt(dx * dx + dy * dy)
-            if distance < 4 {
+            let didDragSelect = distance >= 4
+            let didMultiClickSelect = mouseUpClickCount >= 2
+            if !didDragSelect && !didMultiClickSelect {
+                mouseDownLocation = nil
                 return
             }
         }
         mouseDownLocation = nil
 
-        // Small delay to let the system update the selection state after mouse-up.
-        try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
-
-        guard selectionService.status() == .trusted else { return }
-        guard let text = try? selectionService.getSelectedText() else { return }
-
-        let trimmed = sanitizeSelectedText(text)
-        guard trimmed.count >= 2 else { return }
+        let trimmed = await readSelectionForAutoPopup()
+        guard trimmed.count >= 2 else {
+            pendingSelectionText = ""
+            return
+        }
 
         if trimmed == lastAutoPopupText, now.timeIntervalSince(lastAutoPopupAt) < 0.6 {
             return
@@ -463,8 +435,48 @@ final class AppModel: ObservableObject {
         selectionBubbleController.show(at: point)
     }
 
+    private func readSelectionForAutoPopup() async -> String {
+        let delays: [UInt64] = [50_000_000, 120_000_000, 250_000_000]
+
+        for delay in delays {
+            try? await Task.sleep(nanoseconds: delay)
+            let selection = try? await selectionReader.readSelectedText(allowClipboardFallback: false)
+            let trimmed = sanitizeSelectedText(selection?.text ?? "")
+            if trimmed.count >= 2 {
+                return trimmed
+            }
+        }
+
+        let fallbackSelection = try? await selectionReader.readSelectedText(allowClipboardFallback: true)
+        let fallbackText = sanitizeSelectedText(fallbackSelection?.text ?? "")
+        if fallbackText.count >= 2 {
+            return fallbackText
+        }
+
+        return ""
+    }
+
     func accessibilityStatus() -> AccessibilitySelectionService.Status {
         selectionService.status()
+    }
+
+    func runSelectionDiagnostics() {
+        let diagnostics = selectionService.collectDiagnostics()
+        selectionDiagnosticsReport = diagnostics.report
+        selectionDiagnosticsTextPreview = diagnostics.selectedText ?? ""
+        selectionDiagnosticsUpdatedAt = Date()
+        selectionDiagnosticsPending = false
+    }
+
+    func runSelectionDiagnosticsWithDelay(seconds: Double = 2.0) {
+        selectionDiagnosticsPending = true
+        selectionDiagnosticsReport = "等待 \(String(format: "%.1f", seconds)) 秒后采样，请切回目标应用并选中文本..."
+        selectionDiagnosticsTextPreview = ""
+
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            self?.runSelectionDiagnostics()
+        }
     }
 
     func openAccessibilitySettings() {

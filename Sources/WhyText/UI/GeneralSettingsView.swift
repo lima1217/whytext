@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 private enum GeneralUITokens {
@@ -105,8 +106,55 @@ struct GeneralSettingsView: View {
                                     .foregroundStyle(.secondary)
                             }
 
-                            Button("重启 WhyText") {
-                                appModel.relaunchApp()
+                            HStack(spacing: 10) {
+                                Button("立即诊断") {
+                                    appModel.runSelectionDiagnostics()
+                                }
+
+                                Button(appModel.selectionDiagnosticsPending ? "2秒后诊断（进行中）" : "2秒后诊断") {
+                                    appModel.runSelectionDiagnosticsWithDelay(seconds: 2.0)
+                                }
+                                .disabled(appModel.selectionDiagnosticsPending)
+
+                                if !appModel.selectionDiagnosticsReport.isEmpty {
+                                    Button("复制诊断结果") {
+                                        let pasteboard = NSPasteboard.general
+                                        pasteboard.clearContents()
+                                        pasteboard.setString(appModel.selectionDiagnosticsReport, forType: .string)
+                                    }
+                                }
+
+                                Button("重启 WhyText") {
+                                    appModel.relaunchApp()
+                                }
+                            }
+
+                            if let updatedAt = appModel.selectionDiagnosticsUpdatedAt {
+                                Text("最近诊断: \(updatedAt.formatted(date: .abbreviated, time: .standard))")
+                                    .font(.system(size: GeneralUITokens.captionSize))
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            if !appModel.selectionDiagnosticsTextPreview.isEmpty {
+                                Text("选中文本预览: \(appModel.selectionDiagnosticsTextPreview)")
+                                    .font(.system(size: GeneralUITokens.captionSize))
+                                    .lineLimit(2)
+                                    .textSelection(.enabled)
+                            }
+
+                            if !appModel.selectionDiagnosticsReport.isEmpty {
+                                ScrollView {
+                                    Text(appModel.selectionDiagnosticsReport)
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .textSelection(.enabled)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .frame(maxHeight: 180)
+                                .padding(8)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .fill(Color.secondary.opacity(0.08))
+                                )
                             }
                         }
                         .padding(.top, 6)

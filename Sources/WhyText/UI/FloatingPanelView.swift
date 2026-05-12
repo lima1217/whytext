@@ -108,6 +108,7 @@ struct FloatingPanelView: View {
     private var resultView: some View {
         ScrollView {
             MarkdownTextView(markdown: displayText)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(minWidth: PanelTokens.minWidth, idealWidth: PanelTokens.idealWidth, maxHeight: PanelTokens.maxHeight)

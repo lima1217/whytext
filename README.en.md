@@ -15,7 +15,6 @@ WhyText is a macOS menu bar translation utility: select text anywhere and transl
 - Custom prompt template with `{{text}}` placeholder
 - Multiple provider profiles (Base URL / Model / API Mode)
 - API keys stored in macOS Keychain
-- Local history storage with clear option
 
 ## Requirements
 
@@ -63,6 +62,8 @@ CLANG_MODULE_CACHE_PATH=/tmp/clang-module-cache \
 open ./dist/WhyText.app
 ```
 
+The build script signs with a `Developer ID Application` or `Apple Development` certificate from your keychain when one is available. If none exists, it creates and reuses a local self-signed `WhyText Local Code Signing` identity. This gives macOS Accessibility permission a stable certificate identity instead of an ad-hoc signature that changes on every build.
+
 ## Configuration
 
 - Prompt template: edit it in Prompts; must include `{{text}}`.
@@ -74,7 +75,6 @@ open ./dist/WhyText.app
 
 - API keys: stored in macOS Keychain.
 - Other settings: stored in `UserDefaults`.
-- History: stored at `~/Library/Application Support/WhyText/history.json`.
 - No built-in third-party telemetry.
 
 ## Project Structure
@@ -84,7 +84,7 @@ Sources/WhyText/
   WhyTextApp.swift          # App entry (MenuBarExtra)
   AppModel.swift            # Main state and workflow
   Services/                 # Selection, hotkey, panel, LLM request logic
-  Stores/                   # Settings and history stores
+  Stores/                   # Settings storage
   UI/                       # Settings pages and panel views
   Utils/                    # Utility helpers
 scripts/build-app.sh        # Build script for .app bundle
