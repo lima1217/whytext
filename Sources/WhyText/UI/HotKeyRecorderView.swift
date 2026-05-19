@@ -6,18 +6,33 @@ struct HotKeyRecorderView: View {
     @State private var isRecording = false
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Text(shortcut?.displayString ?? "未设置")
-                .frame(minWidth: 140, alignment: .leading)
-                .font(.system(.body, design: .monospaced))
+                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .foregroundStyle(shortcut == nil ? .secondary : .primary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .frame(minWidth: 142, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(SettingsUI.fieldBackground)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .stroke(Color.primary.opacity(0.10), lineWidth: 0.5)
+                )
 
-            Button(isRecording ? "按键中…" : "录制") {
+            Button {
                 isRecording.toggle()
+            } label: {
+                Label(isRecording ? "按键中..." : "录制", systemImage: isRecording ? "keyboard.badge.ellipsis" : "keyboard")
             }
 
-            Button("清除") {
+            Button {
                 shortcut = nil
                 isRecording = false
+            } label: {
+                Label("清除", systemImage: "xmark")
             }
             .disabled(shortcut == nil)
 
@@ -88,4 +103,3 @@ private final class KeyCaptureNSView: NSView {
         onCapture?(shortcut)
     }
 }
-

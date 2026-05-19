@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import WhyTextCore
 
 final class SettingsStore: ObservableObject {
     static let defaultTranslatePromptTemplate = "把下面的英文翻译成简体中文。只输出译文。\n\n{{text}}"
@@ -12,6 +13,7 @@ final class SettingsStore: ObservableObject {
     @Published var maxInputCharacters: Int
     @Published var splitLongInput: Bool
     @Published var autoPopupOnSelection: Bool
+    @Published var translationFontSize: Double
 
     private var cancellables = Set<AnyCancellable>()
     private var persistWorkItem: DispatchWorkItem?
@@ -49,6 +51,7 @@ final class SettingsStore: ObservableObject {
             self.maxInputCharacters = decoded.maxInputCharacters
             self.splitLongInput = decoded.splitLongInput
             self.autoPopupOnSelection = decoded.autoPopupOnSelection
+            self.translationFontSize = decoded.translationFontSize
 
             if self.translatePromptTemplate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 self.translatePromptTemplate = Self.defaultTranslatePromptTemplate
@@ -93,6 +96,7 @@ final class SettingsStore: ObservableObject {
             self.maxInputCharacters = 4000
             self.splitLongInput = true
             self.autoPopupOnSelection = true
+            self.translationFontSize = 16
         }
 
         bindAutoSave()
@@ -204,6 +208,11 @@ final class SettingsStore: ObservableObject {
             .dropFirst()
             .sink { [weak self] _ in self?.schedulePersist() }
             .store(in: &cancellables)
+
+        $translationFontSize
+            .dropFirst()
+            .sink { [weak self] _ in self?.schedulePersist() }
+            .store(in: &cancellables)
     }
 
     private func schedulePersist() {
@@ -226,7 +235,8 @@ final class SettingsStore: ObservableObject {
             enableStreaming: enableStreaming,
             maxInputCharacters: maxInputCharacters,
             splitLongInput: splitLongInput,
-            autoPopupOnSelection: autoPopupOnSelection
+            autoPopupOnSelection: autoPopupOnSelection,
+            translationFontSize: translationFontSize
         )
         guard let data = try? JSONEncoder().encode(settings) else { return }
         UserDefaults.standard.set(data, forKey: userDefaultsKey)
@@ -262,6 +272,7 @@ private struct PersistedSettings: Codable {
     var maxInputCharacters: Int
     var splitLongInput: Bool
     var autoPopupOnSelection: Bool
+    var translationFontSize: Double
 
     init(
         providers: [LLMProvider],
@@ -271,7 +282,8 @@ private struct PersistedSettings: Codable {
         enableStreaming: Bool,
         maxInputCharacters: Int,
         splitLongInput: Bool,
-        autoPopupOnSelection: Bool
+        autoPopupOnSelection: Bool,
+        translationFontSize: Double
     ) {
         self.providers = providers
         self.selectedProviderID = selectedProviderID
@@ -281,6 +293,7 @@ private struct PersistedSettings: Codable {
         self.maxInputCharacters = maxInputCharacters
         self.splitLongInput = splitLongInput
         self.autoPopupOnSelection = autoPopupOnSelection
+        self.translationFontSize = translationFontSize
     }
 
     init(from decoder: Decoder) throws {
@@ -293,6 +306,7 @@ private struct PersistedSettings: Codable {
         self.maxInputCharacters = try container.decodeIfPresent(Int.self, forKey: .maxInputCharacters) ?? 4000
         self.splitLongInput = try container.decodeIfPresent(Bool.self, forKey: .splitLongInput) ?? true
         self.autoPopupOnSelection = try container.decodeIfPresent(Bool.self, forKey: .autoPopupOnSelection) ?? true
+        self.translationFontSize = try container.decodeIfPresent(Double.self, forKey: .translationFontSize) ?? 16
     }
 }
 

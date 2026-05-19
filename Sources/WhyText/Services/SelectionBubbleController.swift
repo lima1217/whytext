@@ -8,17 +8,17 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
     private var outsideEventMonitor: Any?
     private var autoDismissTask: Task<Void, Never>?
 
-    func show(at mouseLocation: NSPoint) {
+    func show(at mouseLocation: NSPoint, anchorRect: CGRect? = nil) {
         autoDismissTask?.cancel()
 
-        let size = NSSize(width: 24, height: 24)
+        let size = NSSize(width: 34, height: 28)
         let hostingView = NSHostingView(rootView: SelectionBubbleButton { [weak self] in
             self?.handleTap()
         })
 
         if let panel {
             panel.contentView = hostingView
-            positionBubble(panel: panel, at: mouseLocation, size: size)
+            positionBubble(panel: panel, at: mouseLocation, anchorRect: anchorRect, size: size)
             panel.alphaValue = 1
             panel.orderFrontRegardless()
             startOutsideEventMonitor()
@@ -46,7 +46,7 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
 
         self.panel = panel
 
-        positionBubble(panel: panel, at: mouseLocation, size: size)
+        positionBubble(panel: panel, at: mouseLocation, anchorRect: anchorRect, size: size)
 
         // Fade in
         panel.alphaValue = 0
@@ -96,15 +96,33 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
         onTap?()
     }
 
-    private func positionBubble(panel: NSPanel, at mouseLocation: NSPoint, size: NSSize) {
+    private func positionBubble(panel: NSPanel, at mouseLocation: NSPoint, anchorRect: CGRect?, size: NSSize) {
         let screen = NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) }) ?? NSScreen.main
         let visibleFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
 
         let offsetX: CGFloat = 8
-        let offsetY: CGFloat = 4
+        let offsetY: CGFloat = 6
 
-        var x = mouseLocation.x + offsetX
-        var y = mouseLocation.y + offsetY
+        var x: CGFloat
+        var y: CGFloat
+
+        if let anchor = normalizedAnchorRect(anchorRect, near: mouseLocation, screen: screen) {
+            x = anchor.maxX + offsetX
+            y = anchor.midY - size.height / 2
+
+            if x + size.width > visibleFrame.maxX {
+                x = anchor.minX - size.width - offsetX
+            }
+            if y + size.height > visibleFrame.maxY {
+                y = anchor.maxY - size.height
+            }
+            if y < visibleFrame.minY {
+                y = anchor.minY
+            }
+        } else {
+            x = mouseLocation.x + offsetX
+            y = mouseLocation.y + offsetY
+        }
 
         if x + size.width > visibleFrame.maxX {
             x = mouseLocation.x - size.width - offsetX
@@ -117,6 +135,34 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
         y = min(max(y, visibleFrame.minY), visibleFrame.maxY - size.height)
 
         panel.setFrameOrigin(NSPoint(x: x, y: y))
+    }
+
+    private func normalizedAnchorRect(_ rect: CGRect?, near mouseLocation: NSPoint, screen: NSScreen?) -> CGRect? {
+        guard let rect, rect.width > 0, rect.height > 0 else {
+            return nil
+        }
+
+        let targetScreen = screen ?? NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) }) ?? NSScreen.main
+        let screenFrame = targetScreen?.frame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let raw = NSRect(x: rect.origin.x, y: rect.origin.y, width: rect.width, height: rect.height)
+        let flipped = NSRect(
+            x: rect.origin.x,
+            y: screenFrame.maxY - rect.maxY,
+            width: rect.width,
+            height: rect.height
+        )
+
+        let candidates = [raw, flipped].filter { candidate in
+            candidate.intersects(screenFrame.insetBy(dx: -80, dy: -80))
+        }
+
+        guard !candidates.isEmpty else {
+            return nil
+        }
+
+        return candidates.min { lhs, rhs in
+            lhs.distance(to: mouseLocation) < rhs.distance(to: mouseLocation)
+        }
     }
 
     /// Auto-dismiss after 4 seconds if user doesn't interact.
@@ -152,31 +198,43 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
     }
 }
 
+private extension NSRect {
+    func distance(to point: NSPoint) -> CGFloat {
+        if contains(point) {
+            return 0
+        }
+
+        let dx = max(minX - point.x, 0, point.x - maxX)
+        let dy = max(minY - point.y, 0, point.y - maxY)
+        return sqrt(dx * dx + dy * dy)
+    }
+}
+
 // MARK: - Bubble View
 
-/// A tiny accent-colored dot. No icon, no text — just a quiet hint.
-/// On hover it grows slightly and gains a soft glow.
+/// A compact action pill near the selected text. It stays quiet at rest,
+/// then reveals the translate affordance on hover.
 private struct SelectionBubbleButton: View {
     var onTap: () -> Void
     @State private var isHovering = false
     @State private var appeared = false
 
-    private let restSize: CGFloat = 10
-    private let hoverSize: CGFloat = 14
-
     var body: some View {
         Button(action: onTap) {
-            let size = isHovering ? hoverSize : restSize
-
-            Circle()
-                .fill(Color.accentColor.opacity(isHovering ? 0.85 : 0.5))
-                .frame(width: size, height: size)
-                .shadow(color: Color.accentColor.opacity(isHovering ? 0.3 : 0), radius: 6, y: 0)
+            Image(systemName: "character.book.closed")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: isHovering ? 34 : 28, height: 24)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.accentColor.opacity(isHovering ? 0.92 : 0.78))
+                        .shadow(color: Color.accentColor.opacity(isHovering ? 0.28 : 0.12), radius: isHovering ? 8 : 4, y: 1)
+                )
                 .scaleEffect(appeared ? 1.0 : 0.01)
                 .opacity(appeared ? 1 : 0)
-                .animation(.easeOut(duration: 0.15), value: isHovering)
-                // Keep a 24x24 hit area so it's easy to click
-                .frame(width: 24, height: 24)
+                .animation(.easeOut(duration: 0.16), value: isHovering)
+                // Keep a generous hit area so it's easy to click.
+                .frame(width: 34, height: 28)
         }
         .buttonStyle(.plain)
         .onHover { hovering in

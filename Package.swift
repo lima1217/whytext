@@ -9,15 +9,26 @@ let package = Package(
         .macOS(.v13),
     ],
     products: [
+        .library(name: "WhyTextCore", targets: ["WhyTextCore"]),
         .executable(name: "WhyText", targets: ["WhyText"]),
     ],
     targets: [
+        .target(
+            name: "WhyTextCore",
+            path: "Sources/WhyTextCore"
+        ),
         .executableTarget(
             name: "WhyText",
+            dependencies: ["WhyTextCore"],
             path: "Sources/WhyText",
             linkerSettings: [
                 .linkedFramework("Security"),
             ]
+        ),
+        .executableTarget(
+            name: "WhyTextCoreSmokeTests",
+            dependencies: ["WhyTextCore"],
+            path: "Sources/WhyTextCoreSmokeTests"
         ),
     ]
 )

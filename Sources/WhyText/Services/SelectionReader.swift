@@ -14,17 +14,18 @@ final class SelectionReader {
 
     struct Result: Equatable {
         var text: String
+        var anchorRect: CGRect?
     }
 
     func readSelectedText(allowClipboardFallback: Bool = true) async throws -> Result {
         if accessibility.status() == .trusted {
-            if let text = try? accessibility.getSelectedText(), !text.isEmpty {
-                return Result(text: text)
+            if let selection = try? accessibility.getSelectedTextResult(), !selection.text.isEmpty {
+                return Result(text: selection.text, anchorRect: selection.anchorRect)
             }
 
             if allowClipboardFallback,
                let fallbackText = await clipboardFallback.readSelectedTextViaCopy(), !fallbackText.isEmpty {
-                return Result(text: fallbackText)
+                return Result(text: fallbackText, anchorRect: nil)
             }
 
             throw SelectionError.noSelection

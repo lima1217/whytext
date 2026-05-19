@@ -9,13 +9,13 @@ struct SettingsView: View {
                 .tabItem { Label("通用", systemImage: "gearshape") }
 
             ProvidersSettingsView()
-                .tabItem { Label("Provider", systemImage: "network") }
+                .tabItem { Label("服务商", systemImage: "network") }
 
             PromptsSettingsView()
                 .tabItem { Label("提示词", systemImage: "text.quote") }
         }
         .padding(16)
-        .frame(width: 680, height: 480)
+        .frame(width: 720, height: 560)
         .environmentObject(appModel)
     }
 }

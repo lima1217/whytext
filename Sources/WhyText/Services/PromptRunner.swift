@@ -1,4 +1,5 @@
 import Foundation
+import WhyTextCore
 
 final class PromptRunner {
     private let llmClient: LLMClient
@@ -96,11 +97,12 @@ final class PromptRunner {
             model: model,
             sourceText: text,
             sourceLanguage: "auto",
-            targetLanguage: "zh-Hans",
+            targetLanguage: "auto",
             mode: .translate,
             device: UnifiedTranslationRequest.defaultDeviceDescriptor,
             promptTemplate: template,
-            stream: stream
+            stream: stream,
+            includeStructureHint: false
         )
     }
 }

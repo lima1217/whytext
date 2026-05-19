@@ -1,4 +1,5 @@
 import Foundation
+import WhyTextCore
 
 enum TranslationMode: String, Codable {
     case translate
@@ -390,42 +391,20 @@ private enum ProviderAdapter {
     }
 
     func endpointURL(baseURL: String) throws -> URL {
-        let rawBaseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !rawBaseURL.isEmpty else { throw LLMError.invalidBaseURL }
-
-        var base = rawBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-
-        // Strip known endpoint suffixes so users can paste full URLs.
-        let knownSuffixes = [
-            "/v1/chat/completions",
-            "/v1/responses",
-            "/chat/completions",
-            "/responses",
-        ]
-        for suffix in knownSuffixes {
-            if base.lowercased().hasSuffix(suffix) {
-                base = String(base.dropLast(suffix.count))
-                base = base.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-                break
-            }
-        }
-
-        let resourcePath: String
-        switch self {
-        case .chatCompletions:
-            resourcePath = "chat/completions"
-        case .responses:
-            resourcePath = "responses"
-        }
-
-        let path = base.hasSuffix("/v1") ? resourcePath : "v1/\(resourcePath)"
-        let urlString = "\(base)/\(path)"
-
-        guard let url = URL(string: urlString) else {
+        do {
+            return try ProviderEndpointBuilder.endpointURL(baseURL: baseURL, resourcePath: resourcePath)
+        } catch {
             throw LLMError.invalidBaseURL
         }
+    }
 
-        return url
+    private var resourcePath: String {
+        switch self {
+        case .chatCompletions:
+            "chat/completions"
+        case .responses:
+            "responses"
+        }
     }
 
     func requestBody(from request: UnifiedTranslationRequest, stream: Bool) throws -> Data {

@@ -6,86 +6,65 @@ struct ProvidersSettingsView: View {
     @State private var showAddTemplate = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                providerListBar
-                if let index = selectedIndex {
-                    let providerID = appModel.settingsStore.providers[index].id
-                    ProviderDetailView(
-                        provider: $appModel.settingsStore.providers[index],
-                        loadAPIKey: {
-                            appModel.settingsStore.apiKey(for: providerID)
-                        },
-                        saveAPIKey: { value in
-                            appModel.settingsStore.saveAPIKey(value, for: providerID)
-                        },
-                        clearAPIKey: {
-                            appModel.settingsStore.clearAPIKey(for: providerID)
-                        },
-                        testConnectivity: { provider, apiKey in
-                            await appModel.testProviderConnectivity(provider: provider, apiKey: apiKey)
-                        }
-                    )
-                    .id(providerID)
-                } else {
-                    emptyState
-                }
+        SettingsPage {
+            providerHeader
+            if let index = selectedIndex {
+                let providerID = appModel.settingsStore.providers[index].id
+                ProviderDetailView(
+                    provider: $appModel.settingsStore.providers[index],
+                    loadAPIKey: {
+                        appModel.settingsStore.apiKey(for: providerID)
+                    },
+                    saveAPIKey: { value in
+                        appModel.settingsStore.saveAPIKey(value, for: providerID)
+                    },
+                    clearAPIKey: {
+                        appModel.settingsStore.clearAPIKey(for: providerID)
+                    },
+                    testConnectivity: { provider, apiKey in
+                        await appModel.testProviderConnectivity(provider: provider, apiKey: apiKey)
+                    }
+                )
+                .id(providerID)
+            } else {
+                emptyState
             }
-            .frame(maxWidth: 620)
-            .padding(20)
-            .frame(maxWidth: .infinity)
         }
         .onAppear { normalizeSelectionIfNeeded() }
     }
 
     // MARK: - Provider List Bar
 
-    private var providerListBar: some View {
-        HStack(spacing: 8) {
-            // Provider tabs
-            ForEach(appModel.settingsStore.providers) { provider in
-                let isActive = provider.id == appModel.settingsStore.selectedProviderID
-                Button {
-                    appModel.settingsStore.selectedProviderID = provider.id
-                } label: {
-                    Text(provider.name.isEmpty ? "未命名" : provider.name)
-                        .font(.system(size: 12, weight: isActive ? .semibold : .regular))
-                        .foregroundStyle(isActive ? .primary : .secondary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(isActive ? Color.accentColor.opacity(0.12) : Color.clear)
-                        )
+    private var providerHeader: some View {
+        SettingsCard("Provider", subtitle: "选择一个服务商，填写接口、模型和 API Key 后先测试连通性。") {
+            HStack(spacing: 10) {
+                Picker("Provider", selection: providerSelectionBinding) {
+                    ForEach(appModel.settingsStore.providers) { provider in
+                        Text(provider.name.isEmpty ? "未命名" : provider.name)
+                            .tag(Optional(provider.id))
+                    }
                 }
-                .buttonStyle(.plain)
-            }
+                .labelsHidden()
+                .frame(maxWidth: 280)
 
-            Spacer()
+                Spacer()
 
-            // Add
-            Button {
-                showAddTemplate = true
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .popover(isPresented: $showAddTemplate) {
-                addTemplatePopover
-            }
-
-            // Remove (only if more than 1)
-            if appModel.settingsStore.providers.count > 1, let id = appModel.settingsStore.selectedProviderID {
                 Button {
-                    appModel.settingsStore.removeProviders(withIDs: [id])
+                    showAddTemplate = true
                 } label: {
-                    Image(systemName: "minus")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
+                    Label("添加", systemImage: "plus")
                 }
-                .buttonStyle(.plain)
+                .popover(isPresented: $showAddTemplate) {
+                    addTemplatePopover
+                }
+
+                if appModel.settingsStore.providers.count > 1, let id = appModel.settingsStore.selectedProviderID {
+                    Button(role: .destructive) {
+                        appModel.settingsStore.removeProviders(withIDs: [id])
+                    } label: {
+                        Label("移除", systemImage: "trash")
+                    }
+                }
             }
         }
     }
@@ -127,7 +106,8 @@ struct ProvidersSettingsView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
+        SettingsCard("还没有 Provider") {
+            VStack(spacing: 10) {
             Image(systemName: "network")
                 .font(.system(size: 24))
                 .foregroundStyle(.secondary)
@@ -136,11 +116,19 @@ struct ProvidersSettingsView: View {
             Button("添加一个") {
                 showAddTemplate = true
             }
+            }
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Helpers
+
+    private var providerSelectionBinding: Binding<UUID?> {
+        Binding(
+            get: { appModel.settingsStore.selectedProviderID },
+            set: { appModel.settingsStore.selectedProviderID = $0 }
+        )
+    }
 
     private var selectedIndex: Int? {
         let providers = appModel.settingsStore.providers
@@ -219,30 +207,26 @@ private struct ProviderDetailView: View {
     @State private var autoSaveTask: Task<Void, Never>?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Provider fields
-            GroupBox("接口") {
-                VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: SettingsUI.sectionSpacing) {
+            SettingsCard("接口", subtitle: "Base URL 不需要填写具体 endpoint，应用会根据 API 格式拼接请求路径。") {
+                VStack(alignment: .leading, spacing: SettingsUI.fieldSpacing) {
                     labeledField(title: "名称", placeholder: "My Provider", text: $provider.name)
                     labeledField(title: "Base URL", placeholder: "https://api.deepseek.com", text: $provider.baseURL, monospaced: true)
                     labeledField(title: "Model", placeholder: "deepseek-chat", text: $provider.model, monospaced: true)
 
-                    HStack(spacing: 10) {
-                        Text("API 格式")
-                            .frame(width: 86, alignment: .leading)
+                    LabeledSettingsField("API 格式") {
                         Picker("", selection: $provider.apiMode) {
                             ForEach(LLMAPIMode.allCases) { mode in
                                 Text(mode.displayName).tag(mode)
                             }
                         }
+                        .labelsHidden()
                     }
                 }
-                .padding(.top, 4)
             }
 
-            // API Key — auto-saves as you type
-            GroupBox("API Key") {
-                VStack(alignment: .leading, spacing: 10) {
+            SettingsCard("API Key", subtitle: "输入后会自动保存到 macOS Keychain，本地设置不会明文持久化。") {
+                VStack(alignment: .leading, spacing: SettingsUI.fieldSpacing) {
                     HStack(spacing: 8) {
                         if showAPIKey {
                             TextField("sk-...", text: $apiKeyDraft)
@@ -266,9 +250,10 @@ private struct ProviderDetailView: View {
                     }
 
                     HStack(spacing: 10) {
-                        Text("自动保存到 Keychain")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.tertiary)
+                        StatusBadge(
+                            text: apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "未填写" : "已保存到 Keychain",
+                            tone: apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .warning : .success
+                        )
 
                         Spacer()
 
@@ -291,23 +276,33 @@ private struct ProviderDetailView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                .padding(.top, 4)
             }
 
-            // Connectivity test
-            GroupBox("连通性") {
-                VStack(alignment: .leading, spacing: 10) {
-                    Button(isTestingConnectivity ? "测试中…" : "测试连通性") {
-                        runConnectivityTest()
+            SettingsCard("连通性", subtitle: "保存配置后做一次真实请求，确认 URL、Key 和模型都能工作。") {
+                VStack(alignment: .leading, spacing: SettingsUI.fieldSpacing) {
+                    HStack {
+                        Button {
+                            runConnectivityTest()
+                        } label: {
+                            Label(isTestingConnectivity ? "测试中..." : "测试连通性", systemImage: isTestingConnectivity ? "clock" : "bolt.horizontal")
+                        }
+                        .disabled(isTestingConnectivity)
+
+                        Spacer()
                     }
-                    .disabled(isTestingConnectivity)
 
                     if let report = connectivityReport {
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: 8) {
                             statusRow(title: "Base URL", state: report.baseURL)
                             statusRow(title: "API Key", state: report.apiKey)
                             statusRow(title: "Model", state: report.model)
                         }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(SettingsUI.fieldBackground)
+                        )
 
                         if !report.message.isEmpty {
                             Text(report.message)
@@ -317,7 +312,6 @@ private struct ProviderDetailView: View {
                         }
                     }
                 }
-                .padding(.top, 4)
             }
         }
         .onAppear {
@@ -364,9 +358,7 @@ private struct ProviderDetailView: View {
         text: Binding<String>,
         monospaced: Bool = false
     ) -> some View {
-        HStack(spacing: 10) {
-            Text(title)
-                .frame(width: 86, alignment: .leading)
+        LabeledSettingsField(title) {
             TextField(placeholder, text: text)
                 .textFieldStyle(.roundedBorder)
                 .font(monospaced ? .system(.body, design: .monospaced) : .body)
@@ -401,7 +393,8 @@ private struct ProviderDetailView: View {
     private func statusRow(title: String, state: ConnectivityCheckState) -> some View {
         HStack(spacing: 8) {
             Text(title)
-                .frame(width: 70, alignment: .leading)
+                .foregroundStyle(.secondary)
+                .frame(width: 72, alignment: .leading)
             Image(systemName: state.systemImage)
                 .foregroundStyle(statusColor(for: state))
             Text(state.label)

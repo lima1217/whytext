@@ -7,6 +7,11 @@ struct SelectionDiagnostics: Equatable {
     var selectedText: String?
 }
 
+struct SelectedTextResult: Equatable {
+    var text: String
+    var anchorRect: CGRect?
+}
+
 final class AccessibilitySelectionService {
     enum Status: Equatable {
         case trusted
@@ -15,6 +20,8 @@ final class AccessibilitySelectionService {
 
     private let markerRangeAttribute = "AXSelectedTextMarkerRange" as CFString
     private let markerStringAttribute = "AXStringForTextMarkerRange" as CFString
+    private let boundsForRangeAttribute = "AXBoundsForRange" as CFString
+    private let boundsForMarkerRangeAttribute = "AXBoundsForTextMarkerRange" as CFString
     private let descendantSearchAttributes: [CFString] = [
         "AXSelectedChildren" as CFString,
         "AXSelectedRows" as CFString,
@@ -101,11 +108,16 @@ final class AccessibilitySelectionService {
 
         var selectedText: String?
         do {
-            let text = try getSelectedText()
-            selectedText = text
+            let result = try getSelectedTextResult()
+            selectedText = result.text
             lines.append("getSelectedText: success")
-            lines.append("selectedLength: \(text.count)")
-            lines.append("selectedPreview: \(preview(text))")
+            lines.append("selectedLength: \(result.text.count)")
+            lines.append("selectedPreview: \(preview(result.text))")
+            if let anchorRect = result.anchorRect {
+                lines.append("selectedAnchorRect: \(anchorRect.debugDescription)")
+            } else {
+                lines.append("selectedAnchorRect: unavailable")
+            }
         } catch {
             lines.append("getSelectedText: failed")
             lines.append("error: \(error.localizedDescription)")
@@ -115,42 +127,46 @@ final class AccessibilitySelectionService {
     }
 
     func getSelectedText() throws -> String {
+        try getSelectedTextResult().text
+    }
+
+    func getSelectedTextResult() throws -> SelectedTextResult {
         guard status() == .trusted else {
             throw SelectionError.notTrusted
         }
 
         let systemWide = AXUIElementCreateSystemWide()
 
-        if let text = try selectedText(from: systemWide) {
-            return text
+        if let result = try selectedText(from: systemWide) {
+            return result
         }
 
         throw SelectionError.noSelection
     }
 
-    private func selectedText(from systemWide: AXUIElement) throws -> String? {
+    private func selectedText(from systemWide: AXUIElement) throws -> SelectedTextResult? {
         var visited = Set<Int>()
         let frontmostBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
 
         if let element = copyElementAttribute(kAXFocusedUIElementAttribute as CFString, from: systemWide) {
             if isChromiumBundleID(frontmostBundleID),
-               let text = try selectedTextInChromiumContext(startingAt: element, visited: &visited) {
-                return text
+               let result = try selectedTextInChromiumContext(startingAt: element, visited: &visited) {
+                return result
             }
 
-            if let text = try selectedText(near: element, ancestorDepth: 4, descendantDepth: 6, visited: &visited) {
-                return text
+            if let result = try selectedText(near: element, ancestorDepth: 4, descendantDepth: 6, visited: &visited) {
+                return result
             }
         }
 
         if let appElement = copyElementAttribute(kAXFocusedApplicationAttribute as CFString, from: systemWide) {
             if isChromiumBundleID(frontmostBundleID),
-               let text = try selectedText(fromChromiumAppElement: appElement, visited: &visited) {
-                return text
+               let result = try selectedText(fromChromiumAppElement: appElement, visited: &visited) {
+                return result
             }
 
-            if let text = try selectedText(fromAppElement: appElement, visited: &visited) {
-                return text
+            if let result = try selectedText(fromAppElement: appElement, visited: &visited) {
+                return result
             }
         }
 
@@ -159,46 +175,46 @@ final class AccessibilitySelectionService {
             let appElement = AXUIElementCreateApplication(frontmostApp.processIdentifier)
 
             if isChromiumBundleID(frontmostApp.bundleIdentifier),
-               let text = try selectedText(fromChromiumAppElement: appElement, visited: &visited) {
-                return text
+               let result = try selectedText(fromChromiumAppElement: appElement, visited: &visited) {
+                return result
             }
 
-            if let text = try selectedText(fromAppElement: appElement, visited: &visited) {
-                return text
+            if let result = try selectedText(fromAppElement: appElement, visited: &visited) {
+                return result
             }
         }
 
         return nil
     }
 
-    private func selectedText(near element: AXUIElement, ancestorDepth: Int, descendantDepth: Int, visited: inout Set<Int>) throws -> String? {
-        if let text = try selectedText(in: element) {
-            return text
+    private func selectedText(near element: AXUIElement, ancestorDepth: Int, descendantDepth: Int, visited: inout Set<Int>) throws -> SelectedTextResult? {
+        if let result = try selectedText(in: element) {
+            return result
         }
 
-        if let text = try selectedTextAlongAncestorChain(startingAt: element, maxDepth: ancestorDepth, visited: &visited) {
-            return text
+        if let result = try selectedTextAlongAncestorChain(startingAt: element, maxDepth: ancestorDepth, visited: &visited) {
+            return result
         }
 
-        if let text = try selectedTextRecursively(in: element, depth: 0, maxDepth: descendantDepth, visited: &visited) {
-            return text
+        if let result = try selectedTextRecursively(in: element, depth: 0, maxDepth: descendantDepth, visited: &visited) {
+            return result
         }
 
         return nil
     }
 
-    private func selectedText(in element: AXUIElement) throws -> String? {
+    private func selectedText(in element: AXUIElement) throws -> SelectedTextResult? {
         if let text = nonEmptyTrimmed(copyStringAttribute(kAXSelectedTextAttribute as CFString, from: element)) {
-            return text
+            return SelectedTextResult(text: text, anchorRect: selectedBounds(in: element))
         }
 
         if let selectedRangeValue = copyAXValueAttribute(kAXSelectedTextRangeAttribute as CFString, from: element),
            let text = selectedText(for: selectedRangeValue, in: element) {
-            return text
+            return SelectedTextResult(text: text, anchorRect: selectedBounds(for: selectedRangeValue, in: element))
         }
 
-        if let text = selectedTextFromMarkerRange(in: element) {
-            return text
+        if let markerSelection = selectedTextFromMarkerRange(in: element) {
+            return markerSelection
         }
 
         return nil
@@ -230,7 +246,7 @@ final class AccessibilitySelectionService {
         return nil
     }
 
-    private func selectedTextFromMarkerRange(in element: AXUIElement) -> String? {
+    private func selectedTextFromMarkerRange(in element: AXUIElement) -> SelectedTextResult? {
         var markerRange: CFTypeRef?
         let markerError = AXUIElementCopyAttributeValue(element, markerRangeAttribute, &markerRange)
         guard markerError == .success, let markerRange else {
@@ -249,7 +265,74 @@ final class AccessibilitySelectionService {
             return nil
         }
 
-        return nonEmptyTrimmed(markerText)
+        guard let text = nonEmptyTrimmed(markerText) else {
+            return nil
+        }
+
+        return SelectedTextResult(text: text, anchorRect: selectedBounds(forMarkerRange: markerRange, in: element))
+    }
+
+    private func selectedBounds(in element: AXUIElement) -> CGRect? {
+        guard let selectedRangeValue = copyAXValueAttribute(kAXSelectedTextRangeAttribute as CFString, from: element) else {
+            return nil
+        }
+        return selectedBounds(for: selectedRangeValue, in: element)
+    }
+
+    private func selectedBounds(for selectedRangeValue: AXValue, in element: AXUIElement) -> CGRect? {
+        var boundsValue: CFTypeRef?
+        let error = AXUIElementCopyParameterizedAttributeValue(
+            element,
+            boundsForRangeAttribute,
+            selectedRangeValue,
+            &boundsValue
+        )
+
+        guard error == .success, let boundsValue else {
+            return nil
+        }
+
+        guard CFGetTypeID(boundsValue) == AXValueGetTypeID() else {
+            return nil
+        }
+
+        let axValue = unsafeBitCast(boundsValue, to: AXValue.self)
+        return rect(from: axValue)
+    }
+
+    private func selectedBounds(forMarkerRange markerRange: CFTypeRef, in element: AXUIElement) -> CGRect? {
+        var boundsValue: CFTypeRef?
+        let error = AXUIElementCopyParameterizedAttributeValue(
+            element,
+            boundsForMarkerRangeAttribute,
+            markerRange,
+            &boundsValue
+        )
+
+        guard error == .success, let boundsValue else {
+            return nil
+        }
+
+        guard CFGetTypeID(boundsValue) == AXValueGetTypeID() else {
+            return nil
+        }
+
+        let axValue = unsafeBitCast(boundsValue, to: AXValue.self)
+        return rect(from: axValue)
+    }
+
+    private func rect(from axValue: AXValue) -> CGRect? {
+        let type = AXValueGetType(axValue)
+        var rect = CGRect.zero
+
+        if type == AXValueType(rawValue: kAXValueCGRectType),
+           AXValueGetValue(axValue, type, &rect),
+           rect.width > 0,
+           rect.height > 0 {
+            return rect
+        }
+
+        return nil
     }
 
     private func stringForSelectedRange(in element: AXUIElement, selectedRangeValue: AXValue) -> String? {
@@ -268,26 +351,26 @@ final class AccessibilitySelectionService {
         return nonEmptyTrimmed(rangeString)
     }
 
-    private func selectedText(fromAppElement appElement: AXUIElement, visited: inout Set<Int>) throws -> String? {
+    private func selectedText(fromAppElement appElement: AXUIElement, visited: inout Set<Int>) throws -> SelectedTextResult? {
         if let appFocusedElement = copyElementAttribute(kAXFocusedUIElementAttribute as CFString, from: appElement),
-           let text = try selectedText(near: appFocusedElement, ancestorDepth: 4, descendantDepth: 6, visited: &visited) {
-            return text
+           let result = try selectedText(near: appFocusedElement, ancestorDepth: 4, descendantDepth: 6, visited: &visited) {
+            return result
         }
 
         if let focusedWindow = copyElementAttribute(kAXFocusedWindowAttribute as CFString, from: appElement),
-           let text = try selectedText(near: focusedWindow, ancestorDepth: 2, descendantDepth: 8, visited: &visited) {
-            return text
+           let result = try selectedText(near: focusedWindow, ancestorDepth: 2, descendantDepth: 8, visited: &visited) {
+            return result
         }
 
         if let mainWindow = copyElementAttribute(kAXMainWindowAttribute as CFString, from: appElement),
-           let text = try selectedText(near: mainWindow, ancestorDepth: 2, descendantDepth: 8, visited: &visited) {
-            return text
+           let result = try selectedText(near: mainWindow, ancestorDepth: 2, descendantDepth: 8, visited: &visited) {
+            return result
         }
 
         if let windows = copyElementArrayAttribute(kAXWindowsAttribute as CFString, from: appElement) {
             for window in windows {
-                if let text = try selectedText(near: window, ancestorDepth: 1, descendantDepth: 6, visited: &visited) {
-                    return text
+                if let result = try selectedText(near: window, ancestorDepth: 1, descendantDepth: 6, visited: &visited) {
+                    return result
                 }
             }
         }
@@ -295,36 +378,36 @@ final class AccessibilitySelectionService {
         return nil
     }
 
-    private func selectedTextInChromiumContext(startingAt element: AXUIElement, visited: inout Set<Int>) throws -> String? {
-        if let text = try selectedText(in: element) {
-            return text
+    private func selectedTextInChromiumContext(startingAt element: AXUIElement, visited: inout Set<Int>) throws -> SelectedTextResult? {
+        if let result = try selectedText(in: element) {
+            return result
         }
 
         for attribute in chromiumAncestorAttributes {
             if let ancestor = copyElementAttribute(attribute, from: element),
-               let text = try selectedText(near: ancestor, ancestorDepth: 3, descendantDepth: 8, visited: &visited) {
-                return text
+               let result = try selectedText(near: ancestor, ancestorDepth: 3, descendantDepth: 8, visited: &visited) {
+                return result
             }
         }
 
         if let webArea = findNearestAncestor(withRole: "AXWebArea", startingAt: element, maxDepth: 8),
-           let text = try selectedText(near: webArea, ancestorDepth: 1, descendantDepth: 10, visited: &visited) {
-            return text
+           let result = try selectedText(near: webArea, ancestorDepth: 1, descendantDepth: 10, visited: &visited) {
+            return result
         }
 
         for webArea in findDescendants(withRoles: ["AXWebArea"], from: element, maxDepth: 10, limit: 8) {
-            if let text = try selectedText(near: webArea, ancestorDepth: 1, descendantDepth: 10, visited: &visited) {
-                return text
+            if let result = try selectedText(near: webArea, ancestorDepth: 1, descendantDepth: 10, visited: &visited) {
+                return result
             }
         }
 
         return try selectedText(near: element, ancestorDepth: 5, descendantDepth: 10, visited: &visited)
     }
 
-    private func selectedText(fromChromiumAppElement appElement: AXUIElement, visited: inout Set<Int>) throws -> String? {
+    private func selectedText(fromChromiumAppElement appElement: AXUIElement, visited: inout Set<Int>) throws -> SelectedTextResult? {
         if let appFocusedElement = copyElementAttribute(kAXFocusedUIElementAttribute as CFString, from: appElement),
-           let text = try selectedTextInChromiumContext(startingAt: appFocusedElement, visited: &visited) {
-            return text
+           let result = try selectedTextInChromiumContext(startingAt: appFocusedElement, visited: &visited) {
+            return result
         }
 
         let candidateWindows = [
@@ -333,15 +416,15 @@ final class AccessibilitySelectionService {
         ].compactMap { $0 }
 
         for window in candidateWindows {
-            if let text = try selectedTextFromChromiumWindow(window, visited: &visited) {
-                return text
+            if let result = try selectedTextFromChromiumWindow(window, visited: &visited) {
+                return result
             }
         }
 
         if let windows = copyElementArrayAttribute(kAXWindowsAttribute as CFString, from: appElement) {
             for window in windows {
-                if let text = try selectedTextFromChromiumWindow(window, visited: &visited) {
-                    return text
+                if let result = try selectedTextFromChromiumWindow(window, visited: &visited) {
+                    return result
                 }
             }
         }
@@ -349,17 +432,17 @@ final class AccessibilitySelectionService {
         return try selectedText(fromAppElement: appElement, visited: &visited)
     }
 
-    private func selectedTextFromChromiumWindow(_ window: AXUIElement, visited: inout Set<Int>) throws -> String? {
+    private func selectedTextFromChromiumWindow(_ window: AXUIElement, visited: inout Set<Int>) throws -> SelectedTextResult? {
         for webArea in findDescendants(withRoles: ["AXWebArea"], from: window, maxDepth: 12, limit: 12) {
-            if let text = try selectedText(near: webArea, ancestorDepth: 1, descendantDepth: 10, visited: &visited) {
-                return text
+            if let result = try selectedText(near: webArea, ancestorDepth: 1, descendantDepth: 10, visited: &visited) {
+                return result
             }
         }
 
         return try selectedText(near: window, ancestorDepth: 2, descendantDepth: 10, visited: &visited)
     }
 
-    private func selectedTextAlongAncestorChain(startingAt element: AXUIElement, maxDepth: Int, visited: inout Set<Int>) throws -> String? {
+    private func selectedTextAlongAncestorChain(startingAt element: AXUIElement, maxDepth: Int, visited: inout Set<Int>) throws -> SelectedTextResult? {
         var current = element
 
         for _ in 0..<maxDepth {
@@ -373,8 +456,8 @@ final class AccessibilitySelectionService {
             }
             visited.insert(key)
 
-            if let text = try selectedText(in: parent) {
-                return text
+            if let result = try selectedText(in: parent) {
+                return result
             }
 
             current = parent
@@ -383,7 +466,7 @@ final class AccessibilitySelectionService {
         return nil
     }
 
-    private func selectedTextRecursively(in element: AXUIElement, depth: Int, maxDepth: Int, visited: inout Set<Int>) throws -> String? {
+    private func selectedTextRecursively(in element: AXUIElement, depth: Int, maxDepth: Int, visited: inout Set<Int>) throws -> SelectedTextResult? {
         if depth >= maxDepth {
             return nil
         }
@@ -400,14 +483,14 @@ final class AccessibilitySelectionService {
         }
 
         for related in relatedElements {
-            if let text = try selectedText(in: related) {
-                return text
+            if let result = try selectedText(in: related) {
+                return result
             }
         }
 
         for related in relatedElements {
-            if let text = try selectedTextRecursively(in: related, depth: depth + 1, maxDepth: maxDepth, visited: &visited) {
-                return text
+            if let result = try selectedTextRecursively(in: related, depth: depth + 1, maxDepth: maxDepth, visited: &visited) {
+                return result
             }
         }
 

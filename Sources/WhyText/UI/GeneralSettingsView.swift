@@ -1,87 +1,105 @@
 import AppKit
 import SwiftUI
 
-private enum GeneralUITokens {
-    static let cardSpacing: CGFloat = 16
-    static let sectionSpacing: CGFloat = 12
-    static let maxContentWidth: CGFloat = 620
-    static let pagePadding: CGFloat = 20
-    static let captionSize: CGFloat = 12
-}
-
 struct GeneralSettingsView: View {
     @EnvironmentObject private var appModel: AppModel
     @State private var showPermissionDiagnostics = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: GeneralUITokens.cardSpacing) {
-                shortcutCard
-                behaviorCard
-                accessibilityCard
+        SettingsPage {
+            overviewCard
+            shortcutCard
+            behaviorCard
+            translationWindowCard
+            accessibilityCard
+        }
+    }
+
+    private var overviewCard: some View {
+        let status = appModel.accessibilityStatus()
+        let hotKeyReady = appModel.settingsStore.hotKeyShortcut != nil
+
+        return SettingsCard("当前状态", subtitle: "完成这两项后，WhyText 就可以在任意应用里翻译选中文本。") {
+            HStack(spacing: 8) {
+                StatusBadge(
+                    text: hotKeyReady ? "快捷键已设置" : "未设置快捷键",
+                    tone: hotKeyReady ? .success : .warning
+                )
+
+                StatusBadge(
+                    text: status == .trusted ? "辅助功能已授权" : "需要辅助功能权限",
+                    tone: status == .trusted ? .success : .warning
+                )
+
+                Spacer()
             }
-            .frame(maxWidth: GeneralUITokens.maxContentWidth)
-            .padding(GeneralUITokens.pagePadding)
-            .frame(maxWidth: .infinity)
         }
     }
 
     // MARK: - Shortcut
 
     private var shortcutCard: some View {
-        GroupBox("快捷键") {
-            VStack(alignment: .leading, spacing: GeneralUITokens.sectionSpacing) {
+        SettingsCard("快捷键", subtitle: "键盘触发是主入口，适合翻译网页、PDF、聊天窗口里的选中文本。") {
+            VStack(alignment: .leading, spacing: SettingsUI.fieldSpacing) {
                 HotKeyRecorderView(shortcut: $appModel.settingsStore.hotKeyShortcut)
-
-                Text("选中文本后按快捷键即可翻译。")
-                    .font(.system(size: GeneralUITokens.captionSize))
-                    .foregroundStyle(.secondary)
             }
-            .padding(.top, 4)
         }
     }
 
     // MARK: - Behavior
 
     private var behaviorCard: some View {
-        GroupBox("行为") {
-            VStack(alignment: .leading, spacing: GeneralUITokens.sectionSpacing) {
-                Toggle("选中文本后自动显示翻译按钮", isOn: $appModel.settingsStore.autoPopupOnSelection)
-
-                Text("开启后，选中文本时会在光标旁出现一个小按钮，点击即可翻译。")
-                    .font(.system(size: GeneralUITokens.captionSize))
-                    .foregroundStyle(.secondary)
+        SettingsCard("选区浮点", subtitle: "适合鼠标选中后顺手点击，关闭后只保留快捷键触发。") {
+            HStack(alignment: .firstTextBaseline) {
+                Toggle("选中文本后显示翻译按钮", isOn: $appModel.settingsStore.autoPopupOnSelection)
+                Spacer()
             }
-            .padding(.top, 4)
+        }
+    }
+
+    // MARK: - Translation Window
+
+    private var translationWindowCard: some View {
+        SettingsCard("翻译窗口", subtitle: "调整结果窗口正文的阅读尺寸。") {
+            VStack(alignment: .leading, spacing: SettingsUI.fieldSpacing) {
+                HStack {
+                    Text("文字大小")
+
+                    Spacer()
+
+                    Text("\(Int(appModel.settingsStore.translationFontSize)) pt")
+                        .font(.system(size: SettingsUI.captionSize, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+
+                Slider(
+                    value: $appModel.settingsStore.translationFontSize,
+                    in: 13...24,
+                    step: 1
+                )
+            }
         }
     }
 
     // MARK: - Accessibility
 
     private var accessibilityCard: some View {
-        GroupBox("辅助功能权限") {
+        SettingsCard("辅助功能权限", subtitle: "macOS 需要授权后，应用才能读取其他 App 中的选中文本。") {
             TimelineView(.periodic(from: .now, by: 1.5)) { _ in
                 let status = appModel.accessibilityStatus()
 
-                VStack(alignment: .leading, spacing: GeneralUITokens.sectionSpacing) {
+                VStack(alignment: .leading, spacing: SettingsUI.fieldSpacing) {
                     HStack {
-                        Text(status == .trusted ? "已授权" : "未授权")
-                            .font(.system(size: GeneralUITokens.captionSize, weight: .medium))
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule(style: .continuous)
-                                    .fill((status == .trusted ? Color.green : Color.orange).opacity(0.16))
-                            )
-                            .foregroundStyle(status == .trusted ? .green : .orange)
+                        StatusBadge(
+                            text: status == .trusted ? "已授权" : "未授权",
+                            tone: status == .trusted ? .success : .warning
+                        )
 
                         Spacer()
                     }
 
                     if status != .trusted {
-                        Text("WhyText 需要辅助功能权限来读取选中文本。")
-                            .font(.system(size: GeneralUITokens.captionSize))
-                            .foregroundStyle(.secondary)
+                        CaptionText(text: "授权后如果仍读取不到选中文本，先重启 WhyText，再使用诊断查看当前 App 是否暴露选区。")
                     }
 
                     HStack(spacing: 10) {
@@ -131,13 +149,13 @@ struct GeneralSettingsView: View {
 
                             if let updatedAt = appModel.selectionDiagnosticsUpdatedAt {
                                 Text("最近诊断: \(updatedAt.formatted(date: .abbreviated, time: .standard))")
-                                    .font(.system(size: GeneralUITokens.captionSize))
+                                    .font(.system(size: SettingsUI.captionSize))
                                     .foregroundStyle(.secondary)
                             }
 
                             if !appModel.selectionDiagnosticsTextPreview.isEmpty {
                                 Text("选中文本预览: \(appModel.selectionDiagnosticsTextPreview)")
-                                    .font(.system(size: GeneralUITokens.captionSize))
+                                    .font(.system(size: SettingsUI.captionSize))
                                     .lineLimit(2)
                                     .textSelection(.enabled)
                             }

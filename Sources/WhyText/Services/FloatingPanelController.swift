@@ -6,7 +6,7 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
 
     private var panel: NSPanel?
     private var mouseOrigin: NSPoint = .zero
-    private var outsideEventMonitor: Any?
+    private var isClosingProgrammatically = false
 
     private let maxWidth: CGFloat = 420
     private let minWidth: CGFloat = 200
@@ -24,14 +24,13 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
             fitAndPosition(panel: panel, hostingView: hostingView)
             panel.orderFrontRegardless()
             NSApp.activate(ignoringOtherApps: true)
-            startOutsideEventMonitor()
             return
         }
 
         let initialSize = NSSize(width: minWidth, height: minHeight)
         let panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: initialSize),
-            styleMask: [.borderless, .nonactivatingPanel],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
@@ -39,9 +38,13 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         panel.isReleasedWhenClosed = false
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.hidesOnDeactivate = true
-        panel.backgroundColor = .clear
-        panel.isOpaque = false
+        panel.hidesOnDeactivate = false
+        panel.backgroundColor = .windowBackgroundColor
+        panel.isOpaque = true
+        panel.hasShadow = true
+        panel.title = "WhyText"
+        panel.titleVisibility = .visible
+        panel.titlebarAppearsTransparent = false
         panel.isMovableByWindowBackground = true
         panel.delegate = self
         panel.contentView = hostingView
@@ -77,7 +80,6 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
             panel.animator().alphaValue = 1
         }
 
-        startOutsideEventMonitor()
     }
 
     /// Refit the panel to its current content size, keeping the top-left anchored.
@@ -100,9 +102,9 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
 
     func close() {
         let wasVisible = panel != nil
-        stopOutsideEventMonitor()
 
         if let panel {
+            isClosingProgrammatically = true
             NSAnimationContext.runAnimationGroup({ context in
                 context.duration = 0.15
                 context.timingFunction = CAMediaTimingFunction(name: .easeIn)
@@ -110,6 +112,7 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
             }, completionHandler: { [weak self] in
                 self?.panel?.close()
                 self?.panel = nil
+                self?.isClosingProgrammatically = false
             })
         }
 
@@ -123,12 +126,13 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
-        stopOutsideEventMonitor()
         panel = nil
+        if !isClosingProgrammatically {
+            onDidClose?()
+        }
     }
 
     func windowDidResignKey(_ notification: Notification) {
-        close()
     }
 
     func bringToFrontIfVisible() {
@@ -145,29 +149,5 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         panel.setContentSize(size)
         let origin = ScreenClamp.positionedOrigin(near: mouseOrigin, size: size)
         panel.setFrameOrigin(origin)
-    }
-
-    private func startOutsideEventMonitor() {
-        stopOutsideEventMonitor()
-
-        outsideEventMonitor = NSEvent.addGlobalMonitorForEvents(
-            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
-        ) { [weak self] _ in
-            guard let self, let panel = self.panel else { return }
-
-            let point = NSEvent.mouseLocation
-            if panel.frame.insetBy(dx: -6, dy: -6).contains(point) {
-                return
-            }
-
-            self.close()
-        }
-    }
-
-    private func stopOutsideEventMonitor() {
-        if let outsideEventMonitor {
-            NSEvent.removeMonitor(outsideEventMonitor)
-            self.outsideEventMonitor = nil
-        }
     }
 }

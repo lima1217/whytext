@@ -1,5 +1,7 @@
 .DS_Store
 /.build
+/dist
+/.pi
 /Packages
 xcuserdata/
 DerivedData/

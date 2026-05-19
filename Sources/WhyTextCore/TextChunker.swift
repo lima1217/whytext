@@ -1,12 +1,17 @@
 import Foundation
 
-enum TextChunker {
-    struct Result: Equatable {
-        var chunks: [String]
-        var wasTruncated: Bool
+public enum TextChunker {
+    public struct Result: Equatable {
+        public var chunks: [String]
+        public var wasTruncated: Bool
+
+        public init(chunks: [String], wasTruncated: Bool) {
+            self.chunks = chunks
+            self.wasTruncated = wasTruncated
+        }
     }
 
-    static func chunk(text: String, maxCharacters: Int, splitLongInput: Bool) -> Result {
+    public static func chunk(text: String, maxCharacters: Int, splitLongInput: Bool) -> Result {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let paragraphs = splitIntoParagraphs(trimmed)
 

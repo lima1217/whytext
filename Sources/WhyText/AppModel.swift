@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import Foundation
+import WhyTextCore
 
 @MainActor
 final class AppModel: ObservableObject {
@@ -30,6 +31,7 @@ final class AppModel: ObservableObject {
     private var lastAutoPopupText: String = ""
     private var lastAutoPopupAt = Date.distantPast
     private var pendingSelectionText: String = ""
+    private var pendingSelectionAnchorRect: CGRect?
     private var suppressAutoPopupUntil = Date.distantPast
 
     init(
@@ -370,6 +372,7 @@ final class AppModel: ObservableObject {
 
         guard enabled else {
             pendingSelectionText = ""
+            pendingSelectionAnchorRect = nil
             mouseDownLocation = nil
             selectionBubbleController.hide()
             return
@@ -416,9 +419,11 @@ final class AppModel: ObservableObject {
         }
         mouseDownLocation = nil
 
-        let trimmed = await readSelectionForAutoPopup()
+        let selection = await readSelectionForAutoPopup()
+        let trimmed = selection.text
         guard trimmed.count >= 2 else {
             pendingSelectionText = ""
+            pendingSelectionAnchorRect = nil
             return
         }
 
@@ -430,12 +435,13 @@ final class AppModel: ObservableObject {
         lastAutoPopupAt = now
 
         pendingSelectionText = trimmed
+        pendingSelectionAnchorRect = selection.anchorRect
 
         let point = NSEvent.mouseLocation
-        selectionBubbleController.show(at: point)
+        selectionBubbleController.show(at: point, anchorRect: selection.anchorRect)
     }
 
-    private func readSelectionForAutoPopup() async -> String {
+    private func readSelectionForAutoPopup() async -> SelectionReader.Result {
         let delays: [UInt64] = [50_000_000, 120_000_000, 250_000_000]
 
         for delay in delays {
@@ -443,17 +449,17 @@ final class AppModel: ObservableObject {
             let selection = try? await selectionReader.readSelectedText(allowClipboardFallback: false)
             let trimmed = sanitizeSelectedText(selection?.text ?? "")
             if trimmed.count >= 2 {
-                return trimmed
+                return SelectionReader.Result(text: trimmed, anchorRect: selection?.anchorRect)
             }
         }
 
         let fallbackSelection = try? await selectionReader.readSelectedText(allowClipboardFallback: true)
         let fallbackText = sanitizeSelectedText(fallbackSelection?.text ?? "")
         if fallbackText.count >= 2 {
-            return fallbackText
+            return SelectionReader.Result(text: fallbackText, anchorRect: fallbackSelection?.anchorRect)
         }
 
-        return ""
+        return SelectionReader.Result(text: "", anchorRect: nil)
     }
 
     func accessibilityStatus() -> AccessibilitySelectionService.Status {
@@ -497,6 +503,7 @@ final class AppModel: ObservableObject {
 
     private func handlePanelDidClose() {
         pendingSelectionText = ""
+        pendingSelectionAnchorRect = nil
         mouseDownLocation = nil
         selectionBubbleController.hide()
         suppressAutoPopupUntil = Date().addingTimeInterval(0.9)

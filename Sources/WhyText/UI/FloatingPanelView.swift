@@ -1,68 +1,100 @@
 import SwiftUI
 
 private enum PanelTokens {
-    static let cornerRadius: CGFloat = 14
     static let horizontalPadding: CGFloat = 16
-    static let verticalPadding: CGFloat = 14
+    static let topPadding: CGFloat = 12
+    static let bottomPadding: CGFloat = 16
     static let bodyFontSize: CGFloat = 13
     static let metaFontSize: CGFloat = 11
     static let minWidth: CGFloat = 320
     static let idealWidth: CGFloat = 388
+    static let minContentHeight: CGFloat = 72
     static let maxHeight: CGFloat = 420
-    static let shadowRadius: CGFloat = 20
-    static let shadowY: CGFloat = 8
     static let progressHeight: CGFloat = 2
 }
 
 struct FloatingPanelView: View {
     @EnvironmentObject private var appModel: AppModel
     @State private var shakeOffset: CGFloat = 0
+    @State private var didCopy = false
+    @State private var copyResetTask: Task<Void, Never>?
 
     var body: some View {
-        ZStack(alignment: .top) {
-            VisualEffectView(material: .popover, blendingMode: .behindWindow)
-                .ignoresSafeArea()
+        VStack(spacing: 0) {
+            header
 
-            VStack(spacing: 0) {
-                // Thin progress bar — the only loading indicator
-                progressBar
-                    .padding(.bottom, 6)
+            progressBar
+                .padding(.top, 6)
+                .padding(.bottom, 8)
 
-                // Content area
-                Group {
-                    content
-                }
-                .animation(.easeInOut(duration: 0.2), value: contentStateKey)
-                .padding(.horizontal, PanelTokens.horizontalPadding)
-                .padding(.bottom, PanelTokens.verticalPadding)
-
-                // Subtle notice (e.g. truncation info) — only when done
-                if let noticeText, !noticeText.isEmpty {
-                    Divider()
-                        .overlay(Color.primary.opacity(0.04))
-                        .padding(.horizontal, PanelTokens.horizontalPadding)
-
-                    Text(noticeText)
-                        .font(.system(size: PanelTokens.metaFontSize))
-                        .foregroundStyle(.tertiary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, PanelTokens.horizontalPadding)
-                        .padding(.vertical, 8)
-                        .transition(.opacity)
-                }
+            Group {
+                content
             }
-            .padding(.top, PanelTokens.verticalPadding)
+            .animation(.easeInOut(duration: 0.18), value: contentStateKey)
+            .padding(.horizontal, PanelTokens.horizontalPadding)
+            .padding(.bottom, PanelTokens.bottomPadding)
+
+            if let noticeText, !noticeText.isEmpty {
+                Divider()
+                    .overlay(Color.primary.opacity(0.05))
+                    .padding(.horizontal, PanelTokens.horizontalPadding)
+
+                Text(noticeText)
+                    .font(.system(size: PanelTokens.metaFontSize))
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, PanelTokens.horizontalPadding)
+                    .padding(.vertical, 8)
+                    .transition(.opacity)
+            }
         }
-        .clipShape(RoundedRectangle(cornerRadius: PanelTokens.cornerRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: PanelTokens.cornerRadius, style: .continuous)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
-        )
-        .shadow(color: .black.opacity(0.10), radius: PanelTokens.shadowRadius, x: 0, y: PanelTokens.shadowY)
+        .background(Color(nsColor: .windowBackgroundColor))
         .offset(x: shakeOffset)
-        .contentShape(Rectangle())
-        .onTapGesture { copyResultIfPossible() }
         .onExitCommand { appModel.closePanel() }
+        .onDisappear { copyResetTask?.cancel() }
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            statusIcon
+
+            Text(headerTitle)
+                .font(.system(size: PanelTokens.bodyFontSize, weight: .semibold))
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: 16)
+
+            Button(action: copyResultIfPossible) {
+                Label(didCopy ? "已复制" : "复制", systemImage: didCopy ? "checkmark" : "doc.on.doc")
+                    .labelStyle(.titleAndIcon)
+                    .font(.system(size: PanelTokens.bodyFontSize, weight: .medium))
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(didCopy ? Color.green : Color.secondary)
+            .disabled(appModel.panelState.isLoading || !hasResult)
+            .opacity(hasResult ? 1 : 0)
+            .help(didCopy ? "已复制" : "复制译文")
+        }
+        .padding(.top, PanelTokens.topPadding)
+        .padding(.horizontal, PanelTokens.horizontalPadding)
+    }
+
+    @ViewBuilder
+    private var statusIcon: some View {
+        if let error = appModel.panelState.errorMessage, !error.isEmpty {
+            Image(systemName: "exclamationmark.circle.fill")
+                .foregroundStyle(.orange)
+                .font(.system(size: 22))
+        } else if hasResult {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+                .font(.system(size: 22))
+        } else {
+            ProgressView()
+                .controlSize(.small)
+                .frame(width: 22, height: 22)
+        }
     }
 
     // MARK: - Progress Bar
@@ -75,7 +107,7 @@ struct FloatingPanelView: View {
                 RoundedRectangle(cornerRadius: 1)
                     .fill(
                         LinearGradient(
-                            colors: [Color.accentColor.opacity(0.5), Color.accentColor],
+                            colors: [Color.accentColor.opacity(0.35), Color.accentColor],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
@@ -86,6 +118,7 @@ struct FloatingPanelView: View {
         }
         .frame(height: PanelTokens.progressHeight)
         .padding(.horizontal, PanelTokens.horizontalPadding)
+        .opacity(appModel.panelState.isLoading ? 1 : 0)
     }
 
     // MARK: - Content
@@ -95,11 +128,7 @@ struct FloatingPanelView: View {
         if let error = appModel.panelState.errorMessage, !error.isEmpty {
             errorView(error)
         } else if appModel.panelState.isLoading && !hasResult {
-            // No text yet — just show a quiet placeholder.
-            // The progress bar above does the talking.
-            Text("")
-                .frame(minWidth: PanelTokens.minWidth, idealWidth: PanelTokens.idealWidth)
-                .frame(height: 32)
+            loadingView
         } else {
             resultView
         }
@@ -107,11 +136,23 @@ struct FloatingPanelView: View {
 
     private var resultView: some View {
         ScrollView {
-            MarkdownTextView(markdown: displayText)
+            MarkdownTextView(markdown: displayText, fontSize: CGFloat(appModel.settingsStore.translationFontSize))
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(minWidth: PanelTokens.minWidth, idealWidth: PanelTokens.idealWidth, maxHeight: PanelTokens.maxHeight)
+    }
+
+    private var loadingView: some View {
+        Text("翻译中...")
+            .font(.system(size: PanelTokens.bodyFontSize))
+            .foregroundStyle(.tertiary)
+            .frame(
+                minWidth: PanelTokens.minWidth,
+                idealWidth: PanelTokens.idealWidth,
+                minHeight: PanelTokens.minContentHeight,
+                alignment: .leading
+            )
     }
 
     /// Error: subtle message + tap-to-retry. Shake animation on appear.
@@ -156,6 +197,13 @@ struct FloatingPanelView: View {
     private func copyResultIfPossible() {
         guard !appModel.panelState.isLoading, hasResult else { return }
         appModel.copyResultPlainTextToPasteboard()
+        didCopy = true
+        copyResetTask?.cancel()
+        copyResetTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            guard !Task.isCancelled else { return }
+            didCopy = false
+        }
     }
 
     private var contentStateKey: String {
@@ -185,6 +233,26 @@ struct FloatingPanelView: View {
     private var displayText: String {
         let trimmed = appModel.panelState.resultText.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? " " : trimmed
+    }
+
+    private var headerTitle: String {
+        if let error = appModel.panelState.errorMessage, !error.isEmpty {
+            return "翻译失败"
+        }
+        if hasResult {
+            return "翻译结果"
+        }
+        return "翻译"
+    }
+
+    private var accessibilityLabel: String {
+        if appModel.panelState.isLoading {
+            return "正在翻译"
+        }
+        if hasResult {
+            return "翻译结果，点击可复制"
+        }
+        return "翻译窗口"
     }
 }
 

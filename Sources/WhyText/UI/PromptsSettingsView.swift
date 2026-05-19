@@ -1,46 +1,35 @@
 import SwiftUI
 
 private enum PromptUITokens {
-    static let cardSpacing: CGFloat = 16
-    static let sectionSpacing: CGFloat = 14
-    static let maxContentWidth: CGFloat = 620
-    static let pagePadding: CGFloat = 20
-    static let captionSize: CGFloat = 12
     static let editorHeight: CGFloat = 240
-    static let editorCornerRadius: CGFloat = 10
 }
 
 struct PromptsSettingsView: View {
     @EnvironmentObject private var appModel: AppModel
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: PromptUITokens.cardSpacing) {
-                promptCard
-            }
-            .frame(maxWidth: PromptUITokens.maxContentWidth)
-            .padding(PromptUITokens.pagePadding)
-            .frame(maxWidth: .infinity)
+        SettingsPage {
+            promptCard
         }
     }
 
     private var promptCard: some View {
-        GroupBox("翻译提示词") {
-            VStack(alignment: .leading, spacing: PromptUITokens.sectionSpacing) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("决定语气、格式与输出边界")
-                        .font(.system(size: 13, weight: .medium))
+        SettingsCard("翻译提示词", subtitle: "决定语气、格式与输出边界。模板必须包含 {{text}}，运行时会替换为你选中的原文。") {
+            VStack(alignment: .leading, spacing: SettingsUI.fieldSpacing) {
+                HStack {
+                    StatusBadge(
+                        text: hasPlaceholder ? "占位符有效" : "缺少 {{text}}",
+                        tone: hasPlaceholder ? .success : .danger
+                    )
 
-                    Text("必须包含 {{text}}，它会在运行时替换为你选中的原文。")
-                        .font(.system(size: PromptUITokens.captionSize))
-                        .foregroundStyle(.secondary)
+                    Spacer()
                 }
 
                 editor
 
                 HStack(spacing: 10) {
                     Text("\(templateCharacterCount) 字符")
-                        .font(.system(size: PromptUITokens.captionSize))
+                        .font(.system(size: SettingsUI.captionSize))
                         .foregroundStyle(.tertiary)
 
                     Spacer()
@@ -57,7 +46,6 @@ struct PromptsSettingsView: View {
                     .disabled(isDefaultTemplate)
                 }
             }
-            .padding(.top, 4)
         }
     }
 
@@ -67,17 +55,11 @@ struct PromptsSettingsView: View {
             .frame(height: PromptUITokens.editorHeight)
             .padding(10)
             .background(
-                RoundedRectangle(cornerRadius: PromptUITokens.editorCornerRadius, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.primary.opacity(0.045), Color.primary.opacity(0.02)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(SettingsUI.fieldBackground)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: PromptUITokens.editorCornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .stroke(Color.primary.opacity(0.12), lineWidth: 1)
             )
     }
@@ -91,6 +73,10 @@ struct PromptsSettingsView: View {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         == SettingsStore.defaultTranslatePromptTemplate
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var hasPlaceholder: Bool {
+        appModel.settingsStore.translatePromptTemplate.contains("{{text}}")
     }
 
     private func insertTextPlaceholder() {
