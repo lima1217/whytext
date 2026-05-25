@@ -73,6 +73,9 @@ enum WhyTextCoreSmokeTests {
         expect(paragraphs.chunks == ["first", "second"], "paragraphs should split independently")
         expect(!paragraphs.wasTruncated, "paragraph splitting should not mark truncation")
 
+        let lines = TextChunker.chunk(text: "first\nsecond", maxCharacters: 100, splitLongInput: true)
+        expect(lines.chunks == ["first", "second"], "single-newline structured input should split independently")
+
         let long = TextChunker.chunk(text: "alpha beta gamma", maxCharacters: 10, splitLongInput: true)
         expect(long.chunks == ["alpha", "beta gamma"], "long text should split on whitespace")
     }

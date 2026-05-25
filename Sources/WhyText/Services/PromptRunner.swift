@@ -102,7 +102,7 @@ final class PromptRunner {
             device: UnifiedTranslationRequest.defaultDeviceDescriptor,
             promptTemplate: template,
             stream: stream,
-            includeStructureHint: false
+            includeStructureHint: true
         )
     }
 }

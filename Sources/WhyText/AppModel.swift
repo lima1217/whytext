@@ -34,6 +34,9 @@ final class AppModel: ObservableObject {
     private var pendingSelectionAnchorRect: CGRect?
     private var suppressAutoPopupUntil = Date.distantPast
 
+    private static let autoPopupDragThreshold: CGFloat = 4
+    private static let autoPopupAnchorTolerance: CGFloat = 80
+
     init(
         settingsStore: SettingsStore = SettingsStore(),
         selectionService: AccessibilitySelectionService = AccessibilitySelectionService(),
@@ -406,20 +409,25 @@ final class AppModel: ObservableObject {
         // Ignore ordinary clicks so stale selections do not summon the bubble.
         // Multi-clicks can create selections, so let those continue through detection.
         let mouseUpLocation = NSEvent.mouseLocation
-        if let downLocation = mouseDownLocation {
-            let dx = mouseUpLocation.x - downLocation.x
-            let dy = mouseUpLocation.y - downLocation.y
-            let distance = sqrt(dx * dx + dy * dy)
-            let didDragSelect = distance >= 4
-            let didMultiClickSelect = mouseUpClickCount >= 2
-            if !didDragSelect && !didMultiClickSelect {
-                mouseDownLocation = nil
-                return
-            }
+        guard let downLocation = mouseDownLocation else {
+            return
+        }
+
+        let dx = mouseUpLocation.x - downLocation.x
+        let dy = mouseUpLocation.y - downLocation.y
+        let distance = sqrt(dx * dx + dy * dy)
+        let didDragSelect = distance >= Self.autoPopupDragThreshold
+        let didMultiClickSelect = mouseUpClickCount >= 2
+        if !didDragSelect && !didMultiClickSelect {
+            mouseDownLocation = nil
+            return
         }
         mouseDownLocation = nil
 
-        let selection = await readSelectionForAutoPopup()
+        let selection = await readSelectionForAutoPopup(
+            near: mouseUpLocation,
+            allowMissingAnchor: didDragSelect || didMultiClickSelect
+        )
         let trimmed = selection.text
         guard trimmed.count >= 2 else {
             pendingSelectionText = ""
@@ -441,25 +449,48 @@ final class AppModel: ObservableObject {
         selectionBubbleController.show(at: point, anchorRect: selection.anchorRect)
     }
 
-    private func readSelectionForAutoPopup() async -> SelectionReader.Result {
+    private func readSelectionForAutoPopup(near mouseLocation: NSPoint, allowMissingAnchor: Bool) async -> SelectionReader.Result {
         let delays: [UInt64] = [50_000_000, 120_000_000, 250_000_000]
 
         for delay in delays {
             try? await Task.sleep(nanoseconds: delay)
             let selection = try? await selectionReader.readSelectedText(allowClipboardFallback: false)
             let trimmed = sanitizeSelectedText(selection?.text ?? "")
-            if trimmed.count >= 2 {
+            if trimmed.count >= 2,
+               isAutoPopupSelection(selection, near: mouseLocation, allowMissingAnchor: allowMissingAnchor) {
                 return SelectionReader.Result(text: trimmed, anchorRect: selection?.anchorRect)
             }
         }
 
-        let fallbackSelection = try? await selectionReader.readSelectedText(allowClipboardFallback: true)
-        let fallbackText = sanitizeSelectedText(fallbackSelection?.text ?? "")
-        if fallbackText.count >= 2 {
-            return SelectionReader.Result(text: fallbackText, anchorRect: fallbackSelection?.anchorRect)
+        if allowMissingAnchor {
+            let fallbackSelection = try? await selectionReader.readSelectedText(allowClipboardFallback: true)
+            let fallbackText = sanitizeSelectedText(fallbackSelection?.text ?? "")
+            if fallbackText.count >= 2 {
+                return SelectionReader.Result(text: fallbackText, anchorRect: nil)
+            }
         }
 
         return SelectionReader.Result(text: "", anchorRect: nil)
+    }
+
+    private func isAutoPopupSelection(_ selection: SelectionReader.Result?, near mouseLocation: NSPoint, allowMissingAnchor: Bool) -> Bool {
+        guard let anchorRect = selection?.anchorRect else {
+            return allowMissingAnchor
+        }
+
+        let raw = NSRect(x: anchorRect.origin.x, y: anchorRect.origin.y, width: anchorRect.width, height: anchorRect.height)
+        let screen = NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) }) ?? NSScreen.main
+        let screenFrame = screen?.frame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let flipped = NSRect(
+            x: anchorRect.origin.x,
+            y: screenFrame.maxY - anchorRect.maxY,
+            width: anchorRect.width,
+            height: anchorRect.height
+        )
+
+        return [raw, flipped].contains { rect in
+            rect.insetBy(dx: -Self.autoPopupAnchorTolerance, dy: -Self.autoPopupAnchorTolerance).contains(mouseLocation)
+        }
     }
 
     func accessibilityStatus() -> AccessibilitySelectionService.Status {

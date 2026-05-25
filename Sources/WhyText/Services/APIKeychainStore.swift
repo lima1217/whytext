@@ -41,24 +41,7 @@ final class APIKeychainStore {
 
         guard let data = trimmed.data(using: .utf8) else { return false }
 
-        var query = baseQuery(for: providerID, service: primaryService)
-        query[kSecUseAuthenticationContext as String] = nonInteractiveContext()
-
-        let attributes: [String: Any] = [
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-        ]
-
-        let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
-        if updateStatus == errSecSuccess {
-            return true
-        }
-
-        if updateStatus == errSecInteractionNotAllowed {
-            _ = deleteItem(for: providerID, service: primaryService)
-        } else if updateStatus != errSecItemNotFound {
-            return false
-        }
+        _ = deleteItem(for: providerID, service: primaryService)
 
         var addQuery = baseQuery(for: providerID, service: primaryService)
         addQuery[kSecValueData as String] = data

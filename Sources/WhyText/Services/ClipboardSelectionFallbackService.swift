@@ -7,6 +7,7 @@ final class ClipboardSelectionFallbackService {
         var typeData: [NSPasteboard.PasteboardType: Data]
     }
 
+    @MainActor
     func readSelectedTextViaCopy(timeout: TimeInterval = 0.35) async -> String? {
         guard let source = CGEventSource(stateID: .hidSystemState) else { return nil }
 
@@ -15,18 +16,23 @@ final class ClipboardSelectionFallbackService {
         let initialChangeCount = pasteboard.changeCount
 
         guard postCommandC(using: source) else { return nil }
+        defer {
+            restorePasteboardSnapshot(snapshot, to: pasteboard)
+        }
 
         let deadline = Date().addingTimeInterval(timeout)
+        var didChange = false
         while Date() < deadline {
             if pasteboard.changeCount != initialChangeCount {
+                didChange = true
                 break
             }
             try? await Task.sleep(nanoseconds: 20_000_000)
         }
 
-        let text = pasteboard.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard didChange else { return nil }
 
-        restorePasteboardSnapshot(snapshot, to: pasteboard)
+        let text = pasteboard.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard let text, !text.isEmpty else { return nil }
         return text

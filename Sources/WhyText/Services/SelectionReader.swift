@@ -17,6 +17,7 @@ final class SelectionReader {
         var anchorRect: CGRect?
     }
 
+    @MainActor
     func readSelectedText(allowClipboardFallback: Bool = true) async throws -> Result {
         if accessibility.status() == .trusted {
             if let selection = try? accessibility.getSelectedTextResult(), !selection.text.isEmpty {

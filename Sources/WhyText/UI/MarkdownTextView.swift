@@ -74,9 +74,7 @@ enum MarkdownRenderer {
     }
 
     static func renderNSAttributedString(_ markdown: String, fontSize: CGFloat = 16) -> NSAttributedString {
-        let normalizedMarkdown = CJKLatinSpacer.apply(toPlainText: normalizeParagraphs(in: markdown))
-        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
-        let attributed = (try? AttributedString(markdown: normalizedMarkdown, options: options)) ?? AttributedString(normalizedMarkdown)
+        let normalizedText = CJKLatinSpacer.apply(toPlainText: normalizeDisplayText(in: markdown))
 
         let baseFont = NSFont.systemFont(ofSize: fontSize)
 
@@ -85,7 +83,7 @@ enum MarkdownRenderer {
         paragraphStyle.paragraphSpacing = 10
         paragraphStyle.lineBreakMode = .byWordWrapping
 
-        let mutable = NSMutableAttributedString(attributedString: NSAttributedString(attributed))
+        let mutable = NSMutableAttributedString(string: normalizedText)
         mutable.addAttribute(
             .font,
             value: baseFont,
@@ -102,59 +100,13 @@ enum MarkdownRenderer {
     }
 
     static func plainText(_ markdown: String) -> String {
-        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
-        let normalizedMarkdown = CJKLatinSpacer.apply(toPlainText: normalizeParagraphs(in: markdown))
-        if let attributed = try? AttributedString(markdown: normalizedMarkdown, options: options) {
-            return String(attributed.characters)
-        }
-        return normalizedMarkdown
+        CJKLatinSpacer.apply(toPlainText: normalizeDisplayText(in: markdown))
     }
 
-    private static func normalizeParagraphs(in text: String) -> String {
-        let normalizedNewlines = text
+    private static func normalizeDisplayText(in text: String) -> String {
+        text
             .replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
-
-        var output: [String] = []
-        var previousWasBlank = false
-
-        for rawLine in normalizedNewlines.components(separatedBy: "\n") {
-            let line = rawLine.trimmingCharacters(in: .whitespaces)
-            let isBlank = line.isEmpty
-
-            if isBlank {
-                if !previousWasBlank, !output.isEmpty {
-                    output.append("")
-                }
-                previousWasBlank = true
-            } else {
-                if shouldStartNewParagraph(after: output.last, current: line) {
-                    output.append("")
-                }
-                output.append(line)
-                previousWasBlank = false
-            }
-        }
-
-        return output.joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private static func shouldStartNewParagraph(after previousLine: String?, current: String) -> Bool {
-        guard let previousLine,
-              !previousLine.isEmpty,
-              !current.isEmpty,
-              !previousLine.hasSuffix("  "),
-              !previousLine.hasPrefix("#"),
-              !previousLine.hasPrefix("- "),
-              !previousLine.hasPrefix("* "),
-              !current.hasPrefix("- "),
-              !current.hasPrefix("* ") else {
-            return false
-        }
-
-        let sentenceEndings = CharacterSet(charactersIn: ".!?。！？；;：:")
-        guard let scalar = previousLine.unicodeScalars.last else { return false }
-        return sentenceEndings.contains(scalar)
     }
 }
