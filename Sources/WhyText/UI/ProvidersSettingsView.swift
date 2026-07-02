@@ -37,7 +37,7 @@ struct ProvidersSettingsView: View {
 
     private var providerHeader: some View {
         SettingsCard("Provider", subtitle: "选择一个服务商，填写接口、模型和 API Key 后先测试连通性。") {
-            HStack(spacing: 10) {
+            HStack(spacing: Spacing.x2_5) {
                 Picker("Provider", selection: providerSelectionBinding) {
                     ForEach(appModel.settingsStore.providers) { provider in
                         Text(provider.name.isEmpty ? "未命名" : provider.name)
@@ -54,16 +54,18 @@ struct ProvidersSettingsView: View {
                 } label: {
                     Label("添加", systemImage: "plus")
                 }
+                .buttonStyle(.quiet)
                 .popover(isPresented: $showAddTemplate) {
                     addTemplatePopover
                 }
 
                 if appModel.settingsStore.providers.count > 1, let id = appModel.settingsStore.selectedProviderID {
-                    Button(role: .destructive) {
+                    Button {
                         appModel.settingsStore.removeProviders(withIDs: [id])
                     } label: {
                         Label("移除", systemImage: "trash")
                     }
+                    .buttonStyle(.quiet(tint: Tone.danger.color.opacity(0.85)))
                 }
             }
         }
@@ -72,52 +74,65 @@ struct ProvidersSettingsView: View {
     // MARK: - Add Template Popover
 
     private var addTemplatePopover: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("添加 Provider")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.top, 4)
+        VStack(alignment: .leading, spacing: Spacing.x1) {
+            SectionLabel(text: "内置模板")
+                .padding(.horizontal, Spacing.x2)
+                .padding(.top, Spacing.x1_5)
+                .padding(.bottom, Spacing.half)
 
             ForEach(ProviderTemplate.allCases) { template in
                 Button {
                     addProvider(from: template)
                     showAddTemplate = false
                 } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(template.name)
-                            .font(.system(size: 13, weight: .medium))
-                        Text(template.subtitle)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
+                    HStack(spacing: Spacing.x2_5) {
+                        Image(systemName: template.icon)
+                            .font(.system(size: 13))
+                            .foregroundStyle(AstryxColor.textSecondary)
+                            .frame(width: 18)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(template.name)
+                                .font(AstryxFont.bodyMedium)
+                                .foregroundStyle(AstryxColor.textPrimary)
+                            Text(template.subtitle)
+                                .font(.system(size: 11))
+                                .foregroundStyle(AstryxColor.textSecondary)
+                        }
+                        Spacer()
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, Spacing.x2)
+                    .padding(.vertical, Spacing.x1_5)
                     .contentShape(Rectangle())
+                    .quietButtonHover(cornerRadius: Radius.inner)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(8)
-        .frame(width: 220)
+        .padding(.bottom, Spacing.x1_5)
+        .frame(width: 240)
     }
 
     // MARK: - Empty State
 
     private var emptyState: some View {
         SettingsCard("还没有 Provider") {
-            VStack(spacing: 10) {
-            Image(systemName: "network")
-                .font(.system(size: 24))
-                .foregroundStyle(.secondary)
-            Text("无可用 Provider")
-                .font(.headline)
-            Button("添加一个") {
-                showAddTemplate = true
-            }
+            VStack(spacing: Spacing.x3) {
+                Image(systemName: "network")
+                    .font(.system(size: 28, weight: .light))
+                    .foregroundStyle(AstryxColor.borderEmphasized)
+                Text("无可用 Provider")
+                    .font(AstryxFont.heading4)
+                    .foregroundStyle(AstryxColor.textPrimary)
+                Button {
+                    showAddTemplate = true
+                } label: {
+                    Label("添加一个", systemImage: "plus")
+                }
+                .buttonStyle(.borderedProminent)
             }
             .frame(maxWidth: .infinity)
+            .padding(.vertical, Spacing.x4)
         }
     }
 
@@ -178,6 +193,14 @@ private enum ProviderTemplate: String, CaseIterable, Identifiable {
         }
     }
 
+    var icon: String {
+        switch self {
+        case .deepSeek: "sparkles"
+        case .openAI: "brain.head.profile"
+        case .custom: "wrench.and.screwdriver"
+        }
+    }
+
     func makeProvider() -> LLMProvider {
         switch self {
         case .deepSeek:
@@ -227,7 +250,7 @@ private struct ProviderDetailView: View {
 
             SettingsCard("API Key", subtitle: "输入后会自动保存到 macOS Keychain，本地设置不会明文持久化。") {
                 VStack(alignment: .leading, spacing: SettingsUI.fieldSpacing) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: Spacing.x2) {
                         if showAPIKey {
                             TextField("sk-...", text: $apiKeyDraft)
                                 .textFieldStyle(.roundedBorder)
@@ -243,13 +266,15 @@ private struct ProviderDetailView: View {
                         } label: {
                             Image(systemName: showAPIKey ? "eye.slash" : "eye")
                                 .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(AstryxColor.textSecondary)
+                                .frame(width: 26, height: 26)
+                                .quietButtonHover(cornerRadius: Radius.inner)
                         }
                         .buttonStyle(.plain)
                         .help(showAPIKey ? "隐藏" : "显示")
                     }
 
-                    HStack(spacing: 10) {
+                    HStack(spacing: Spacing.x2_5) {
                         StatusBadge(
                             text: apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "未填写" : "已保存到 Keychain",
                             tone: apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .warning : .success
@@ -273,7 +298,7 @@ private struct ProviderDetailView: View {
                     if let keychainRepairMessage, !keychainRepairMessage.isEmpty {
                         Text(keychainRepairMessage)
                             .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AstryxColor.textSecondary)
                     }
                 }
             }
@@ -292,22 +317,23 @@ private struct ProviderDetailView: View {
                     }
 
                     if let report = connectivityReport {
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: Spacing.x2) {
                             statusRow(title: "Base URL", state: report.baseURL)
                             statusRow(title: "API Key", state: report.apiKey)
                             statusRow(title: "Model", state: report.model)
                         }
-                        .padding(10)
+                        .padding(Spacing.x2_5)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
                                 .fill(SettingsUI.fieldBackground)
                         )
+                        .hairlineBorder(cornerRadius: Radius.element)
 
                         if !report.message.isEmpty {
                             Text(report.message)
                                 .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(AstryxColor.textSecondary)
                                 .textSelection(.enabled)
                         }
                     }
@@ -391,23 +417,23 @@ private struct ProviderDetailView: View {
     }
 
     private func statusRow(title: String, state: ConnectivityCheckState) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.x2) {
             Text(title)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AstryxColor.textSecondary)
                 .frame(width: 72, alignment: .leading)
-            Image(systemName: state.systemImage)
-                .foregroundStyle(statusColor(for: state))
+            StatusDot(tone: statusTone(for: state))
             Text(state.label)
-                .foregroundStyle(statusColor(for: state))
+                .foregroundStyle(AstryxColor.textPrimary)
+            Spacer(minLength: 0)
         }
         .font(.system(size: 12, weight: .medium))
     }
 
-    private func statusColor(for state: ConnectivityCheckState) -> Color {
+    private func statusTone(for state: ConnectivityCheckState) -> Tone {
         switch state {
-        case .available: .green
-        case .unavailable: .red
-        case .unknown: .secondary
+        case .available: .success
+        case .unavailable: .danger
+        case .unknown: .neutral
         }
     }
 }

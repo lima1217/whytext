@@ -10,7 +10,7 @@ struct WhyTextApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra("WhyText", systemImage: "globe") {
+        MenuBarExtra("WhyText", systemImage: "character.textbox") {
             MenuBarView()
                 .environmentObject(appModel)
         }

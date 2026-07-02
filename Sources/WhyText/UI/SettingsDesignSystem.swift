@@ -1,16 +1,18 @@
 import SwiftUI
 
+/// Shared layout constants for the settings windows.
+/// Thin wrappers over the project-wide design tokens (`Spacing`, `Radius`, `AstryxFont`).
 enum SettingsUI {
     static let contentWidth: CGFloat = 640
-    static let pagePadding: CGFloat = 22
-    static let sectionSpacing: CGFloat = 14
-    static let fieldSpacing: CGFloat = 12
-    static let cornerRadius: CGFloat = 12
+    static let pagePadding: CGFloat = Spacing.x6        // 24
+    static let sectionSpacing: CGFloat = Spacing.x3_5    // 14
+    static let fieldSpacing: CGFloat = Spacing.x3        // 12
+    static let cornerRadius: CGFloat = Radius.container  // 12
     static let labelWidth: CGFloat = 92
-    static let captionSize: CGFloat = 12
+    static let captionSize: CGFloat = 12                 // kept for monospaced numeric sizing
 
     static let cardBackground = Color(nsColor: .controlBackgroundColor)
-    static let fieldBackground = Color.primary.opacity(0.045)
+    static let fieldBackground = AstryxColor.overlayHover
 }
 
 struct SettingsPage<Content: View>: View {
@@ -45,72 +47,41 @@ struct SettingsCard<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: Spacing.x4) {
+            VStack(alignment: .leading, spacing: Spacing.half) {
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(AstryxFont.bodySemibold)
+                    .foregroundStyle(AstryxColor.textPrimary)
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.system(size: SettingsUI.captionSize))
-                        .foregroundStyle(.secondary)
+                        .font(AstryxFont.captionM)
+                        .foregroundStyle(AstryxColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
             content
         }
-        .padding(16)
+        .padding(Spacing.x4)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: SettingsUI.cornerRadius, style: .continuous)
-                .fill(SettingsUI.cardBackground)
-                .shadow(color: .black.opacity(0.06), radius: 1, y: 1)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: SettingsUI.cornerRadius, style: .continuous)
-                .stroke(Color.primary.opacity(0.07), lineWidth: 0.5)
-        )
+        .cardSurface(radius: SettingsUI.cornerRadius, fill: SettingsUI.cardBackground)
     }
 }
 
 struct StatusBadge: View {
-    enum Tone {
-        case success
-        case warning
-        case neutral
-        case danger
-
-        var color: Color {
-            switch self {
-            case .success: .green
-            case .warning: .orange
-            case .neutral: .secondary
-            case .danger: .red
-            }
-        }
-
-        var symbol: String {
-            switch self {
-            case .success: "checkmark.circle.fill"
-            case .warning: "exclamationmark.triangle.fill"
-            case .neutral: "circle.fill"
-            case .danger: "xmark.circle.fill"
-            }
-        }
-    }
-
     var text: String
     var tone: Tone
 
     var body: some View {
-        Label(text, systemImage: tone.symbol)
+        Label(text, systemImage: tone.icon)
             .font(.system(size: 11, weight: .medium))
             .labelStyle(.titleAndIcon)
             .foregroundStyle(tone.color)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
+            .padding(.horizontal, Spacing.x2_5)
+            .padding(.vertical, Spacing.x1)
             .background(
                 Capsule(style: .continuous)
-                    .fill(tone.color.opacity(0.14))
+                    .fill(tone.mutedFill)
             )
     }
 }
@@ -120,8 +91,8 @@ struct CaptionText: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: SettingsUI.captionSize))
-            .foregroundStyle(.secondary)
+            .font(AstryxFont.captionM)
+            .foregroundStyle(AstryxColor.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
     }
 }
@@ -138,8 +109,8 @@ struct LabeledSettingsField<Field: View>: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: SettingsUI.fieldSpacing) {
             Text(title)
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
+                .font(AstryxFont.body)
+                .foregroundStyle(AstryxColor.textSecondary)
                 .frame(width: SettingsUI.labelWidth, alignment: .leading)
 
             field

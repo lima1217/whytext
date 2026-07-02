@@ -6,27 +6,25 @@ struct HotKeyRecorderView: View {
     @State private var isRecording = false
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Spacing.x2_5) {
             Text(shortcut?.displayString ?? "未设置")
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
-                .foregroundStyle(shortcut == nil ? .secondary : .primary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
+                .font(AstryxFont.bodyMono)
+                .foregroundStyle(shortcut == nil ? AstryxColor.textSecondary : AstryxColor.textPrimary)
+                .padding(.horizontal, Spacing.x2_5)
+                .padding(.vertical, Spacing.x1_5)
                 .frame(minWidth: 142, alignment: .leading)
                 .background(
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
                         .fill(SettingsUI.fieldBackground)
                 )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .stroke(Color.primary.opacity(0.10), lineWidth: 0.5)
-                )
+                .hairlineBorder(cornerRadius: Radius.element)
 
             Button {
                 isRecording.toggle()
             } label: {
                 Label(isRecording ? "按键中..." : "录制", systemImage: isRecording ? "keyboard.badge.ellipsis" : "keyboard")
             }
+            .buttonStyle(.quiet)
 
             Button {
                 shortcut = nil
@@ -34,6 +32,7 @@ struct HotKeyRecorderView: View {
             } label: {
                 Label("清除", systemImage: "xmark")
             }
+            .buttonStyle(.quiet)
             .disabled(shortcut == nil)
 
             if isRecording {

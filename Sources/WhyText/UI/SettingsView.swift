@@ -14,7 +14,7 @@ struct SettingsView: View {
             PromptsSettingsView()
                 .tabItem { Label("提示词", systemImage: "text.quote") }
         }
-        .padding(16)
+        .padding(Spacing.x4)
         .frame(width: 720, height: 560)
         .environmentObject(appModel)
     }

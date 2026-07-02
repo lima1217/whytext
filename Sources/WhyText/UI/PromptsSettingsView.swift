@@ -27,22 +27,22 @@ struct PromptsSettingsView: View {
 
                 editor
 
-                HStack(spacing: 10) {
+                HStack(spacing: Spacing.x2_5) {
                     Text("\(templateCharacterCount) 字符")
-                        .font(.system(size: SettingsUI.captionSize))
-                        .foregroundStyle(.tertiary)
+                        .font(AstryxFont.captionM)
+                        .foregroundStyle(AstryxColor.textSecondary)
 
                     Spacer()
 
                     Button("插入 {{text}}") {
                         insertTextPlaceholder()
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.quiet)
 
                     Button("恢复默认") {
                         appModel.settingsStore.resetTranslatePromptTemplateToDefault()
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.quiet)
                     .disabled(isDefaultTemplate)
                 }
             }
@@ -51,17 +51,14 @@ struct PromptsSettingsView: View {
 
     private var editor: some View {
         TextEditor(text: $appModel.settingsStore.translatePromptTemplate)
-            .font(.system(size: 13, weight: .regular, design: .monospaced))
+            .font(AstryxFont.bodyMono)
             .frame(height: PromptUITokens.editorHeight)
-            .padding(10)
+            .padding(Spacing.x2_5)
             .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
                     .fill(SettingsUI.fieldBackground)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .stroke(Color.primary.opacity(0.12), lineWidth: 1)
-            )
+            .hairlineBorder(cornerRadius: Radius.element, lineWidth: 1)
     }
 
     private var templateCharacterCount: Int {

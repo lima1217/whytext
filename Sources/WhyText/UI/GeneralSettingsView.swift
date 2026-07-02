@@ -20,7 +20,7 @@ struct GeneralSettingsView: View {
         let hotKeyReady = appModel.settingsStore.hotKeyShortcut != nil
 
         return SettingsCard("当前状态", subtitle: "完成这两项后，WhyText 就可以在任意应用里翻译选中文本。") {
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.x2) {
                 StatusBadge(
                     text: hotKeyReady ? "快捷键已设置" : "未设置快捷键",
                     tone: hotKeyReady ? .success : .warning
@@ -69,7 +69,7 @@ struct GeneralSettingsView: View {
 
                     Text("\(Int(appModel.settingsStore.translationFontSize)) pt")
                         .font(.system(size: SettingsUI.captionSize, design: .monospaced))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AstryxColor.textSecondary)
                 }
 
                 Slider(
@@ -102,18 +102,20 @@ struct GeneralSettingsView: View {
                         CaptionText(text: "授权后如果仍读取不到选中文本，先重启 WhyText，再使用诊断查看当前 App 是否暴露选区。")
                     }
 
-                    HStack(spacing: 10) {
+                    HStack(spacing: Spacing.x2) {
                         Button("请求授权") {
                             appModel.requestAccessibilityPermissionPrompt()
                         }
+                        .buttonStyle(.quiet)
 
                         Button("打开系统设置") {
                             appModel.openAccessibilitySettings()
                         }
+                        .buttonStyle(.quiet)
                     }
 
                     DisclosureGroup("诊断", isExpanded: $showPermissionDiagnostics) {
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: Spacing.x2) {
                             LabeledContent("Bundle ID", value: Bundle.main.bundleIdentifier ?? "(unknown)")
 
                             LabeledContent("路径") {
@@ -121,17 +123,19 @@ struct GeneralSettingsView: View {
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                                     .textSelection(.enabled)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(AstryxColor.textSecondary)
                             }
 
-                            HStack(spacing: 10) {
+                            HStack(spacing: Spacing.x2) {
                                 Button("立即诊断") {
                                     appModel.runSelectionDiagnostics()
                                 }
+                                .buttonStyle(.quiet)
 
                                 Button(appModel.selectionDiagnosticsPending ? "2秒后诊断（进行中）" : "2秒后诊断") {
                                     appModel.runSelectionDiagnosticsWithDelay(seconds: 2.0)
                                 }
+                                .buttonStyle(.quiet)
                                 .disabled(appModel.selectionDiagnosticsPending)
 
                                 if !appModel.selectionDiagnosticsReport.isEmpty {
@@ -140,22 +144,24 @@ struct GeneralSettingsView: View {
                                         pasteboard.clearContents()
                                         pasteboard.setString(appModel.selectionDiagnosticsReport, forType: .string)
                                     }
+                                    .buttonStyle(.quiet)
                                 }
 
                                 Button("重启 WhyText") {
                                     appModel.relaunchApp()
                                 }
+                                .buttonStyle(.quiet)
                             }
 
                             if let updatedAt = appModel.selectionDiagnosticsUpdatedAt {
                                 Text("最近诊断: \(updatedAt.formatted(date: .abbreviated, time: .standard))")
-                                    .font(.system(size: SettingsUI.captionSize))
-                                    .foregroundStyle(.secondary)
+                                    .font(AstryxFont.captionM)
+                                    .foregroundStyle(AstryxColor.textSecondary)
                             }
 
                             if !appModel.selectionDiagnosticsTextPreview.isEmpty {
                                 Text("选中文本预览: \(appModel.selectionDiagnosticsTextPreview)")
-                                    .font(.system(size: SettingsUI.captionSize))
+                                    .font(AstryxFont.captionM)
                                     .lineLimit(2)
                                     .textSelection(.enabled)
                             }
@@ -168,17 +174,18 @@ struct GeneralSettingsView: View {
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                                 .frame(maxHeight: 180)
-                                .padding(8)
+                                .padding(Spacing.x2)
                                 .background(
-                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .fill(Color.secondary.opacity(0.08))
+                                    RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
+                                        .fill(SettingsUI.fieldBackground)
                                 )
+                                .hairlineBorder(cornerRadius: Radius.element)
                             }
                         }
-                        .padding(.top, 6)
+                        .padding(.top, Spacing.x1_5)
                     }
                 }
-                .padding(.top, 4)
+                .padding(.top, Spacing.x1)
             }
         }
     }

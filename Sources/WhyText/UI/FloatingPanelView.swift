@@ -1,9 +1,9 @@
 import SwiftUI
 
 private enum PanelTokens {
-    static let horizontalPadding: CGFloat = 16
-    static let topPadding: CGFloat = 12
-    static let bottomPadding: CGFloat = 16
+    static let horizontalPadding: CGFloat = Spacing.x4   // 16
+    static let topPadding: CGFloat = Spacing.x3          // 12
+    static let bottomPadding: CGFloat = Spacing.x4       // 16
     static let bodyFontSize: CGFloat = 13
     static let metaFontSize: CGFloat = 11
     static let minWidth: CGFloat = 320
@@ -30,21 +30,23 @@ struct FloatingPanelView: View {
             Group {
                 content
             }
-            .animation(.easeInOut(duration: 0.18), value: contentStateKey)
+            .animation(AstryxMotion.smooth, value: contentStateKey)
             .padding(.horizontal, PanelTokens.horizontalPadding)
             .padding(.bottom, PanelTokens.bottomPadding)
 
             if let noticeText, !noticeText.isEmpty {
-                Divider()
-                    .overlay(Color.primary.opacity(0.05))
-                    .padding(.horizontal, PanelTokens.horizontalPadding)
-
                 Text(noticeText)
                     .font(.system(size: PanelTokens.metaFontSize))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(AstryxColor.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, Spacing.x2)
+                    .padding(.vertical, Spacing.x1_5)
+                    .background(
+                        RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
+                            .fill(AstryxColor.overlayHover)
+                    )
                     .padding(.horizontal, PanelTokens.horizontalPadding)
-                    .padding(.vertical, 8)
+                    .padding(.bottom, PanelTokens.bottomPadding)
                     .transition(.opacity)
             }
         }
@@ -56,22 +58,21 @@ struct FloatingPanelView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Spacing.x2) {
             statusIcon
 
             Text(headerTitle)
-                .font(.system(size: PanelTokens.bodyFontSize, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .font(AstryxFont.bodyMedium)
+                .foregroundStyle(AstryxColor.textSecondary)
 
-            Spacer(minLength: 16)
+            Spacer(minLength: Spacing.x4)
 
             Button(action: copyResultIfPossible) {
                 Label(didCopy ? "已复制" : "复制", systemImage: didCopy ? "checkmark" : "doc.on.doc")
                     .labelStyle(.titleAndIcon)
                     .font(.system(size: PanelTokens.bodyFontSize, weight: .medium))
             }
-            .buttonStyle(.borderless)
-            .foregroundStyle(didCopy ? Color.green : Color.secondary)
+            .buttonStyle(.quiet(tint: didCopy ? Tone.success.color : AstryxColor.textSecondary))
             .disabled(appModel.panelState.isLoading || !hasResult)
             .opacity(hasResult ? 1 : 0)
             .help(didCopy ? "已复制" : "复制译文")
@@ -83,17 +84,17 @@ struct FloatingPanelView: View {
     @ViewBuilder
     private var statusIcon: some View {
         if let error = appModel.panelState.errorMessage, !error.isEmpty {
-            Image(systemName: "exclamationmark.circle.fill")
-                .foregroundStyle(.orange)
-                .font(.system(size: 22))
+            Image(systemName: Tone.warning.icon)
+                .foregroundStyle(Tone.warning.color)
+                .font(.system(size: 14))
         } else if hasResult {
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
-                .font(.system(size: 22))
+            Image(systemName: Tone.success.icon)
+                .foregroundStyle(Tone.success.color)
+                .font(.system(size: 14))
         } else {
             ProgressView()
                 .controlSize(.small)
-                .frame(width: 22, height: 22)
+                .frame(width: 14, height: 14)
         }
     }
 
@@ -112,7 +113,7 @@ struct FloatingPanelView: View {
                             endPoint: .trailing
                         )
                     )
-                    .frame(width: geo.size.width * 0.4, height: PanelTokens.progressHeight)
+                    .frame(width: geo.size.width * 0.3, height: PanelTokens.progressHeight)
                     .modifier(IndeterminateProgressModifier(width: geo.size.width))
             }
         }
@@ -144,51 +145,91 @@ struct FloatingPanelView: View {
     }
 
     private var loadingView: some View {
-        Text("翻译中...")
-            .font(.system(size: PanelTokens.bodyFontSize))
-            .foregroundStyle(.tertiary)
-            .frame(
-                minWidth: PanelTokens.minWidth,
-                idealWidth: PanelTokens.idealWidth,
-                minHeight: PanelTokens.minContentHeight,
-                alignment: .leading
+        VStack(alignment: .leading, spacing: Spacing.x2) {
+            Text("翻译中…")
+                .font(.system(size: PanelTokens.bodyFontSize))
+                .foregroundStyle(AstryxColor.textSecondary)
+
+            // A quiet skeleton bar suggesting in-progress content.
+            skeletonBar(widthRatio: 1.0)
+            skeletonBar(widthRatio: 0.82)
+            skeletonBar(widthRatio: 0.6)
+        }
+        .frame(
+            minWidth: PanelTokens.minWidth,
+            idealWidth: PanelTokens.idealWidth,
+            minHeight: PanelTokens.minContentHeight,
+            alignment: .leading
+        )
+    }
+
+    private func skeletonBar(widthRatio: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: Radius.inner, style: .continuous)
+            .fill(AstryxColor.overlayHover)
+            .frame(height: 8)
+            .frame(maxWidth: .infinity)
+            .overlay(
+                GeometryReader { geo in
+                    RoundedRectangle(cornerRadius: Radius.inner, style: .continuous)
+                        .fill(AstryxColor.borderEmphasized.opacity(0.5))
+                        .frame(width: geo.size.width * 0.35, height: 8)
+                        .modifier(SkeletonShimmerModifier(width: geo.size.width))
+                }
+            )
+            .mask(
+                GeometryReader { geo in
+                    RoundedRectangle(cornerRadius: Radius.inner, style: .continuous)
+                        .frame(width: geo.size.width * widthRatio, height: 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             )
     }
 
-    /// Error: subtle message + tap-to-retry. Shake animation on appear.
+    /// Error: a quiet error card with a status dot + retry. Shake animation on appear.
     private func errorView(_ message: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(message)
-                .foregroundStyle(.secondary)
-                .font(.system(size: PanelTokens.bodyFontSize))
+        VStack(alignment: .leading, spacing: Spacing.x2) {
+            HStack(alignment: .top, spacing: Spacing.x2) {
+                StatusDot(tone: .danger)
+                    .padding(.top, 5)
+                Text(message)
+                    .foregroundStyle(AstryxColor.textPrimary)
+                    .font(.system(size: PanelTokens.bodyFontSize))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             Button(action: { appModel.retryLastAction() }) {
-                Text("重试")
+                Label("重试", systemImage: "arrow.clockwise")
+                    .labelStyle(.titleAndIcon)
                     .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
-                    .foregroundColor(.accentColor)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.quiet(tint: Color.accentColor))
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 6)
+        .padding(Spacing.x3)
+        .background(
+            RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
+                .fill(AstryxColor.overlayHover)
+        )
+        .hairlineBorder(cornerRadius: Radius.element)
         .onAppear { triggerShake() }
     }
 
     // MARK: - Shake Animation
 
     private func triggerShake() {
-        withAnimation(.default) { shakeOffset = 6 }
+        withAnimation(AstryxMotion.quick) { shakeOffset = 6 }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-            withAnimation(.default) { shakeOffset = -5 }
+            withAnimation(AstryxMotion.quick) { shakeOffset = -5 }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
-            withAnimation(.default) { shakeOffset = 3 }
+            withAnimation(AstryxMotion.quick) { shakeOffset = 3 }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
-            withAnimation(.default) { shakeOffset = -2 }
+            withAnimation(AstryxMotion.quick) { shakeOffset = -2 }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
-            withAnimation(.spring(response: 0.15, dampingFraction: 0.5)) { shakeOffset = 0 }
+            withAnimation(.astryxSpring(response: 0.15, damping: 0.5)) { shakeOffset = 0 }
         }
     }
 
@@ -268,10 +309,31 @@ private struct IndeterminateProgressModifier: ViewModifier, Animatable {
             .offset(x: offset)
             .onAppear {
                 withAnimation(
-                    .easeInOut(duration: 1.2)
+                    AstryxMotion.smooth
                     .repeatForever(autoreverses: true)
                 ) {
                     offset = width * 0.6
+                }
+            }
+    }
+}
+
+// MARK: - Skeleton shimmer
+
+/// Sweeps a faint highlight across a skeleton bar to suggest in-progress content.
+private struct SkeletonShimmerModifier: ViewModifier, Animatable {
+    let width: CGFloat
+    @State private var offset: CGFloat = -1
+
+    func body(content: Content) -> some View {
+        content
+            .offset(x: offset * width)
+            .onAppear {
+                withAnimation(
+                    .easeInOut(duration: 1.1)
+                    .repeatForever(autoreverses: false)
+                ) {
+                    offset = 1.6
                 }
             }
     }

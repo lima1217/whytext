@@ -79,8 +79,8 @@ enum MarkdownRenderer {
         let baseFont = NSFont.systemFont(ofSize: fontSize)
 
         let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineSpacing = 2
-        paragraphStyle.paragraphSpacing = 10
+        paragraphStyle.lineSpacing = Spacing.half      // 2
+        paragraphStyle.paragraphSpacing = Spacing.x2_5 // 10
         paragraphStyle.lineBreakMode = .byWordWrapping
 
         let mutable = NSMutableAttributedString(string: normalizedText)

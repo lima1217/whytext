@@ -221,18 +221,18 @@ private struct SelectionBubbleButton: View {
 
     var body: some View {
         Button(action: onTap) {
-            Image(systemName: "character.book.closed")
-                .font(.system(size: 12, weight: .semibold))
+            Image(systemName: "character.textbox")
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.white)
                 .frame(width: isHovering ? 34 : 28, height: 24)
                 .background(
                     Capsule(style: .continuous)
-                        .fill(Color.accentColor.opacity(isHovering ? 0.92 : 0.78))
-                        .shadow(color: Color.accentColor.opacity(isHovering ? 0.28 : 0.12), radius: isHovering ? 8 : 4, y: 1)
+                        .fill(Color.accentColor.opacity(isHovering ? 0.92 : 0.62))
+                        .shadow(color: Color.accentColor.opacity(isHovering ? 0.22 : 0.10), radius: isHovering ? 6 : 3, y: 1)
                 )
                 .scaleEffect(appeared ? 1.0 : 0.01)
                 .opacity(appeared ? 1 : 0)
-                .animation(.easeOut(duration: 0.16), value: isHovering)
+                .animation(AstryxMotion.quick, value: isHovering)
                 // Keep a generous hit area so it's easy to click.
                 .frame(width: 34, height: 28)
         }
@@ -241,7 +241,7 @@ private struct SelectionBubbleButton: View {
             isHovering = hovering
         }
         .onAppear {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.65)) {
+            withAnimation(.astryxSpring(response: 0.35, damping: 0.65)) {
                 appeared = true
             }
         }
