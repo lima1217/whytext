@@ -662,17 +662,6 @@ enum ConnectivityCheckState: Equatable {
             "待确认"
         }
     }
-
-    var systemImage: String {
-        switch self {
-        case .available:
-            "checkmark.circle.fill"
-        case .unavailable:
-            "xmark.circle.fill"
-        case .unknown:
-            "questionmark.circle.fill"
-        }
-    }
 }
 
 struct ProviderConnectivityReport: Equatable {
