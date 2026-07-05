@@ -5,6 +5,8 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     var onDidClose: (() -> Void)?
 
     private var panel: NSPanel?
+    private var titlebarAccessory: NSTitlebarAccessoryViewController?
+    private var titlebarHostingView: NSHostingView<AnyView>?
     private var mouseOrigin: NSPoint = .zero
     private var isClosingProgrammatically = false
 
@@ -13,15 +15,22 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     private let maxHeight: CGFloat = 480
     private let minHeight: CGFloat = 60
 
-    func show<V: View>(at mouseLocation: NSPoint, @ViewBuilder content: () -> V) {
+    func show<Content: View, Titlebar: View>(
+        at mouseLocation: NSPoint,
+        @ViewBuilder titlebar: () -> Titlebar,
+        @ViewBuilder content: () -> Content
+    ) {
         mouseOrigin = mouseLocation
 
         let rootView = AnyView(content())
         let hostingView = NSHostingView(rootView: rootView)
+        prepareHostingView(hostingView)
+        let titlebarView = AnyView(titlebar())
 
         if let panel {
             panel.contentView = hostingView
             fitAndPosition(panel: panel, hostingView: hostingView)
+            updateTitlebarAccessory(panel: panel, rootView: titlebarView)
             panel.orderFrontRegardless()
             NSApp.activate(ignoringOtherApps: true)
             return
@@ -37,19 +46,21 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
 
         panel.isReleasedWhenClosed = false
         panel.level = .floating
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenNone]
         panel.hidesOnDeactivate = false
-        panel.backgroundColor = .windowBackgroundColor
-        panel.isOpaque = true
+        panel.backgroundColor = .clear
+        panel.isOpaque = false
         panel.hasShadow = true
         panel.title = "WhyText"
-        panel.titleVisibility = .visible
-        panel.titlebarAppearsTransparent = false
+        panel.titleVisibility = .hidden
+        panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = true
         panel.delegate = self
         panel.contentView = hostingView
+        disableFullscreen(panel)
 
         self.panel = panel
+        installTitlebarAccessory(panel: panel, rootView: titlebarView)
 
         fitAndPosition(panel: panel, hostingView: hostingView)
 
@@ -135,6 +146,11 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     func windowDidResignKey(_ notification: Notification) {
     }
 
+    func windowDidResize(_ notification: Notification) {
+        guard let panel = notification.object as? NSPanel else { return }
+        updateTitlebarAccessoryWidth(panel: panel)
+    }
+
     func bringToFrontIfVisible() {
         guard let panel, panel.isVisible else { return }
         panel.orderFrontRegardless()
@@ -149,5 +165,48 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         panel.setContentSize(size)
         let origin = ScreenClamp.positionedOrigin(near: mouseOrigin, size: size)
         panel.setFrameOrigin(origin)
+        updateTitlebarAccessoryWidth(panel: panel)
+    }
+
+    private func installTitlebarAccessory(panel: NSPanel, rootView: AnyView) {
+        let hostingView = NSHostingView(rootView: rootView)
+        prepareHostingView(hostingView)
+        hostingView.frame = NSRect(origin: .zero, size: titlebarAccessorySize(for: panel))
+
+        let accessory = NSTitlebarAccessoryViewController()
+        accessory.layoutAttribute = .left
+        accessory.view = hostingView
+
+        panel.addTitlebarAccessoryViewController(accessory)
+        titlebarAccessory = accessory
+        titlebarHostingView = hostingView
+    }
+
+    private func updateTitlebarAccessory(panel: NSPanel, rootView: AnyView) {
+        if titlebarAccessory == nil {
+            installTitlebarAccessory(panel: panel, rootView: rootView)
+            return
+        }
+
+        titlebarHostingView?.rootView = rootView
+        updateTitlebarAccessoryWidth(panel: panel)
+    }
+
+    private func updateTitlebarAccessoryWidth(panel: NSPanel) {
+        titlebarHostingView?.frame.size = titlebarAccessorySize(for: panel)
+    }
+
+    private func titlebarAccessorySize(for panel: NSPanel) -> NSSize {
+        NSSize(width: max(panel.frame.width - 78, 160), height: 32)
+    }
+
+    private func prepareHostingView(_ hostingView: NSHostingView<AnyView>) {
+        hostingView.wantsLayer = true
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+    }
+
+    private func disableFullscreen(_ panel: NSPanel) {
+        panel.standardWindowButton(.zoomButton)?.isEnabled = false
+        panel.standardWindowButton(.zoomButton)?.isHidden = true
     }
 }

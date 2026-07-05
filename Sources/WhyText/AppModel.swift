@@ -168,6 +168,9 @@ final class AppModel: ObservableObject {
 
         let point = NSEvent.mouseLocation
         panelController.show(at: point) {
+            FloatingPanelTitlebarView()
+                .environmentObject(self)
+        } content: {
             FloatingPanelView()
                 .environmentObject(self)
         }

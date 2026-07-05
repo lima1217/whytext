@@ -1,8 +1,8 @@
+import AppKit
 import SwiftUI
 
 private enum PanelTokens {
     static let horizontalPadding: CGFloat = Spacing.x4   // 16
-    static let topPadding: CGFloat = Spacing.x3          // 12
     static let bottomPadding: CGFloat = Spacing.x4       // 16
     static let bodyFontSize: CGFloat = 13
     static let metaFontSize: CGFloat = 11
@@ -10,116 +10,46 @@ private enum PanelTokens {
     static let idealWidth: CGFloat = 388
     static let minContentHeight: CGFloat = 72
     static let maxHeight: CGFloat = 420
-    static let progressHeight: CGFloat = 2
 }
 
 struct FloatingPanelView: View {
     @EnvironmentObject private var appModel: AppModel
     @State private var shakeOffset: CGFloat = 0
-    @State private var didCopy = false
-    @State private var copyResetTask: Task<Void, Never>?
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
+        ZStack {
+            VisualEffectView(material: .popover, blendingMode: .behindWindow, state: .active)
+                .ignoresSafeArea()
 
-            progressBar
-                .padding(.top, 6)
-                .padding(.bottom, 8)
+            VStack(spacing: 0) {
+                Group {
+                    content
+                }
+                .animation(AstryxMotion.smooth, value: contentStateKey)
+                .padding(.top, Spacing.x3)
+                .padding(.horizontal, PanelTokens.horizontalPadding)
+                .padding(.bottom, PanelTokens.bottomPadding)
 
-            Group {
-                content
-            }
-            .animation(AstryxMotion.smooth, value: contentStateKey)
-            .padding(.horizontal, PanelTokens.horizontalPadding)
-            .padding(.bottom, PanelTokens.bottomPadding)
-
-            if let noticeText, !noticeText.isEmpty {
-                Text(noticeText)
-                    .font(.system(size: PanelTokens.metaFontSize))
-                    .foregroundStyle(AstryxColor.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, Spacing.x2)
-                    .padding(.vertical, Spacing.x1_5)
-                    .background(
-                        RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
-                            .fill(AstryxColor.overlayHover)
-                    )
-                    .padding(.horizontal, PanelTokens.horizontalPadding)
-                    .padding(.bottom, PanelTokens.bottomPadding)
-                    .transition(.opacity)
+                if let noticeText, !noticeText.isEmpty {
+                    Text(noticeText)
+                        .font(.system(size: PanelTokens.metaFontSize))
+                        .foregroundStyle(AstryxColor.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, Spacing.x2)
+                        .padding(.vertical, Spacing.x1_5)
+                        .background(
+                            RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
+                                .fill(AstryxColor.overlayHover)
+                        )
+                        .padding(.horizontal, PanelTokens.horizontalPadding)
+                        .padding(.bottom, PanelTokens.bottomPadding)
+                        .transition(.opacity)
+                }
             }
         }
-        .background(Color(nsColor: .windowBackgroundColor))
         .offset(x: shakeOffset)
         .onExitCommand { appModel.closePanel() }
-        .onDisappear { copyResetTask?.cancel() }
         .accessibilityLabel(accessibilityLabel)
-    }
-
-    private var header: some View {
-        HStack(spacing: Spacing.x2) {
-            statusIcon
-
-            Text(headerTitle)
-                .font(AstryxFont.bodyMedium)
-                .foregroundStyle(AstryxColor.textSecondary)
-
-            Spacer(minLength: Spacing.x4)
-
-            Button(action: copyResultIfPossible) {
-                Label(didCopy ? "已复制" : "复制", systemImage: didCopy ? "checkmark" : "doc.on.doc")
-                    .labelStyle(.titleAndIcon)
-                    .font(.system(size: PanelTokens.bodyFontSize, weight: .medium))
-            }
-            .buttonStyle(.quiet(tint: didCopy ? Tone.success.color : AstryxColor.textSecondary))
-            .disabled(appModel.panelState.isLoading || !hasResult)
-            .opacity(hasResult ? 1 : 0)
-            .help(didCopy ? "已复制" : "复制译文")
-        }
-        .padding(.top, PanelTokens.topPadding)
-        .padding(.horizontal, PanelTokens.horizontalPadding)
-    }
-
-    @ViewBuilder
-    private var statusIcon: some View {
-        if let error = appModel.panelState.errorMessage, !error.isEmpty {
-            Image(systemName: Tone.warning.icon)
-                .foregroundStyle(Tone.warning.color)
-                .font(.system(size: 14))
-        } else if hasResult {
-            Image(systemName: Tone.success.icon)
-                .foregroundStyle(Tone.success.color)
-                .font(.system(size: 14))
-        } else {
-            ProgressView()
-                .controlSize(.small)
-                .frame(width: 14, height: 14)
-        }
-    }
-
-    // MARK: - Progress Bar
-
-    /// A thin, Safari-style progress line at the top of the panel.
-    /// Visible only during loading. The streaming text itself is the real progress.
-    private var progressBar: some View {
-        GeometryReader { geo in
-            if appModel.panelState.isLoading {
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.accentColor.opacity(0.35), Color.accentColor],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(width: geo.size.width * 0.3, height: PanelTokens.progressHeight)
-                    .modifier(IndeterminateProgressModifier(width: geo.size.width))
-            }
-        }
-        .frame(height: PanelTokens.progressHeight)
-        .padding(.horizontal, PanelTokens.horizontalPadding)
-        .opacity(appModel.panelState.isLoading ? 1 : 0)
     }
 
     // MARK: - Content
@@ -146,11 +76,6 @@ struct FloatingPanelView: View {
 
     private var loadingView: some View {
         VStack(alignment: .leading, spacing: Spacing.x2) {
-            Text("翻译中…")
-                .font(.system(size: PanelTokens.bodyFontSize))
-                .foregroundStyle(AstryxColor.textSecondary)
-
-            // A quiet skeleton bar suggesting in-progress content.
             skeletonBar(widthRatio: 1.0)
             skeletonBar(widthRatio: 0.82)
             skeletonBar(widthRatio: 0.6)
@@ -235,18 +160,6 @@ struct FloatingPanelView: View {
 
     // MARK: - Helpers
 
-    private func copyResultIfPossible() {
-        guard !appModel.panelState.isLoading, hasResult else { return }
-        appModel.copyResultPlainTextToPasteboard()
-        didCopy = true
-        copyResetTask?.cancel()
-        copyResetTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 900_000_000)
-            guard !Task.isCancelled else { return }
-            didCopy = false
-        }
-    }
-
     private var contentStateKey: String {
         if let error = appModel.panelState.errorMessage, !error.isEmpty {
             return "error"
@@ -276,16 +189,6 @@ struct FloatingPanelView: View {
         return trimmed.isEmpty ? " " : trimmed
     }
 
-    private var headerTitle: String {
-        if let error = appModel.panelState.errorMessage, !error.isEmpty {
-            return "翻译失败"
-        }
-        if hasResult {
-            return "翻译结果"
-        }
-        return "翻译"
-    }
-
     private var accessibilityLabel: String {
         if appModel.panelState.isLoading {
             return "正在翻译"
@@ -297,24 +200,191 @@ struct FloatingPanelView: View {
     }
 }
 
-// MARK: - Indeterminate Progress Animation
+struct FloatingPanelTitlebarView: View {
+    @EnvironmentObject private var appModel: AppModel
+    @State private var didCopy = false
+    @State private var isCopyHovered = false
+    @State private var copyResetTask: Task<Void, Never>?
 
-/// Slides a highlight bar back and forth continuously.
-private struct IndeterminateProgressModifier: ViewModifier, Animatable {
-    let width: CGFloat
-    @State private var offset: CGFloat = 0
+    var body: some View {
+        HStack(spacing: Spacing.x2) {
+            if shouldShowStatus {
+                statusIcon
 
-    func body(content: Content) -> some View {
-        content
-            .offset(x: offset)
-            .onAppear {
-                withAnimation(
-                    AstryxMotion.smooth
-                    .repeatForever(autoreverses: true)
-                ) {
-                    offset = width * 0.6
-                }
+                Text(headerTitle)
+                    .font(AstryxFont.bodyMedium)
+                    .foregroundStyle(AstryxColor.textSecondary)
             }
+
+            Spacer(minLength: Spacing.x4)
+
+            Button(action: copyResultIfPossible) {
+                Image(systemName: didCopy ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 14, weight: .medium))
+                    .frame(width: 28, height: 28)
+                    .accessibilityLabel(didCopy ? "已复制" : "复制译文")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(didCopy ? Tone.success.color : AstryxColor.textSecondary)
+            .background(copyButtonBackground)
+            .background(CopyTooltipAnchor(isPresented: isCopyHovered, text: "复制"))
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                isCopyHovered = hovering
+            }
+            .disabled(appModel.panelState.isLoading || !hasResult)
+            .opacity(hasResult ? 1 : 0)
+            .help(didCopy ? "已复制" : "复制")
+        }
+        .frame(height: 32)
+        .padding(.trailing, PanelTokens.horizontalPadding)
+        .onDisappear { copyResetTask?.cancel() }
+    }
+
+    private var copyButtonBackground: some View {
+        RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
+            .fill(isCopyHovered ? AstryxColor.overlayHover : Color.clear)
+            .shadow(
+                color: isCopyHovered ? Color.black.opacity(0.18) : Color.clear,
+                radius: 10,
+                x: 0,
+                y: 3
+            )
+            .animation(AstryxMotion.quick, value: isCopyHovered)
+    }
+
+    @ViewBuilder
+    private var statusIcon: some View {
+        if let error = appModel.panelState.errorMessage, !error.isEmpty {
+            Image(systemName: Tone.warning.icon)
+                .foregroundStyle(Tone.warning.color)
+                .font(.system(size: 14))
+        } else if appModel.panelState.isLoading {
+            ProgressView()
+                .controlSize(.small)
+                .frame(width: 14, height: 14)
+        } else if hasResult {
+            Image(systemName: Tone.success.icon)
+                .foregroundStyle(Tone.success.color)
+                .font(.system(size: 14))
+        }
+    }
+
+    private func copyResultIfPossible() {
+        guard !appModel.panelState.isLoading, hasResult else { return }
+        appModel.copyResultPlainTextToPasteboard()
+        didCopy = true
+        copyResetTask?.cancel()
+        copyResetTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            guard !Task.isCancelled else { return }
+            didCopy = false
+        }
+    }
+
+    private var hasResult: Bool {
+        !appModel.panelState.resultText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var shouldShowStatus: Bool {
+        appModel.panelState.isLoading || (appModel.panelState.errorMessage?.isEmpty == false)
+    }
+
+    private var headerTitle: String {
+        if let error = appModel.panelState.errorMessage, !error.isEmpty {
+            return "翻译失败"
+        }
+        if appModel.panelState.isLoading {
+            return "翻译中"
+        }
+        return "翻译"
+    }
+}
+
+private struct CopyTooltipAnchor: NSViewRepresentable {
+    var isPresented: Bool
+    var text: String
+
+    func makeNSView(context: Context) -> NSView {
+        NSView(frame: .zero)
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        if isPresented {
+            CopyTooltipWindow.shared.show(text: text, below: nsView)
+        } else {
+            CopyTooltipWindow.shared.hide(anchor: nsView)
+        }
+    }
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: ()) {
+        CopyTooltipWindow.shared.hide(anchor: nsView)
+    }
+}
+
+@MainActor
+private final class CopyTooltipWindow {
+    static let shared = CopyTooltipWindow()
+
+    private var panel: NSPanel?
+    private weak var anchorView: NSView?
+
+    func show(text: String, below view: NSView) {
+        guard let window = view.window else { return }
+        anchorView = view
+
+        let size = NSSize(width: 48, height: 30)
+        let anchorRect = window.convertToScreen(view.convert(view.bounds, to: nil))
+        let origin = NSPoint(
+            x: anchorRect.midX - size.width / 2,
+            y: anchorRect.minY - size.height - 6
+        )
+
+        let panel = panel ?? makePanel(size: size)
+        panel.contentView = NSHostingView(rootView: CopyTooltipView(text: text))
+        panel.setFrame(NSRect(origin: origin, size: size), display: true)
+        panel.orderFrontRegardless()
+        self.panel = panel
+    }
+
+    func hide(anchor view: NSView? = nil) {
+        if let view, anchorView !== view { return }
+        panel?.orderOut(nil)
+        anchorView = nil
+    }
+
+    private func makePanel(size: NSSize) -> NSPanel {
+        let panel = NSPanel(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.isReleasedWhenClosed = false
+        panel.backgroundColor = .clear
+        panel.isOpaque = false
+        panel.hasShadow = false
+        panel.level = .floating
+        panel.ignoresMouseEvents = true
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        return panel
+    }
+}
+
+private struct CopyTooltipView: View {
+    var text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(AstryxColor.textPrimary)
+            .padding(.horizontal, Spacing.x2)
+            .padding(.vertical, Spacing.x1)
+            .background(
+                RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
+                    .fill(Color(nsColor: .controlBackgroundColor).opacity(0.82))
+                    .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 3)
+            )
     }
 }
 

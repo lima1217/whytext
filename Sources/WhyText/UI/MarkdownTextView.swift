@@ -80,7 +80,7 @@ enum MarkdownRenderer {
 
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineSpacing = Spacing.half      // 2
-        paragraphStyle.paragraphSpacing = Spacing.x2_5 // 10
+        paragraphStyle.paragraphSpacing = Spacing.half // 2
         paragraphStyle.lineBreakMode = .byWordWrapping
 
         let mutable = NSMutableAttributedString(string: normalizedText)
@@ -100,10 +100,22 @@ enum MarkdownRenderer {
     }
 
     static func plainText(_ markdown: String) -> String {
-        CJKLatinSpacer.apply(toPlainText: normalizeDisplayText(in: markdown))
+        CJKLatinSpacer.apply(toPlainText: normalizePlainText(in: markdown))
     }
 
     private static func normalizeDisplayText(in text: String) -> String {
+        text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .replacingOccurrences(
+                of: "\n{2,}",
+                with: "\n",
+                options: .regularExpression
+            )
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func normalizePlainText(in text: String) -> String {
         text
             .replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
