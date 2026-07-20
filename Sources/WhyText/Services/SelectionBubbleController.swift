@@ -2,25 +2,35 @@ import AppKit
 import SwiftUI
 
 final class SelectionBubbleController: NSObject, NSWindowDelegate {
-    var onTap: (() -> Void)?
+    var onTranslate: (() -> Void)?
+    var onExplain: (() -> Void)?
 
     private var panel: NSPanel?
     private var outsideEventMonitor: Any?
     private var autoDismissTask: Task<Void, Never>?
 
+    private static let bubbleSize = NSSize(width: 80, height: 32)
+
     func show(at mouseLocation: NSPoint, anchorRect: CGRect? = nil) {
         autoDismissTask?.cancel()
 
-        let size = NSSize(width: 34, height: 28)
-        let hostingView = NSHostingView(rootView: SelectionBubbleButton { [weak self] in
-            self?.handleTap()
-        })
+        let size = Self.bubbleSize
+        let hostingView = NSHostingView(rootView: SelectionBubbleBar(
+            onTranslate: { [weak self] in
+                self?.handleAction(self?.onTranslate)
+            },
+            onExplain: { [weak self] in
+                self?.handleAction(self?.onExplain)
+            }
+        ))
+        Self.prepareHostingView(hostingView)
 
         if let panel {
             panel.contentView = hostingView
             positionBubble(panel: panel, at: mouseLocation, anchorRect: anchorRect, size: size)
             panel.alphaValue = 1
             panel.orderFrontRegardless()
+            panel.invalidateShadow()
             startOutsideEventMonitor()
             scheduleAutoDismiss()
             return
@@ -36,7 +46,9 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
         panel.isReleasedWhenClosed = false
         panel.backgroundColor = .clear
         panel.isOpaque = false
-        panel.hasShadow = false
+        // Window shadow follows opaque content alpha — use this instead of a SwiftUI
+        // `.shadow` clipped by the rectangular panel frame (which left sharp corners).
+        panel.hasShadow = true
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
         panel.hidesOnDeactivate = false
@@ -47,15 +59,8 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
         self.panel = panel
 
         positionBubble(panel: panel, at: mouseLocation, anchorRect: anchorRect, size: size)
-
-        // Fade in
-        panel.alphaValue = 0
-        panel.orderFrontRegardless()
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.2
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            panel.animator().alphaValue = 1
-        }
+        PanelChromeMotion.animatePresent(panel: panel, to: panel.frame)
+        panel.invalidateShadow()
 
         startOutsideEventMonitor()
         scheduleAutoDismiss()
@@ -68,14 +73,10 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
 
         guard let panel else { return }
 
-        NSAnimationContext.runAnimationGroup({ ctx in
-            ctx.duration = 0.15
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
-            panel.animator().alphaValue = 0
-        }, completionHandler: { [weak self] in
+        PanelChromeMotion.animateDismiss(panel: panel) { [weak self] in
             self?.panel?.close()
             self?.panel = nil
-        })
+        }
     }
 
     var isVisible: Bool {
@@ -88,12 +89,12 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
         panel = nil
     }
 
-    private func handleTap() {
+    private func handleAction(_ action: (() -> Void)?) {
         autoDismissTask?.cancel()
         stopOutsideEventMonitor()
         panel?.close()
         panel = nil
-        onTap?()
+        action?()
     }
 
     private func positionBubble(panel: NSPanel, at mouseLocation: NSPoint, anchorRect: CGRect?, size: NSSize) {
@@ -196,6 +197,11 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
             self.outsideEventMonitor = nil
         }
     }
+
+    private static func prepareHostingView<Content: View>(_ hostingView: NSHostingView<Content>) {
+        hostingView.wantsLayer = true
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+    }
 }
 
 private extension NSRect {
@@ -212,39 +218,136 @@ private extension NSRect {
 
 // MARK: - Bubble View
 
-/// A compact action pill near the selected text. It stays quiet at rest,
-/// then reveals the translate affordance on hover.
-private struct SelectionBubbleButton: View {
-    var onTap: () -> Void
-    @State private var isHovering = false
+/// Compact dual-action pill near the selected text: translate + explain.
+/// Translucent material chrome (Apple materials) — not a solid accent fill —
+/// so it reads as floating UI that doesn't steal focus from the selection.
+private struct SelectionBubbleBar: View {
+    var onTranslate: () -> Void
+    var onExplain: () -> Void
+
+    @State private var isBarHovering = false
     @State private var appeared = false
+    @Environment(\.colorScheme) private var colorScheme
+
+    private static let outerPaddingH: CGFloat = 3
+    private static let outerPaddingV: CGFloat = 2
+    private static let dividerHeight: CGFloat = 14
 
     var body: some View {
-        Button(action: onTap) {
-            Image(systemName: "character.textbox")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.white)
-                .frame(width: isHovering ? 34 : 28, height: 24)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(Color.accentColor.opacity(isHovering ? 0.92 : 0.62))
-                        .shadow(color: Color.accentColor.opacity(isHovering ? 0.22 : 0.10), radius: isHovering ? 6 : 3, y: 1)
-                )
-                .scaleEffect(appeared ? 1.0 : 0.01)
-                .opacity(appeared ? 1 : 0)
-                .animation(AstryxMotion.quick, value: isHovering)
-                // Keep a generous hit area so it's easy to click.
-                .frame(width: 34, height: 28)
+        HStack(spacing: 0) {
+            bubbleButton(
+                systemName: "character.textbox",
+                help: "翻译",
+                action: onTranslate
+            )
+            Capsule(style: .continuous)
+                .fill(AstryxColor.borderEmphasized.opacity(isBarHovering ? 0.9 : 0.55))
+                .frame(width: 1, height: Self.dividerHeight)
+                .accessibilityHidden(true)
+            bubbleButton(
+                systemName: "questionmark",
+                help: "解释",
+                action: onExplain
+            )
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, Self.outerPaddingH)
+        .padding(.vertical, Self.outerPaddingV)
+        .background(bubbleMaterial)
+        .overlay(
+            Capsule(style: .continuous)
+                .strokeBorder(materialEdgeHighlight, lineWidth: 0.5)
+        )
+        // No SwiftUI drop shadow — the panel uses `hasShadow` so the silhouette
+        // follows the capsule alpha instead of the rectangular window bounds.
+        .scaleEffect(appeared || MotionPreference.reduceMotion ? 1.0 : 0.94)
+        .opacity(appeared || MotionPreference.reduceMotion ? 1 : 0)
+        .animation(AstryxMotion.quick, value: isBarHovering)
         .onHover { hovering in
-            isHovering = hovering
+            isBarHovering = hovering
         }
         .onAppear {
-            withAnimation(.astryxSpring(response: 0.35, damping: 0.65)) {
+            guard !MotionPreference.reduceMotion else {
+                appeared = true
+                return
+            }
+            // Critically damped — no bounce on chrome that simply appears.
+            withAnimation(AstryxMotion.present) {
                 appeared = true
             }
         }
-        .help("翻译")
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("WhyText 操作")
+    }
+
+    private var bubbleMaterial: some View {
+        ZStack {
+            if MotionPreference.reduceTransparency {
+                Color(nsColor: .controlBackgroundColor)
+            } else {
+                // cornerStyle masks at CALayer — SwiftUI clipShape alone does not clip materials.
+                VisualEffectView(
+                    material: .hudWindow,
+                    blendingMode: .behindWindow,
+                    state: .active,
+                    cornerStyle: .capsule
+                )
+                // Light fill keeps vibrancy text legible without stacking translucent layers.
+                Color(nsColor: .controlBackgroundColor).opacity(colorScheme == .dark ? 0.28 : 0.55)
+            }
+        }
+        .clipShape(Capsule(style: .continuous))
+    }
+
+    /// Bright top-edge catch light — materials read as thicker when lit at the rim.
+    private var materialEdgeHighlight: Color {
+        colorScheme == .dark
+            ? Color.white.opacity(0.18)
+            : Color.white.opacity(0.55)
+    }
+
+    private func bubbleButton(systemName: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            BubbleButtonLabel(systemName: systemName)
+        }
+        .buttonStyle(BubblePressButtonStyle())
+        .help(help)
+        .accessibilityLabel(help)
+    }
+}
+
+/// Icon label with its own hover fill so each slot reads as a separate hit target.
+private struct BubbleButtonLabel: View {
+    let systemName: String
+    @State private var isHovering = false
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(AstryxColor.textPrimary)
+            // Optical: SF Symbol questionmark sits slightly high; nudge down.
+            .offset(y: systemName == "questionmark" ? 0.5 : 0)
+            .frame(width: SelectionBubbleBarMetrics.buttonWidth, height: SelectionBubbleBarMetrics.buttonHeight)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(AstryxColor.overlayHover.opacity(isHovering ? 1 : 0))
+            )
+            .contentShape(Capsule())
+            .animation(AstryxMotion.quick, value: isHovering)
+            .onHover { isHovering = $0 }
+    }
+}
+
+private enum SelectionBubbleBarMetrics {
+    static let buttonWidth: CGFloat = 36
+    static let buttonHeight: CGFloat = 28
+}
+
+/// Scale-on-press — feedback on pointer-down, interruptible.
+private struct BubblePressButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .opacity(configuration.isPressed ? 0.88 : 1)
+            .animation(AstryxMotion.press, value: configuration.isPressed)
     }
 }

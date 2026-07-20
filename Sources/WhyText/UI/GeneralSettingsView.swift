@@ -51,7 +51,7 @@ struct GeneralSettingsView: View {
     private var behaviorCard: some View {
         SettingsCard("选区浮点", subtitle: "适合鼠标选中后顺手点击，关闭后只保留快捷键触发。") {
             HStack(alignment: .firstTextBaseline) {
-                Toggle("选中文本后显示翻译按钮", isOn: $appModel.settingsStore.autoPopupOnSelection)
+                Toggle("选中文本后显示操作气泡", isOn: $appModel.settingsStore.autoPopupOnSelection)
                 Spacer()
             }
         }
@@ -176,10 +176,15 @@ struct GeneralSettingsView: View {
                                 .frame(maxHeight: 180)
                                 .padding(Spacing.x2)
                                 .background(
-                                    RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
-                                        .fill(SettingsUI.fieldBackground)
+                                    RoundedRectangle(
+                                        cornerRadius: Radius.concentric(outer: SettingsUI.cornerRadius, padding: Spacing.x4),
+                                        style: .continuous
+                                    )
+                                    .fill(SettingsUI.fieldBackground)
                                 )
-                                .hairlineBorder(cornerRadius: Radius.element)
+                                .hairlineBorder(
+                                    cornerRadius: Radius.concentric(outer: SettingsUI.cornerRadius, padding: Spacing.x4)
+                                )
                             }
                         }
                         .padding(.top, Spacing.x1_5)

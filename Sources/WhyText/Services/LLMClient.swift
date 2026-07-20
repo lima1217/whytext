@@ -3,6 +3,7 @@ import WhyTextCore
 
 enum TranslationMode: String, Codable {
     case translate
+    case explain
 }
 
 enum TranslationErrorCode: String, Codable {

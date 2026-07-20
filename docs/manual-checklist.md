@@ -13,21 +13,20 @@ Use this checklist before replacing the local app in `/Applications`.
 - Open `WhyText -> 设置...`.
 - Confirm 通用 shows shortcut and Accessibility status.
 - Record a shortcut, clear it, then record it again.
-- Toggle 选中文本后显示翻译按钮 and confirm it persists after reopening settings.
-- In 提示词, change 目标语言, 表达风格, 保留原文段落结构, and 中英文之间自动加半角空格. Reopen settings and confirm values persist.
-- Edit the prompt template, use 插入 `{{text}}`, and 恢复默认.
+- Toggle 选中文本后显示操作气泡 and confirm it persists after reopening settings.
+- In 提示词, edit both 翻译提示词 and 解释提示词, use 插入 `{{text}}`, and 恢复默认. Reopen settings and confirm both templates persist.
 - In 服务商, add a provider from a template, switch provider, test connectivity, and remove it.
 
-## Translation Flow
+## Translation / Explain Flow
 
-- Select text in a native text editor and trigger the shortcut.
+- Select text in a native text editor and trigger the shortcut (translate).
 - Select text in a browser and trigger the shortcut.
-- Select text and click the floating bubble.
+- Select text and click the bubble’s translate action; confirm the panel title reflects 翻译.
+- Select text and click the bubble’s explain (question-mark) action; confirm the panel title reflects 解释 and the explain prompt is used.
 - Confirm the bubble appears near the selection when the app provides selection bounds, and still appears near the mouse as fallback.
-- Confirm the translation panel has rounded lower corners.
+- Confirm the result panel has rounded lower corners.
 - Confirm the copy button copies plain text.
 - Confirm clicking the result area copies plain text.
-- Turn off 中英文之间自动加半角空格 and confirm copied/rendered text no longer inserts extra CJK/Latin spacing.
 
 ## Failure Cases
 

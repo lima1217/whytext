@@ -14,6 +14,7 @@ final class PromptRunner {
         provider: LLMProvider,
         apiKey: String,
         enableStreaming: Bool,
+        mode: TranslationMode = .translate,
         onUpdate: @escaping (String) async -> Void
     ) async throws -> String {
         var output = ""
@@ -30,11 +31,12 @@ final class PromptRunner {
         for (idx, chunk) in chunks.enumerated() {
             try Task.checkCancellation()
 
-            let translationRequest = buildTranslationRequest(
+            let request = buildRequest(
                 template: template,
                 text: chunk,
                 model: provider.model,
-                stream: enableStreaming
+                stream: enableStreaming,
+                mode: mode
             )
 
             if idx > 0 {
@@ -46,7 +48,7 @@ final class PromptRunner {
                 var current = ""
                 do {
                     for try await delta in llmClient.stream(
-                        request: translationRequest,
+                        request: request,
                         provider: provider,
                         apiKey: apiKey
                     ) {
@@ -56,7 +58,7 @@ final class PromptRunner {
                     }
                     output += current
                 } catch {
-                    var fallbackRequest = translationRequest
+                    var fallbackRequest = request
                     fallbackRequest.stream = false
 
                     let response = try await llmClient.complete(
@@ -69,7 +71,7 @@ final class PromptRunner {
                 }
             } else {
                 let response = try await llmClient.complete(
-                    request: translationRequest,
+                    request: request,
                     provider: provider,
                     apiKey: apiKey
                 )
@@ -87,22 +89,23 @@ final class PromptRunner {
         return trimmed
     }
 
-    private func buildTranslationRequest(
+    private func buildRequest(
         template: String,
         text: String,
         model: String,
-        stream: Bool
+        stream: Bool,
+        mode: TranslationMode
     ) -> UnifiedTranslationRequest {
         UnifiedTranslationRequest(
             model: model,
             sourceText: text,
             sourceLanguage: "auto",
             targetLanguage: "auto",
-            mode: .translate,
+            mode: mode,
             device: UnifiedTranslationRequest.defaultDeviceDescriptor,
             promptTemplate: template,
             stream: stream,
-            includeStructureHint: true
+            includeStructureHint: mode == .translate
         )
     }
 }

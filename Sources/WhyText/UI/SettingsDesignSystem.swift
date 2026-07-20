@@ -7,7 +7,7 @@ enum SettingsUI {
     static let pagePadding: CGFloat = Spacing.x6        // 24
     static let sectionSpacing: CGFloat = Spacing.x3_5    // 14
     static let fieldSpacing: CGFloat = Spacing.x3        // 12
-    static let cornerRadius: CGFloat = Radius.container  // 12
+    static let cornerRadius: CGFloat = Radius.card       // 24 — concentric with 16pt padding + 8pt inner
     static let labelWidth: CGFloat = 92
     static let captionSize: CGFloat = 12                 // kept for monospaced numeric sizing
 

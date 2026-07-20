@@ -1,7 +1,7 @@
 import SwiftUI
 
 private enum PromptUITokens {
-    static let editorHeight: CGFloat = 240
+    static let editorHeight: CGFloat = 180
 }
 
 struct PromptsSettingsView: View {
@@ -9,12 +9,38 @@ struct PromptsSettingsView: View {
 
     var body: some View {
         SettingsPage {
-            promptCard
+            PromptTemplateCard(
+                title: "翻译提示词",
+                subtitle: "决定语气、格式与输出边界。模板必须包含 {{text}}，运行时会替换为你选中的原文。",
+                template: $appModel.settingsStore.translatePromptTemplate,
+                defaultTemplate: SettingsStore.defaultTranslatePromptTemplate,
+                onReset: {
+                    appModel.settingsStore.resetTranslatePromptTemplateToDefault()
+                }
+            )
+
+            PromptTemplateCard(
+                title: "解释提示词",
+                subtitle: "选中气泡上的问号会用这份模板解释原文，而不是翻译。模板必须包含 {{text}}。",
+                template: $appModel.settingsStore.explainPromptTemplate,
+                defaultTemplate: SettingsStore.defaultExplainPromptTemplate,
+                onReset: {
+                    appModel.settingsStore.resetExplainPromptTemplateToDefault()
+                }
+            )
         }
     }
+}
 
-    private var promptCard: some View {
-        SettingsCard("翻译提示词", subtitle: "决定语气、格式与输出边界。模板必须包含 {{text}}，运行时会替换为你选中的原文。") {
+private struct PromptTemplateCard: View {
+    let title: String
+    let subtitle: String
+    @Binding var template: String
+    let defaultTemplate: String
+    let onReset: () -> Void
+
+    var body: some View {
+        SettingsCard(title, subtitle: subtitle) {
             VStack(alignment: .leading, spacing: SettingsUI.fieldSpacing) {
                 HStack {
                     StatusBadge(
@@ -40,7 +66,7 @@ struct PromptsSettingsView: View {
                     .buttonStyle(.quiet)
 
                     Button("恢复默认") {
-                        appModel.settingsStore.resetTranslatePromptTemplateToDefault()
+                        onReset()
                     }
                     .buttonStyle(.quiet)
                     .disabled(isDefaultTemplate)
@@ -50,45 +76,48 @@ struct PromptsSettingsView: View {
     }
 
     private var editor: some View {
-        TextEditor(text: $appModel.settingsStore.translatePromptTemplate)
+        TextEditor(text: $template)
             .font(AstryxFont.bodyMono)
             .frame(height: PromptUITokens.editorHeight)
             .padding(Spacing.x2_5)
             .background(
-                RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
-                    .fill(SettingsUI.fieldBackground)
+                RoundedRectangle(
+                    cornerRadius: Radius.concentric(outer: SettingsUI.cornerRadius, padding: Spacing.x4),
+                    style: .continuous
+                )
+                .fill(SettingsUI.fieldBackground)
             )
-            .hairlineBorder(cornerRadius: Radius.element, lineWidth: 1)
+            .hairlineBorder(
+                cornerRadius: Radius.concentric(outer: SettingsUI.cornerRadius, padding: Spacing.x4),
+                lineWidth: 1
+            )
     }
 
     private var templateCharacterCount: Int {
-        appModel.settingsStore.translatePromptTemplate.count
+        template.count
     }
 
     private var isDefaultTemplate: Bool {
-        appModel.settingsStore.translatePromptTemplate
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        == SettingsStore.defaultTranslatePromptTemplate
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        template.trimmingCharacters(in: .whitespacesAndNewlines)
+            == defaultTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var hasPlaceholder: Bool {
-        appModel.settingsStore.translatePromptTemplate.contains("{{text}}")
+        template.contains("{{text}}")
     }
 
     private func insertTextPlaceholder() {
         let token = "{{text}}"
-        if appModel.settingsStore.translatePromptTemplate.contains(token) {
+        if template.contains(token) {
             return
         }
 
-        let trimmed = appModel.settingsStore.translatePromptTemplate
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = template.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if trimmed.isEmpty {
-            appModel.settingsStore.translatePromptTemplate = token
+            template = token
         } else {
-            appModel.settingsStore.translatePromptTemplate = "\(trimmed)\n\n\(token)"
+            template = "\(trimmed)\n\n\(token)"
         }
     }
 }

@@ -81,6 +81,10 @@ enum AstryxColor {
 
     // Shadow tint
     static let shadow = Color.dynamic(light: "#0000001A", dark: "#0000004D")
+
+    /// Pure black/white ring — never a tinted neutral (reads as dirt on the edge).
+    static let outlineRing = Color.dynamic(light: "#0000001A", dark: "#FFFFFF1A")
+    static let outlineRingHover = Color.dynamic(light: "#00000014", dark: "#FFFFFF21")
 }
 
 // MARK: - Spacing
@@ -111,18 +115,22 @@ enum Radius {
     static let inner: CGFloat = 4
     static let element: CGFloat = 8
     static let container: CGFloat = 12
+    /// Card outer radius sized for ~16pt padding + `element` inner (16 + 8 = 24).
+    static let card: CGFloat = 24
     static let page: CGFloat = 28
 
     /// Concentric radius: when a rounded container has padding, inner elements need a
     /// smaller radius to appear concentric with the outer corner. Ported from Astryx Card.
+    /// When padding exceeds 24pt, layers read as separate surfaces — pick radii independently.
     static func concentric(outer: CGFloat, padding: CGFloat) -> CGFloat {
         max(0, outer - padding)
     }
 }
 
 // MARK: - Typography
-// UI chrome fonts. The translation body font stays user-controlled (`translationFontSize`)
-// and is NOT routed through this scale — see `MarkdownTextView`.
+// UI chrome fonts. Translation / explanation body size stays user-controlled
+// (`translationFontSize`); its line-height and paragraph rhythm live in
+// `MarkdownRenderer` (body ~1.55, paragraph spacing ~0.28× font size, single `\n`).
 
 enum AstryxFont {
     static let caption = Font.system(size: 10)
@@ -134,6 +142,15 @@ enum AstryxFont {
     static let label = Font.system(size: 13, weight: .medium)
     static let heading3 = Font.system(size: 13, weight: .bold)
     static let heading4 = Font.system(size: 14, weight: .bold)
+}
+
+// MARK: - Type rhythm
+// Tracking is size-specific (Apple UI Typography): small chrome gets a slight positive
+// track; body stays near 0. Applied where we control Text directly.
+
+enum TypeRhythm {
+    /// Small uppercase section labels — positive tracking for legibility.
+    static let sectionTracking: CGFloat = 0.4
 }
 
 // MARK: - Unified semantic tone
@@ -188,6 +205,34 @@ private struct HairlineBorder: ViewModifier {
     }
 }
 
+/// Layered transparent shadows that adapt to any background — prefer over solid borders
+/// for elevated cards and controls. Form inputs keep hairline borders for accessibility.
+/// Dark mode uses a white ring only (depth shadows wash out on dark surfaces).
+private struct ShadowBorder: ViewModifier {
+    var cornerRadius: CGFloat
+    var isHovered: Bool
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        let ring = isHovered ? AstryxColor.outlineRingHover : AstryxColor.outlineRing
+        if colorScheme == .dark {
+            content
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(ring, lineWidth: 1)
+                )
+        } else {
+            content
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(ring, lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(isHovered ? 0.08 : 0.06), radius: 1, y: 1)
+                .shadow(color: Color.black.opacity(isHovered ? 0.06 : 0.04), radius: 2, y: 2)
+        }
+    }
+}
+
 private struct CardSurface: ViewModifier {
     var radius: CGFloat
     var fill: Color
@@ -198,43 +243,190 @@ private struct CardSurface: ViewModifier {
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .fill(fill)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .stroke(AstryxColor.border, lineWidth: 0.5)
-            )
-            .shadow(color: AstryxColor.shadow.opacity(0.6), radius: 1, y: 1)
+            .modifier(ShadowBorder(cornerRadius: radius, isHovered: false))
+    }
+}
+
+/// Expands the tappable region without changing the visible control size.
+/// Desktop chrome targets ≥40×40; touch contexts should use 44.
+private struct MinHitArea: ViewModifier {
+    var size: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .frame(minWidth: size, minHeight: size)
+            .contentShape(Rectangle())
     }
 }
 
 extension View {
-    /// 1px Astryx hairline border. Replaces scattered `Color.primary.opacity(0.05~0.12)` strokes.
+    /// 1px hairline for layout separators and form field outlines (accessibility).
     func hairlineBorder(cornerRadius: CGFloat = Radius.element, lineWidth: CGFloat = 0.5) -> some View {
         modifier(HairlineBorder(cornerRadius: cornerRadius, lineWidth: lineWidth))
     }
 
-    /// Card surface: rounded fill + hairline border + subtle shadow.
-    /// `fill` defaults to the macOS control background so vibrancy is preserved.
-    func cardSurface(radius: CGFloat = Radius.container, fill: Color = Color(nsColor: .controlBackgroundColor)) -> some View {
+    /// Elevated surface: fill + adaptive shadow-as-border (no solid stroke).
+    func cardSurface(radius: CGFloat = Radius.card, fill: Color = Color(nsColor: .controlBackgroundColor)) -> some View {
         modifier(CardSurface(radius: radius, fill: fill))
+    }
+
+    /// Shadow-as-border for buttons and compact controls.
+    func shadowBorder(cornerRadius: CGFloat = Radius.element, isHovered: Bool = false) -> some View {
+        modifier(ShadowBorder(cornerRadius: cornerRadius, isHovered: isHovered))
+    }
+
+    /// Ensure interactive chrome meets a minimum hit target (default 40pt for desktop).
+    func minHitArea(_ size: CGFloat = 40) -> some View {
+        modifier(MinHitArea(size: size))
     }
 }
 
 // MARK: - Motion
-// Unified animation rhythm. Replaces scattered magic durations across views.
+// Apple fluid-interface defaults (WWDC Designing Fluid Interfaces):
+// damping 1.0 = critically damped (no overshoot) for chrome that just appears;
+// damping ~0.8 only when the gesture itself carried momentum (flick / throw).
+// `response` is settle time in seconds — not a fixed duration.
 
 enum AstryxMotion {
-    /// Snappy feedback for hover / toggles.
-    static let quick: Animation = .easeOut(duration: 0.16)
+    /// Snappy feedback for hover / toggles — interruptible ease (CSS-transition equivalent).
+    static let quick: Animation = .easeOut(duration: 0.15)
     /// Content transitions (state changes, panel content swap).
     static let smooth: Animation = .easeInOut(duration: 0.22)
-    /// Spring for entrance / scale gestures.
-    static let spring: Animation = .spring(response: 0.35, dampingFraction: 0.8)
+    /// Soft exit — shorter than enter so focus moves forward.
+    static let exit: Animation = .easeIn(duration: 0.15)
+    /// Default UI spring: critically damped, response ~0.35 (move / reposition).
+    static let spring: Animation = .spring(response: 0.35, dampingFraction: 1.0)
+    /// Sheet / floating chrome present — snappier response, still no bounce.
+    static let present: Animation = .spring(response: 0.32, dampingFraction: 1.0)
+    /// Momentum / flick spring — slight overshoot only because velocity preceded it.
+    static let momentum: Animation = .spring(response: 0.30, dampingFraction: 0.82)
+    /// Icon swaps: critically damped, response 0.3.
+    static let icon: Animation = .spring(response: 0.3, dampingFraction: 1.0)
+    /// Press scale feedback — lives on pointer-down, not release.
+    static let press: Animation = .easeOut(duration: 0.1)
+}
+
+/// Reads System Settings → Accessibility → Display preferences.
+enum MotionPreference {
+    static var reduceMotion: Bool {
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    }
+
+    static var reduceTransparency: Bool {
+        NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
+    }
 }
 
 extension Animation {
-    /// Convenience: a gentle spring matching `AstryxMotion.spring` with a tunable response.
-    static func astryxSpring(response: Double = 0.35, damping: Double = 0.8) -> Animation {
+    /// Critically damped spring by default. Pass `damping: ~0.8` only for momentum handoff.
+    static func astryxSpring(response: Double = 0.35, damping: Double = 1.0) -> Animation {
         .spring(response: response, dampingFraction: damping)
+    }
+}
+
+// MARK: - Panel / bubble window animation helpers
+// Symmetric enter/exit paths (Apple spatial consistency): if it scales in, it scales out.
+
+enum PanelChromeMotion {
+    /// Present scale for floating chrome (panel, bubble). Reduced motion → opacity only.
+    static let presentScale: CGFloat = 0.94
+    static let presentDuration: TimeInterval = 0.32
+    static let dismissDuration: TimeInterval = 0.18
+
+    static func animatePresent(panel: NSPanel, to finalFrame: NSRect) {
+        if MotionPreference.reduceMotion {
+            panel.setFrame(finalFrame, display: false)
+            panel.alphaValue = 0
+            panel.orderFrontRegardless()
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.18
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                panel.animator().alphaValue = 1
+            }
+            return
+        }
+
+        let scale = presentScale
+        let shrunkWidth = finalFrame.width * scale
+        let shrunkHeight = finalFrame.height * scale
+        let startFrame = NSRect(
+            x: finalFrame.midX - shrunkWidth / 2,
+            y: finalFrame.midY - shrunkHeight / 2,
+            width: shrunkWidth,
+            height: shrunkHeight
+        )
+
+        panel.setFrame(startFrame, display: false)
+        panel.alphaValue = 0
+        panel.orderFrontRegardless()
+
+        // Critically damped spring approximation (response ≈ 0.32).
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = presentDuration
+            ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.2, 1.0)
+            panel.animator().setFrame(finalFrame, display: true)
+            panel.animator().alphaValue = 1
+        }
+    }
+
+    static func animateDismiss(panel: NSPanel, completion: @escaping () -> Void) {
+        if MotionPreference.reduceMotion {
+            NSAnimationContext.runAnimationGroup({ ctx in
+                ctx.duration = 0.14
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                panel.animator().alphaValue = 0
+            }, completionHandler: completion)
+            return
+        }
+
+        let current = panel.frame
+        let scale = presentScale
+        let shrunkWidth = current.width * scale
+        let shrunkHeight = current.height * scale
+        let endFrame = NSRect(
+            x: current.midX - shrunkWidth / 2,
+            y: current.midY - shrunkHeight / 2,
+            width: shrunkWidth,
+            height: shrunkHeight
+        )
+
+        // Mirror the present curve (spatial consistency: leave the way you arrived).
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = dismissDuration
+            ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.4, 0.0, 0.8, 0.1)
+            panel.animator().setFrame(endFrame, display: true)
+            panel.animator().alphaValue = 0
+        }, completionHandler: completion)
+    }
+}
+
+// MARK: - Contextual icon crossfade
+// Keep both icons in the tree and cross-fade with opacity / scale / blur
+// (scale 0.25→1, blur 4→0) so enter and exit both animate without a motion library.
+
+struct ContextualIconSwap: View {
+    var isActive: Bool
+    var activeSystemName: String
+    var inactiveSystemName: String
+    var size: CGFloat = 14
+    var weight: Font.Weight = .medium
+
+    var body: some View {
+        ZStack {
+            Image(systemName: activeSystemName)
+                .font(.system(size: size, weight: weight))
+                .opacity(isActive ? 1 : 0)
+                .scaleEffect(isActive ? 1 : 0.25)
+                .blur(radius: isActive ? 0 : 4)
+
+            Image(systemName: inactiveSystemName)
+                .font(.system(size: size, weight: weight))
+                .opacity(isActive ? 0 : 1)
+                .scaleEffect(isActive ? 0.25 : 1)
+                .blur(radius: isActive ? 4 : 0)
+        }
+        .animation(AstryxMotion.icon, value: isActive)
+        .accessibilityHidden(true)
     }
 }
 
@@ -264,21 +456,46 @@ struct SectionLabel: View {
             .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(AstryxColor.textSecondary)
             .textCase(.uppercase)
-            .tracking(0.3)
+            .tracking(TypeRhythm.sectionTracking)
     }
 }
 
 // MARK: - Quiet button style
 // A restrained secondary control: transparent at rest, soft overlay on hover,
-// hairline border. For high-frequency secondary actions (copy, retry, paste, toggle).
+// shadow-as-border, scale-on-press. For high-frequency secondary actions.
 
 struct QuietButtonStyle: ButtonStyle {
     var tint: Color? = nil
     var cornerRadius: CGFloat = Radius.element
     var horizontalPadding: CGFloat = Spacing.x2_5
     var verticalPadding: CGFloat = Spacing.x1
+    /// Disables press scale when motion would be distracting.
+    var isStatic: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
+        QuietButtonBody(
+            configuration: configuration,
+            tint: tint,
+            cornerRadius: cornerRadius,
+            horizontalPadding: horizontalPadding,
+            verticalPadding: verticalPadding,
+            isStatic: isStatic
+        )
+    }
+}
+
+/// Separate body so hover state can live alongside ButtonStyle's isPressed
+/// (press feedback on pointer-down; hover fill for continuous tracking).
+private struct QuietButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    var tint: Color?
+    var cornerRadius: CGFloat
+    var horizontalPadding: CGFloat
+    var verticalPadding: CGFloat
+    var isStatic: Bool
+    @State private var isHovering = false
+
+    var body: some View {
         configuration.label
             .font(AstryxFont.bodyMedium)
             .foregroundStyle(tint ?? AstryxColor.textSecondary)
@@ -286,22 +503,60 @@ struct QuietButtonStyle: ButtonStyle {
             .padding(.vertical, verticalPadding)
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(configuration.isPressed ? AstryxColor.overlayPressed : AstryxColor.overlayHover.opacity(0))
+                    .fill(fillColor)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(AstryxColor.border, lineWidth: 0.5)
-            )
-            .opacity(configuration.isPressed ? 0.7 : 1)
+            .shadowBorder(cornerRadius: cornerRadius, isHovered: isHovering)
+            .scaleEffect((!isStatic && configuration.isPressed) ? 0.96 : 1)
+            .animation(AstryxMotion.press, value: configuration.isPressed)
+            .animation(AstryxMotion.quick, value: isHovering)
+            .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .onHover { isHovering = $0 }
+    }
+
+    private var fillColor: Color {
+        if configuration.isPressed {
+            return AstryxColor.overlayPressed
+        }
+        if isHovering {
+            return AstryxColor.overlayHover
+        }
+        return Color.clear
+    }
+}
+
+/// Icon-only chrome button with press scale (copy, visibility toggle, etc.).
+struct QuietIconButtonStyle: ButtonStyle {
+    var isStatic: Bool = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect((!isStatic && configuration.isPressed) ? 0.96 : 1)
+            .animation(AstryxMotion.press, value: configuration.isPressed)
+            .contentShape(Rectangle())
     }
 }
 
 extension ButtonStyle where Self == QuietButtonStyle {
-    /// Quiet secondary button: transparent at rest, soft overlay on hover, hairline border.
+    /// Quiet secondary button: shadow border + scale on press.
     static var quiet: QuietButtonStyle { QuietButtonStyle() }
 
     /// Quiet button with a custom foreground tint (e.g. accent, danger).
-    static func quiet(tint: Color) -> QuietButtonStyle { QuietButtonStyle(tint: tint) }
+    static func quiet(tint: Color, isStatic: Bool = false) -> QuietButtonStyle {
+        QuietButtonStyle(tint: tint, isStatic: isStatic)
+    }
+
+    /// Quiet button without press scale.
+    static func quiet(isStatic: Bool) -> QuietButtonStyle {
+        QuietButtonStyle(isStatic: isStatic)
+    }
+}
+
+extension ButtonStyle where Self == QuietIconButtonStyle {
+    static var quietIcon: QuietIconButtonStyle { QuietIconButtonStyle() }
+
+    static func quietIcon(isStatic: Bool) -> QuietIconButtonStyle {
+        QuietIconButtonStyle(isStatic: isStatic)
+    }
 }
 
 extension View {

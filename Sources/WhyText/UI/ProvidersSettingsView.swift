@@ -264,13 +264,18 @@ private struct ProviderDetailView: View {
                         Button {
                             showAPIKey.toggle()
                         } label: {
-                            Image(systemName: showAPIKey ? "eye.slash" : "eye")
-                                .font(.system(size: 12))
-                                .foregroundStyle(AstryxColor.textSecondary)
-                                .frame(width: 26, height: 26)
-                                .quietButtonHover(cornerRadius: Radius.inner)
+                            ContextualIconSwap(
+                                isActive: showAPIKey,
+                                activeSystemName: "eye.slash",
+                                inactiveSystemName: "eye",
+                                size: 12
+                            )
+                            .foregroundStyle(AstryxColor.textSecondary)
+                            .frame(width: 28, height: 28)
+                            .quietButtonHover(cornerRadius: Radius.inner)
+                            .minHitArea(40)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.quietIcon)
                         .help(showAPIKey ? "隐藏" : "显示")
                     }
 
@@ -325,10 +330,15 @@ private struct ProviderDetailView: View {
                         .padding(Spacing.x2_5)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(
-                            RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
-                                .fill(SettingsUI.fieldBackground)
+                            RoundedRectangle(
+                                cornerRadius: Radius.concentric(outer: SettingsUI.cornerRadius, padding: Spacing.x4),
+                                style: .continuous
+                            )
+                            .fill(SettingsUI.fieldBackground)
                         )
-                        .hairlineBorder(cornerRadius: Radius.element)
+                        .hairlineBorder(
+                            cornerRadius: Radius.concentric(outer: SettingsUI.cornerRadius, padding: Spacing.x4)
+                        )
 
                         if !report.message.isEmpty {
                             Text(report.message)

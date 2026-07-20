@@ -81,9 +81,15 @@ final class AppModel: ObservableObject {
             }
         }
 
-        self.selectionBubbleController.onTap = { [weak self] in
+        self.selectionBubbleController.onTranslate = { [weak self] in
             Task { @MainActor in
-                self?.openPanelFromSelectionBubble()
+                self?.openPanelFromSelectionBubble(action: .translate)
+            }
+        }
+
+        self.selectionBubbleController.onExplain = { [weak self] in
+            Task { @MainActor in
+                self?.openPanelFromSelectionBubble(action: .explain)
             }
         }
 
@@ -126,12 +132,12 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func openPanelFromSelectionBubble() {
+    private func openPanelFromSelectionBubble(action: PanelAction) {
         let selectedText = sanitizeSelectedText(pendingSelectionText)
         guard !selectedText.isEmpty else { return }
 
         presentPanel(selectedText: selectedText)
-        run(action: .translate)
+        run(action: action)
     }
 
     private func openPanelFlow() async {
@@ -209,7 +215,13 @@ final class AppModel: ObservableObject {
         panelState.lastInputText = selectedText
         panelState.phase = .result
 
-        let template = settingsStore.translatePromptTemplate
+        let template: String
+        switch action {
+        case .translate:
+            template = settingsStore.translatePromptTemplate
+        case .explain:
+            template = settingsStore.explainPromptTemplate
+        }
 
         panelState.errorMessage = nil
         panelState.noticeMessage = nil
@@ -241,6 +253,7 @@ final class AppModel: ObservableObject {
                     provider: provider,
                     apiKey: apiKey,
                     enableStreaming: settingsStore.enableStreaming,
+                    mode: action.translationMode,
                     onUpdate: { partial in
                         await MainActor.run {
                             self.panelState.resultText = partial
@@ -698,8 +711,23 @@ enum PanelPhase: String, Codable, Equatable {
 
 enum PanelAction: String, Codable, CaseIterable {
     case translate
+    case explain
 
     var displayName: String {
-        "翻译"
+        switch self {
+        case .translate:
+            "翻译"
+        case .explain:
+            "解释"
+        }
+    }
+
+    var translationMode: TranslationMode {
+        switch self {
+        case .translate:
+            .translate
+        case .explain:
+            .explain
+        }
     }
 }

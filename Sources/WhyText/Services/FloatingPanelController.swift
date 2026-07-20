@@ -10,8 +10,9 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     private var mouseOrigin: NSPoint = .zero
     private var isClosingProgrammatically = false
 
-    private let maxWidth: CGFloat = 420
-    private let minWidth: CGFloat = 200
+    /// Cap the reading column near ~60–75 Latin / ~30–35 CJK glyphs at default body size.
+    private let maxWidth: CGFloat = 560
+    private let minWidth: CGFloat = 280
     private let maxHeight: CGFloat = 480
     private let minHeight: CGFloat = 60
 
@@ -64,33 +65,10 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
 
         fitAndPosition(panel: panel, hostingView: hostingView)
 
-        // Spring-like entrance: scale up from center + fade in.
-        // We simulate scale by starting slightly smaller and expanding.
+        // Symmetric present path: scale from center + fade (mirrored on dismiss).
         let finalFrame = panel.frame
-        let scaleFactor: CGFloat = 0.94
-        let shrunkWidth = finalFrame.width * scaleFactor
-        let shrunkHeight = finalFrame.height * scaleFactor
-        let offsetX = (finalFrame.width - shrunkWidth) / 2
-        let offsetY = (finalFrame.height - shrunkHeight) / 2
-        let startFrame = NSRect(
-            x: finalFrame.origin.x + offsetX,
-            y: finalFrame.origin.y + offsetY,
-            width: shrunkWidth,
-            height: shrunkHeight
-        )
-
-        panel.setFrame(startFrame, display: false)
-        panel.alphaValue = 0
-        panel.orderFrontRegardless()
+        PanelChromeMotion.animatePresent(panel: panel, to: finalFrame)
         NSApp.activate(ignoringOtherApps: true)
-
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.28
-            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 1.0, 0.3, 1.0)
-            panel.animator().setFrame(finalFrame, display: true)
-            panel.animator().alphaValue = 1
-        }
-
     }
 
     /// Refit the panel to its current content size, keeping the top-left anchored.
@@ -116,15 +94,12 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
 
         if let panel {
             isClosingProgrammatically = true
-            NSAnimationContext.runAnimationGroup({ context in
-                context.duration = 0.15
-                context.timingFunction = CAMediaTimingFunction(name: .easeIn)
-                panel.animator().alphaValue = 0
-            }, completionHandler: { [weak self] in
+            // Leave the way we arrived (scale + fade) — Apple spatial consistency.
+            PanelChromeMotion.animateDismiss(panel: panel) { [weak self] in
                 self?.panel?.close()
                 self?.panel = nil
                 self?.isClosingProgrammatically = false
-            })
+            }
         }
 
         if wasVisible {

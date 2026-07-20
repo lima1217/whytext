@@ -6,8 +6,9 @@ private enum PanelTokens {
     static let bottomPadding: CGFloat = Spacing.x4       // 16
     static let bodyFontSize: CGFloat = 13
     static let metaFontSize: CGFloat = 11
-    static let minWidth: CGFloat = 320
-    static let idealWidth: CGFloat = 388
+    /// Reading column: ~30–35 CJK / ~55–65 Latin glyphs at default 16pt body.
+    static let minWidth: CGFloat = 360
+    static let idealWidth: CGFloat = 520
     static let minContentHeight: CGFloat = 72
     static let maxHeight: CGFloat = 420
 }
@@ -20,6 +21,18 @@ struct FloatingPanelView: View {
         ZStack {
             VisualEffectView(material: .popover, blendingMode: .behindWindow, state: .active)
                 .ignoresSafeArea()
+
+            // Material weight: soft fill keeps vibrancy text legible without stacking glass on glass.
+            // Reduce Transparency → frostier/solid surface.
+            Group {
+                if MotionPreference.reduceTransparency {
+                    Color(nsColor: .windowBackgroundColor)
+                } else {
+                    Color(nsColor: .windowBackgroundColor).opacity(0.18)
+                }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
 
             VStack(spacing: 0) {
                 Group {
@@ -43,9 +56,17 @@ struct FloatingPanelView: View {
                         )
                         .padding(.horizontal, PanelTokens.horizontalPadding)
                         .padding(.bottom, PanelTokens.bottomPadding)
-                        .transition(.opacity)
+                        .transition(
+                            MotionPreference.reduceMotion
+                                ? .opacity
+                                : .asymmetric(
+                                    insertion: .opacity.combined(with: .offset(y: 8)),
+                                    removal: .opacity.combined(with: .offset(y: -12))
+                                )
+                        )
                 }
             }
+            .animation(AstryxMotion.smooth, value: noticeText)
         }
         .offset(x: shakeOffset)
         .onExitCommand { appModel.closePanel() }
@@ -58,11 +79,24 @@ struct FloatingPanelView: View {
     private var content: some View {
         if let error = appModel.panelState.errorMessage, !error.isEmpty {
             errorView(error)
+                .transition(panelContentTransition)
         } else if appModel.panelState.isLoading && !hasResult {
             loadingView
+                .transition(panelContentTransition)
         } else {
             resultView
+                .transition(panelContentTransition)
         }
+    }
+
+    private var panelContentTransition: AnyTransition {
+        if MotionPreference.reduceMotion {
+            return .opacity
+        }
+        return .asymmetric(
+            insertion: .opacity.combined(with: .offset(y: 8)),
+            removal: .opacity.combined(with: .offset(y: -12))
+        )
     }
 
     private var resultView: some View {
@@ -136,8 +170,11 @@ struct FloatingPanelView: View {
             RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
                 .fill(AstryxColor.overlayHover)
         )
-        .hairlineBorder(cornerRadius: Radius.element)
-        .onAppear { triggerShake() }
+        .shadowBorder(cornerRadius: Radius.element)
+        .onAppear {
+            guard !MotionPreference.reduceMotion else { return }
+            triggerShake()
+        }
     }
 
     // MARK: - Shake Animation
@@ -154,7 +191,8 @@ struct FloatingPanelView: View {
             withAnimation(AstryxMotion.quick) { shakeOffset = -2 }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
-            withAnimation(.astryxSpring(response: 0.15, damping: 0.5)) { shakeOffset = 0 }
+            // Momentum settle — underdamped only because the shake carried velocity.
+            withAnimation(.astryxSpring(response: 0.18, damping: 0.82)) { shakeOffset = 0 }
         }
     }
 
@@ -190,13 +228,14 @@ struct FloatingPanelView: View {
     }
 
     private var accessibilityLabel: String {
+        let actionName = appModel.panelState.lastAction?.displayName ?? PanelAction.translate.displayName
         if appModel.panelState.isLoading {
-            return "正在翻译"
+            return "正在\(actionName)"
         }
         if hasResult {
-            return "翻译结果，点击可复制"
+            return "\(actionName)结果，点击可复制"
         }
-        return "翻译窗口"
+        return "\(actionName)窗口"
     }
 }
 
@@ -214,21 +253,29 @@ struct FloatingPanelTitlebarView: View {
                 Text(headerTitle)
                     .font(AstryxFont.bodyMedium)
                     .foregroundStyle(AstryxColor.textSecondary)
+                    .transition(.opacity.combined(with: .offset(y: 4)))
             }
 
             Spacer(minLength: Spacing.x4)
 
             Button(action: copyResultIfPossible) {
-                Image(systemName: didCopy ? "checkmark" : "doc.on.doc")
-                    .font(.system(size: 14, weight: .medium))
-                    .frame(width: 28, height: 28)
-                    .accessibilityLabel(didCopy ? "已复制" : "复制译文")
+                ContextualIconSwap(
+                    isActive: didCopy,
+                    activeSystemName: "checkmark",
+                    inactiveSystemName: "doc.on.doc",
+                    size: 14
+                )
+                .foregroundStyle(didCopy ? Tone.success.color : AstryxColor.textSecondary)
+                .frame(width: 28, height: 28)
+                .background(copyButtonBackground)
+                // Grow hit target left/vertical so the glyph stays flush with content trailing.
+                .padding(.leading, 12)
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
+                .accessibilityLabel(didCopy ? "已复制" : "复制结果")
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(didCopy ? Tone.success.color : AstryxColor.textSecondary)
-            .background(copyButtonBackground)
+            .buttonStyle(.quietIcon)
             .background(CopyTooltipAnchor(isPresented: isCopyHovered, text: "复制"))
-            .contentShape(Rectangle())
             .onHover { hovering in
                 isCopyHovered = hovering
             }
@@ -238,36 +285,50 @@ struct FloatingPanelTitlebarView: View {
         }
         .frame(height: 32)
         .padding(.trailing, PanelTokens.horizontalPadding)
+        .animation(AstryxMotion.smooth, value: shouldShowStatus)
         .onDisappear { copyResetTask?.cancel() }
     }
 
     private var copyButtonBackground: some View {
         RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
             .fill(isCopyHovered ? AstryxColor.overlayHover : Color.clear)
-            .shadow(
-                color: isCopyHovered ? Color.black.opacity(0.18) : Color.clear,
-                radius: 10,
-                x: 0,
-                y: 3
-            )
             .animation(AstryxMotion.quick, value: isCopyHovered)
     }
 
     @ViewBuilder
     private var statusIcon: some View {
-        if let error = appModel.panelState.errorMessage, !error.isEmpty {
-            Image(systemName: Tone.warning.icon)
-                .foregroundStyle(Tone.warning.color)
-                .font(.system(size: 14))
-        } else if appModel.panelState.isLoading {
-            ProgressView()
-                .controlSize(.small)
-                .frame(width: 14, height: 14)
-        } else if hasResult {
-            Image(systemName: Tone.success.icon)
-                .foregroundStyle(Tone.success.color)
-                .font(.system(size: 14))
+        ZStack {
+            if let error = appModel.panelState.errorMessage, !error.isEmpty {
+                Image(systemName: Tone.warning.icon)
+                    .foregroundStyle(Tone.warning.color)
+                    .font(.system(size: 14))
+                    .transition(statusIconTransition)
+            } else if appModel.panelState.isLoading {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(width: 14, height: 14)
+                    .transition(statusIconTransition)
+            } else if hasResult {
+                Image(systemName: Tone.success.icon)
+                    .foregroundStyle(Tone.success.color)
+                    .font(.system(size: 14))
+                    .transition(statusIconTransition)
+            }
         }
+        .frame(width: 14, height: 14)
+        .animation(AstryxMotion.icon, value: contentStatusKey)
+    }
+
+    private var statusIconTransition: AnyTransition {
+        .opacity
+            .combined(with: .scale(scale: 0.25))
+    }
+
+    private var contentStatusKey: String {
+        if let error = appModel.panelState.errorMessage, !error.isEmpty { return "error" }
+        if appModel.panelState.isLoading { return "loading" }
+        if hasResult { return "result" }
+        return "idle"
     }
 
     private func copyResultIfPossible() {
@@ -291,13 +352,14 @@ struct FloatingPanelTitlebarView: View {
     }
 
     private var headerTitle: String {
+        let actionName = appModel.panelState.lastAction?.displayName ?? PanelAction.translate.displayName
         if let error = appModel.panelState.errorMessage, !error.isEmpty {
-            return "翻译失败"
+            return "\(actionName)失败"
         }
         if appModel.panelState.isLoading {
-            return "翻译中"
+            return "\(actionName)中"
         }
-        return "翻译"
+        return actionName
     }
 }
 
@@ -341,9 +403,13 @@ private final class CopyTooltipWindow {
         )
 
         let panel = panel ?? makePanel(size: size)
-        panel.contentView = NSHostingView(rootView: CopyTooltipView(text: text))
+        let hosting = NSHostingView(rootView: CopyTooltipView(text: text))
+        hosting.wantsLayer = true
+        hosting.layer?.backgroundColor = NSColor.clear.cgColor
+        panel.contentView = hosting
         panel.setFrame(NSRect(origin: origin, size: size), display: true)
         panel.orderFrontRegardless()
+        panel.invalidateShadow()
         self.panel = panel
     }
 
@@ -363,7 +429,7 @@ private final class CopyTooltipWindow {
         panel.isReleasedWhenClosed = false
         panel.backgroundColor = .clear
         panel.isOpaque = false
-        panel.hasShadow = false
+        panel.hasShadow = true
         panel.level = .floating
         panel.ignoresMouseEvents = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
@@ -373,6 +439,7 @@ private final class CopyTooltipWindow {
 
 private struct CopyTooltipView: View {
     var text: String
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Text(text)
@@ -381,9 +448,27 @@ private struct CopyTooltipView: View {
             .padding(.horizontal, Spacing.x2)
             .padding(.vertical, Spacing.x1)
             .background(
+                ZStack {
+                    if MotionPreference.reduceTransparency {
+                        Color(nsColor: .controlBackgroundColor)
+                    } else {
+                        VisualEffectView(
+                            material: .hudWindow,
+                            blendingMode: .behindWindow,
+                            state: .active,
+                            cornerStyle: .continuous(Radius.element)
+                        )
+                        Color(nsColor: .controlBackgroundColor).opacity(colorScheme == .dark ? 0.35 : 0.72)
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: Radius.element, style: .continuous))
+            )
+            .overlay(
                 RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
-                    .fill(Color(nsColor: .controlBackgroundColor).opacity(0.82))
-                    .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 3)
+                    .strokeBorder(
+                        colorScheme == .dark ? Color.white.opacity(0.16) : Color.white.opacity(0.5),
+                        lineWidth: 0.5
+                    )
             )
     }
 }
@@ -391,14 +476,16 @@ private struct CopyTooltipView: View {
 // MARK: - Skeleton shimmer
 
 /// Sweeps a faint highlight across a skeleton bar to suggest in-progress content.
+/// Skipped when Reduce Motion is on — looping oscillation near ~1Hz is vestibular noise.
 private struct SkeletonShimmerModifier: ViewModifier, Animatable {
     let width: CGFloat
     @State private var offset: CGFloat = -1
 
     func body(content: Content) -> some View {
         content
-            .offset(x: offset * width)
+            .offset(x: MotionPreference.reduceMotion ? 0 : offset * width)
             .onAppear {
+                guard !MotionPreference.reduceMotion else { return }
                 withAnimation(
                     .easeInOut(duration: 1.1)
                     .repeatForever(autoreverses: false)

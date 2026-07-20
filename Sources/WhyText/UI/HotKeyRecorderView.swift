@@ -17,7 +17,7 @@ struct HotKeyRecorderView: View {
                     RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
                         .fill(SettingsUI.fieldBackground)
                 )
-                .hairlineBorder(cornerRadius: Radius.element)
+                .shadowBorder(cornerRadius: Radius.element)
 
             Button {
                 isRecording.toggle()

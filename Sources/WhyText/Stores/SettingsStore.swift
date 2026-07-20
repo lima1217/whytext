@@ -4,10 +4,27 @@ import WhyTextCore
 
 final class SettingsStore: ObservableObject {
     static let defaultTranslatePromptTemplate = "把下面的英文翻译成简体中文。只输出译文。\n\n{{text}}"
+    static let defaultExplainPromptTemplate = """
+        用白话讲清下面文字的要义。
+
+        要义：作者实际想表达的意思。忠于原文事实与语气；只写原文能支撑的内容。
+
+        1. 先用一句话点出它在讲什么。
+           完成标准：读者不看原文也能抓住主题。
+        2. 再用通俗话补上理解所需的关键点（难词、专名、隐含前提、句子关系）。
+           完成标准：每一句都能回溯到原文；说不清的标成不确定，不当成事实。
+        3. 到此为止。
+           完成标准：没有延伸议论、背景科普、或「还可以这样理解」。
+
+        简体中文；短句；能短则短。
+
+        {{text}}
+        """
 
     @Published var providers: [LLMProvider]
     @Published var selectedProviderID: UUID?
     @Published var translatePromptTemplate: String
+    @Published var explainPromptTemplate: String
     @Published var hotKeyShortcut: KeyboardShortcut?
     @Published var enableStreaming: Bool
     @Published var maxInputCharacters: Int
@@ -46,6 +63,7 @@ final class SettingsStore: ObservableObject {
             self.providers = decoded.providers
             self.selectedProviderID = decoded.selectedProviderID
             self.translatePromptTemplate = decoded.translatePromptTemplate
+            self.explainPromptTemplate = decoded.explainPromptTemplate
             self.hotKeyShortcut = decoded.hotKeyShortcut
             self.enableStreaming = decoded.enableStreaming
             self.maxInputCharacters = decoded.maxInputCharacters
@@ -55,6 +73,10 @@ final class SettingsStore: ObservableObject {
 
             if self.translatePromptTemplate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 self.translatePromptTemplate = Self.defaultTranslatePromptTemplate
+            }
+
+            if self.explainPromptTemplate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                self.explainPromptTemplate = Self.defaultExplainPromptTemplate
             }
 
             if self.providers.isEmpty {
@@ -91,6 +113,7 @@ final class SettingsStore: ObservableObject {
             self.providers = [defaultProvider]
             self.selectedProviderID = defaultProvider.id
             self.translatePromptTemplate = Self.defaultTranslatePromptTemplate
+            self.explainPromptTemplate = Self.defaultExplainPromptTemplate
             self.hotKeyShortcut = KeyboardShortcut.defaultShortcut
             self.enableStreaming = true
             self.maxInputCharacters = 4000
@@ -168,6 +191,10 @@ final class SettingsStore: ObservableObject {
         translatePromptTemplate = Self.defaultTranslatePromptTemplate
     }
 
+    func resetExplainPromptTemplateToDefault() {
+        explainPromptTemplate = Self.defaultExplainPromptTemplate
+    }
+
     private func bindAutoSave() {
         $providers
             .dropFirst()
@@ -180,6 +207,11 @@ final class SettingsStore: ObservableObject {
             .store(in: &cancellables)
 
         $translatePromptTemplate
+            .dropFirst()
+            .sink { [weak self] _ in self?.schedulePersist() }
+            .store(in: &cancellables)
+
+        $explainPromptTemplate
             .dropFirst()
             .sink { [weak self] _ in self?.schedulePersist() }
             .store(in: &cancellables)
@@ -231,6 +263,7 @@ final class SettingsStore: ObservableObject {
             providers: providers,
             selectedProviderID: selectedProviderID,
             translatePromptTemplate: translatePromptTemplate,
+            explainPromptTemplate: explainPromptTemplate,
             hotKeyShortcut: hotKeyShortcut,
             enableStreaming: enableStreaming,
             maxInputCharacters: maxInputCharacters,
@@ -267,6 +300,7 @@ private struct PersistedSettings: Codable {
     var providers: [LLMProvider]
     var selectedProviderID: UUID?
     var translatePromptTemplate: String
+    var explainPromptTemplate: String
     var hotKeyShortcut: KeyboardShortcut?
     var enableStreaming: Bool
     var maxInputCharacters: Int
@@ -278,6 +312,7 @@ private struct PersistedSettings: Codable {
         providers: [LLMProvider],
         selectedProviderID: UUID?,
         translatePromptTemplate: String,
+        explainPromptTemplate: String,
         hotKeyShortcut: KeyboardShortcut?,
         enableStreaming: Bool,
         maxInputCharacters: Int,
@@ -288,6 +323,7 @@ private struct PersistedSettings: Codable {
         self.providers = providers
         self.selectedProviderID = selectedProviderID
         self.translatePromptTemplate = translatePromptTemplate
+        self.explainPromptTemplate = explainPromptTemplate
         self.hotKeyShortcut = hotKeyShortcut
         self.enableStreaming = enableStreaming
         self.maxInputCharacters = maxInputCharacters
@@ -301,6 +337,8 @@ private struct PersistedSettings: Codable {
         self.providers = try container.decode([LLMProvider].self, forKey: .providers)
         self.selectedProviderID = try container.decodeIfPresent(UUID.self, forKey: .selectedProviderID)
         self.translatePromptTemplate = try container.decode(String.self, forKey: .translatePromptTemplate)
+        self.explainPromptTemplate = try container.decodeIfPresent(String.self, forKey: .explainPromptTemplate)
+            ?? SettingsStore.defaultExplainPromptTemplate
         self.hotKeyShortcut = try container.decodeIfPresent(KeyboardShortcut.self, forKey: .hotKeyShortcut)
         self.enableStreaming = try container.decodeIfPresent(Bool.self, forKey: .enableStreaming) ?? true
         self.maxInputCharacters = try container.decodeIfPresent(Int.self, forKey: .maxInputCharacters) ?? 4000
