@@ -94,15 +94,30 @@ EOF
     "$tmpdir/cert.pem" >/dev/null
 }
 
-echo "Building $APP_NAME (release)..."
-CLANG_MODULE_CACHE_PATH="$CLANG_MODULE_CACHE_PATH" swift build -c release --cache-path "$SWIFTPM_CACHE_PATH" >/dev/null
-BIN_DIR=$(CLANG_MODULE_CACHE_PATH="$CLANG_MODULE_CACHE_PATH" swift build -c release --cache-path "$SWIFTPM_CACHE_PATH" --show-bin-path)
-BIN_PATH="$BIN_DIR/$APP_NAME"
+build_arch() {
+  local arch="$1"
+  local build_path="$ROOT_DIR/.build/universal-$arch"
+  echo "Building $APP_NAME (release, $arch)..." >&2
+  CLANG_MODULE_CACHE_PATH="$CLANG_MODULE_CACHE_PATH" \
+    swift build -c release --arch "$arch" \
+    --cache-path "$SWIFTPM_CACHE_PATH" \
+    --scratch-path "$build_path" >/dev/null
+  local bin_dir
+  bin_dir=$(CLANG_MODULE_CACHE_PATH="$CLANG_MODULE_CACHE_PATH" \
+    swift build -c release --arch "$arch" \
+    --cache-path "$SWIFTPM_CACHE_PATH" \
+    --scratch-path "$build_path" \
+    --show-bin-path)
+  local bin_path="$bin_dir/$APP_NAME"
+  if [[ ! -f "$bin_path" ]]; then
+    echo "Binary not found: $bin_path" >&2
+    exit 1
+  fi
+  printf '%s\n' "$bin_path"
+}
 
-if [[ ! -f "$BIN_PATH" ]]; then
-  echo "Binary not found: $BIN_PATH" >&2
-  exit 1
-fi
+ARM64_BIN="$(build_arch arm64)"
+X86_64_BIN="$(build_arch x86_64)"
 
 DIST_DIR="$ROOT_DIR/dist"
 APP_DIR="$DIST_DIR/$APP_NAME.app"
@@ -113,7 +128,8 @@ RESOURCES_DIR="$CONTENTS_DIR/Resources"
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
-cp "$BIN_PATH" "$MACOS_DIR/$APP_NAME"
+echo "Creating universal binary..."
+lipo -create -output "$MACOS_DIR/$APP_NAME" "$ARM64_BIN" "$X86_64_BIN"
 chmod +x "$MACOS_DIR/$APP_NAME"
 
 if [[ -f "$ICON_PATH" ]]; then
@@ -140,9 +156,9 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.2.0</string>
+  <string>0.2.1</string>
   <key>CFBundleVersion</key>
-  <string>4</string>
+  <string>5</string>
   <key>LSMinimumSystemVersion</key>
   <string>13.0</string>
   <key>LSUIElement</key>
@@ -168,5 +184,6 @@ xattr -dr com.apple.quarantine "$APP_DIR" 2>/dev/null || true
 codesign --force --deep --timestamp=none --sign "$SIGNING_IDENTITY" "$APP_DIR"
 
 echo "Built: $APP_DIR"
+echo "Architectures: $(lipo -archs "$MACOS_DIR/$APP_NAME")"
 echo "Signed with: $SIGNING_IDENTITY"
 echo "Run: open \"$APP_DIR\""
