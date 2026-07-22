@@ -95,7 +95,11 @@ final class LLMClient {
             let adapter = ProviderAdapter(mode: provider.apiMode)
             let url = try adapter.endpointURL(baseURL: provider.baseURL)
             var httpRequest = makeRequest(url: url, apiKey: apiKey)
-            httpRequest.httpBody = try adapter.requestBody(from: request, stream: false)
+            httpRequest.httpBody = try adapter.requestBody(
+                from: request,
+                stream: false,
+                baseURL: provider.baseURL
+            )
 
             let (data, response) = try await performDataRequest(httpRequest)
             try Task.checkCancellation()
@@ -158,7 +162,11 @@ final class LLMClient {
                     let url = try adapter.endpointURL(baseURL: provider.baseURL)
                     var httpRequest = makeRequest(url: url, apiKey: apiKey)
                     httpRequest.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-                    httpRequest.httpBody = try adapter.requestBody(from: request, stream: true)
+                    httpRequest.httpBody = try adapter.requestBody(
+                        from: request,
+                        stream: true,
+                        baseURL: provider.baseURL
+                    )
 
                     let (bytes, response) = try await activeSession().bytes(for: httpRequest)
                     try Task.checkCancellation()
@@ -408,14 +416,19 @@ private enum ProviderAdapter {
         }
     }
 
-    func requestBody(from request: UnifiedTranslationRequest, stream: Bool) throws -> Data {
+    func requestBody(from request: UnifiedTranslationRequest, stream: Bool, baseURL: String) throws -> Data {
         switch self {
         case .chatCompletions:
+            // DeepSeek thinking defaults to enabled and slows translation; turn it off.
+            let thinking: ThinkingConfig? = Self.supportsThinkingToggle(baseURL: baseURL)
+                ? ThinkingConfig(type: "disabled")
+                : nil
             let body = ChatCompletionsRequest(
                 model: request.model,
                 messages: [ChatMessage(role: "user", content: request.renderedPrompt)],
                 temperature: 0.2,
-                stream: stream
+                stream: stream,
+                thinking: thinking
             )
             return try JSONEncoder().encode(body)
         case .responses:
@@ -426,6 +439,10 @@ private enum ProviderAdapter {
             )
             return try JSONEncoder().encode(body)
         }
+    }
+
+    private static func supportsThinkingToggle(baseURL: String) -> Bool {
+        baseURL.lowercased().contains("deepseek")
     }
 
     func parseCompletionText(from data: Data) throws -> String {
@@ -483,11 +500,16 @@ private func parseErrorMessage(from data: Data) -> String? {
     return String(data: data, encoding: .utf8)
 }
 
+private struct ThinkingConfig: Encodable {
+    var type: String
+}
+
 private struct ChatCompletionsRequest: Encodable {
     var model: String
     var messages: [ChatMessage]
     var temperature: Double?
     var stream: Bool?
+    var thinking: ThinkingConfig?
 }
 
 private struct ChatMessage: Codable {
