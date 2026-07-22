@@ -13,28 +13,29 @@ public enum TextChunker {
 
     public static func chunk(text: String, maxCharacters: Int, splitLongInput: Bool) -> Result {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let paragraphs = splitIntoParagraphs(trimmed)
 
-        guard maxCharacters > 0 else {
-            return Result(chunks: paragraphs.isEmpty ? [trimmed] : paragraphs, wasTruncated: false)
-        }
-
-        if !splitLongInput {
-            if trimmed.count <= maxCharacters {
-                return Result(chunks: paragraphs.isEmpty ? [trimmed] : paragraphs, wasTruncated: false)
-            }
-            return Result(chunks: [String(trimmed.prefix(maxCharacters))], wasTruncated: true)
-        }
-
-        if trimmed.count <= maxCharacters {
-            if paragraphs.count > 1 {
-                return Result(chunks: paragraphs, wasTruncated: false)
-            }
+        guard !trimmed.isEmpty else {
             return Result(chunks: [trimmed], wasTruncated: false)
         }
 
-        var chunks = splitParagraphsIntoChunks(
+        // Unlimited or under the budget: one request preserves structure via the prompt hint.
+        guard maxCharacters > 0 else {
+            return Result(chunks: [trimmed], wasTruncated: false)
+        }
+
+        if trimmed.count <= maxCharacters {
+            return Result(chunks: [trimmed], wasTruncated: false)
+        }
+
+        if !splitLongInput {
+            return Result(chunks: [String(trimmed.prefix(maxCharacters))], wasTruncated: true)
+        }
+
+        let paragraphs = splitIntoParagraphs(trimmed)
+        let separator = paragraphSeparator(in: trimmed)
+        var chunks = packIntoChunks(
             paragraphs: paragraphs,
+            separator: separator,
             maxCharacters: maxCharacters
         )
 
@@ -47,6 +48,16 @@ public enum TextChunker {
         }
 
         return Result(chunks: chunks, wasTruncated: false)
+    }
+
+    private static func paragraphSeparator(in text: String) -> String {
+        if text.contains("\n\n") {
+            return "\n\n"
+        }
+        if text.contains("\n") {
+            return "\n"
+        }
+        return "\n\n"
     }
 
     private static func splitIntoParagraphs(_ text: String) -> [String] {
@@ -89,43 +100,89 @@ public enum TextChunker {
         return [text]
     }
 
-    private static func splitParagraphsIntoChunks(paragraphs: [String], maxCharacters: Int) -> [String] {
+    /// Pack paragraphs into as few capacity-bounded chunks as possible.
+    private static func packIntoChunks(
+        paragraphs: [String],
+        separator: String,
+        maxCharacters: Int
+    ) -> [String] {
         var chunks: [String] = []
+        var current = ""
+
+        func flushCurrent() {
+            let piece = current.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !piece.isEmpty {
+                chunks.append(piece)
+            }
+            current = ""
+        }
 
         for paragraph in paragraphs {
-            if paragraph.count <= maxCharacters {
-                chunks.append(paragraph)
+            if chunks.count >= 12 {
+                return chunks
+            }
+
+            if paragraph.count > maxCharacters {
+                flushCurrent()
+                appendHardCutParts(
+                    of: paragraph,
+                    maxCharacters: maxCharacters,
+                    into: &chunks
+                )
                 continue
             }
 
-            var remaining = paragraph
-            while !remaining.isEmpty {
-                if remaining.count <= maxCharacters {
-                    let last = remaining.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !last.isEmpty {
-                        chunks.append(last)
-                    }
-                    break
-                }
+            if current.isEmpty {
+                current = paragraph
+                continue
+            }
 
-                let hardCut = remaining.index(remaining.startIndex, offsetBy: maxCharacters)
-                let head = remaining[..<hardCut]
-                let boundary = head.lastIndex(where: { $0 == "\n" || $0 == " " || $0 == "\t" })
-                let cut = boundary ?? hardCut
-
-                let part = String(remaining[..<cut]).trimmingCharacters(in: .whitespacesAndNewlines)
-                if !part.isEmpty {
-                    chunks.append(part)
-                }
-
-                remaining = String(remaining[cut...]).trimmingCharacters(in: .whitespacesAndNewlines)
-
+            let candidate = current + separator + paragraph
+            if candidate.count <= maxCharacters {
+                current = candidate
+            } else {
+                flushCurrent()
                 if chunks.count >= 12 {
                     return chunks
                 }
+                current = paragraph
             }
         }
 
+        flushCurrent()
         return chunks
+    }
+
+    private static func appendHardCutParts(
+        of text: String,
+        maxCharacters: Int,
+        into chunks: inout [String]
+    ) {
+        var remaining = text
+        while !remaining.isEmpty {
+            if chunks.count >= 12 {
+                return
+            }
+
+            if remaining.count <= maxCharacters {
+                let last = remaining.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !last.isEmpty {
+                    chunks.append(last)
+                }
+                return
+            }
+
+            let hardCut = remaining.index(remaining.startIndex, offsetBy: maxCharacters)
+            let head = remaining[..<hardCut]
+            let boundary = head.lastIndex(where: { $0 == "\n" || $0 == " " || $0 == "\t" })
+            let cut = boundary ?? hardCut
+
+            let part = String(remaining[..<cut]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !part.isEmpty {
+                chunks.append(part)
+            }
+
+            remaining = String(remaining[cut...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
     }
 }

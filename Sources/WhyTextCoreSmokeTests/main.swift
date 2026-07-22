@@ -70,11 +70,14 @@ enum WhyTextCoreSmokeTests {
         expect(truncated.wasTruncated, "disabled splitting should mark truncation")
 
         let paragraphs = TextChunker.chunk(text: "first\n\nsecond", maxCharacters: 100, splitLongInput: true)
-        expect(paragraphs.chunks == ["first", "second"], "paragraphs should split independently")
-        expect(!paragraphs.wasTruncated, "paragraph splitting should not mark truncation")
+        expect(paragraphs.chunks == ["first\n\nsecond"], "under-budget paragraphs stay one request")
+        expect(!paragraphs.wasTruncated, "under-budget text should not mark truncation")
 
         let lines = TextChunker.chunk(text: "first\nsecond", maxCharacters: 100, splitLongInput: true)
-        expect(lines.chunks == ["first", "second"], "single-newline structured input should split independently")
+        expect(lines.chunks == ["first\nsecond"], "under-budget line breaks stay one request")
+
+        let packed = TextChunker.chunk(text: "aaaa\n\nbbbb\n\ncccc", maxCharacters: 10, splitLongInput: true)
+        expect(packed.chunks == ["aaaa\n\nbbbb", "cccc"], "over-budget paragraphs should pack by capacity")
 
         let long = TextChunker.chunk(text: "alpha beta gamma", maxCharacters: 10, splitLongInput: true)
         expect(long.chunks == ["alpha", "beta gamma"], "long text should split on whitespace")
