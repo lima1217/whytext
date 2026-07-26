@@ -36,9 +36,9 @@ struct ProvidersSettingsView: View {
     // MARK: - Provider List Bar
 
     private var providerHeader: some View {
-        SettingsCard("Provider", subtitle: "选择一个服务商，填写接口、模型和 API Key 后先测试连通性。") {
+        SettingsCard("服务商", subtitle: "选择一个服务商，填写接口、模型和 API Key 后先测试连通性。") {
             HStack(spacing: Spacing.x2_5) {
-                Picker("Provider", selection: providerSelectionBinding) {
+                Picker("服务商", selection: providerSelectionBinding) {
                     ForEach(appModel.settingsStore.providers) { provider in
                         Text(provider.name.isEmpty ? "未命名" : provider.name)
                             .tag(Optional(provider.id))
@@ -55,6 +55,7 @@ struct ProvidersSettingsView: View {
                     Label("添加", systemImage: "plus")
                 }
                 .buttonStyle(.quiet)
+                .accessibilityLabel("添加服务商")
                 .popover(isPresented: $showAddTemplate) {
                     addTemplatePopover
                 }
@@ -66,6 +67,7 @@ struct ProvidersSettingsView: View {
                         Label("移除", systemImage: "trash")
                     }
                     .buttonStyle(.quiet(tint: Tone.danger.color.opacity(0.85)))
+                    .accessibilityLabel("移除当前服务商")
                 }
             }
         }
@@ -116,18 +118,20 @@ struct ProvidersSettingsView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        SettingsCard("还没有 Provider") {
+        SettingsCard("还没有服务商", subtitle: "添加一个服务商后，才能翻译选中文本。") {
             VStack(spacing: Spacing.x3) {
                 Image(systemName: "network")
                     .font(.system(size: 28, weight: .light))
                     .foregroundStyle(AstryxColor.borderEmphasized)
-                Text("无可用 Provider")
-                    .font(AstryxFont.heading4)
-                    .foregroundStyle(AstryxColor.textPrimary)
+                    .accessibilityHidden(true)
+                Text("从模板添加 DeepSeek、OpenAI，或自定义接口。")
+                    .font(AstryxFont.captionM)
+                    .foregroundStyle(AstryxColor.textSecondary)
+                    .multilineTextAlignment(.center)
                 Button {
                     showAddTemplate = true
                 } label: {
-                    Label("添加一个", systemImage: "plus")
+                    Label("添加服务商", systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -276,7 +280,8 @@ private struct ProviderDetailView: View {
                             .minHitArea(40)
                         }
                         .buttonStyle(.quietIcon)
-                        .help(showAPIKey ? "隐藏" : "显示")
+                        .help(showAPIKey ? "隐藏 API Key" : "显示 API Key")
+                        .accessibilityLabel(showAPIKey ? "隐藏 API Key" : "显示 API Key")
                     }
 
                     HStack(spacing: Spacing.x2_5) {
@@ -290,14 +295,17 @@ private struct ProviderDetailView: View {
                         Button("粘贴") {
                             apiKeyDraft = NSPasteboard.general.string(forType: .string) ?? ""
                         }
+                        .accessibilityLabel("粘贴 API Key")
 
                         Button("修复钥匙串") {
                             repairKeychainEntry()
                         }
+                        .help("重新写入当前 API Key 到钥匙串")
 
                         Button("清除") {
                             apiKeyDraft = ""
                         }
+                        .accessibilityLabel("清除 API Key")
                     }
 
                     if let keychainRepairMessage, !keychainRepairMessage.isEmpty {
@@ -314,9 +322,10 @@ private struct ProviderDetailView: View {
                         Button {
                             runConnectivityTest()
                         } label: {
-                            Label(isTestingConnectivity ? "测试中..." : "测试连通性", systemImage: isTestingConnectivity ? "clock" : "bolt.horizontal")
+                            Label(isTestingConnectivity ? "测试中…" : "测试连通性", systemImage: isTestingConnectivity ? "clock" : "bolt.horizontal")
                         }
                         .disabled(isTestingConnectivity)
+                        .accessibilityLabel(isTestingConnectivity ? "正在测试连通性" : "测试连通性")
 
                         Spacer()
                     }
@@ -409,7 +418,7 @@ private struct ProviderDetailView: View {
         }
 
         saveAPIKey(trimmed)
-        keychainRepairMessage = "已重新保存到新钥匙串项。"
+        keychainRepairMessage = "已重新保存到钥匙串。"
     }
 
     private func runConnectivityTest() {

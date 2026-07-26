@@ -8,11 +8,14 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
     private var panel: NSPanel?
     private var outsideEventMonitor: Any?
     private var autoDismissTask: Task<Void, Never>?
+    private var isHoverPaused = false
 
-    private static let bubbleSize = NSSize(width: 80, height: 32)
+    /// Sized for two ≥40×40 hit targets plus divider and chrome padding.
+    private static let bubbleSize = NSSize(width: 92, height: 40)
 
     func show(at mouseLocation: NSPoint, anchorRect: CGRect? = nil) {
         autoDismissTask?.cancel()
+        isHoverPaused = false
 
         let size = Self.bubbleSize
         let hostingView = NSHostingView(rootView: SelectionBubbleBar(
@@ -21,6 +24,9 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
             },
             onExplain: { [weak self] in
                 self?.handleAction(self?.onExplain)
+            },
+            onHoverChange: { [weak self] hovering in
+                self?.setHoverPaused(hovering)
             }
         ))
         Self.prepareHostingView(hostingView)
@@ -69,6 +75,7 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
     func hide() {
         autoDismissTask?.cancel()
         autoDismissTask = nil
+        isHoverPaused = false
         stopOutsideEventMonitor()
 
         guard let panel else { return }
@@ -166,13 +173,25 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
         }
     }
 
-    /// Auto-dismiss after 4 seconds if user doesn't interact.
+    /// Auto-dismiss after 6 seconds unless the pointer is over the bubble (pause/resume).
     private func scheduleAutoDismiss() {
         autoDismissTask?.cancel()
+        guard !isHoverPaused else { return }
         autoDismissTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
             guard !Task.isCancelled else { return }
+            guard !self.isHoverPaused else { return }
             self.hide()
+        }
+    }
+
+    private func setHoverPaused(_ hovering: Bool) {
+        isHoverPaused = hovering
+        if hovering {
+            autoDismissTask?.cancel()
+            autoDismissTask = nil
+        } else if panel != nil {
+            scheduleAutoDismiss()
         }
     }
 
@@ -224,14 +243,15 @@ private extension NSRect {
 private struct SelectionBubbleBar: View {
     var onTranslate: () -> Void
     var onExplain: () -> Void
+    var onHoverChange: (Bool) -> Void
 
     @State private var isBarHovering = false
     @State private var appeared = false
     @Environment(\.colorScheme) private var colorScheme
 
-    private static let outerPaddingH: CGFloat = 3
-    private static let outerPaddingV: CGFloat = 2
-    private static let dividerHeight: CGFloat = 14
+    private static let outerPaddingH: CGFloat = 4
+    private static let outerPaddingV: CGFloat = 4
+    private static let dividerHeight: CGFloat = 16
 
     var body: some View {
         HStack(spacing: 0) {
@@ -264,6 +284,7 @@ private struct SelectionBubbleBar: View {
         .animation(AstryxMotion.quick, value: isBarHovering)
         .onHover { hovering in
             isBarHovering = hovering
+            onHoverChange(hovering)
         }
         .onAppear {
             guard !MotionPreference.reduceMotion else {
@@ -338,8 +359,8 @@ private struct BubbleButtonLabel: View {
 }
 
 private enum SelectionBubbleBarMetrics {
-    static let buttonWidth: CGFloat = 36
-    static let buttonHeight: CGFloat = 28
+    static let buttonWidth: CGFloat = 40
+    static let buttonHeight: CGFloat = 32
 }
 
 /// Scale-on-press — feedback on pointer-down, interruptible.

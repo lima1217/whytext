@@ -15,7 +15,7 @@ struct MenuBarView: View {
 
         Divider()
 
-        Label("Provider: \(providerName)", systemImage: "network")
+        Label("服务商：\(providerName)", systemImage: "network")
         Label(accessibilityReady ? "辅助功能已授权" : "需要辅助功能权限", systemImage: accessibilityReady ? "checkmark.circle" : "exclamationmark.triangle")
 
         Divider()

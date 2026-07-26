@@ -56,6 +56,7 @@ private struct PromptTemplateCard: View {
                 HStack(spacing: Spacing.x2_5) {
                     Text("\(templateCharacterCount) 字符")
                         .font(AstryxFont.captionM)
+                        .monospacedDigit()
                         .foregroundStyle(AstryxColor.textSecondary)
 
                     Spacer()

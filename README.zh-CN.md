@@ -11,7 +11,7 @@ WhyText 是一个 macOS 菜单栏翻译工具：选中文本后，用快捷键�
 - 可选「选中文本后显示操作气泡」：翻译或解释
 - 支持流式输出（Provider 支持时）
 - 长文本自动分段或截断
-- 结果一键复制（支持纯文本复制）
+- 结果一键复制（富文本，含纯文本回退）
 - 自定义翻译 / 解释提示词模板（`{{text}}` 占位符）
 - 多 Provider 配置（Base URL / Model / API Mode）
 - API Key 保存在 macOS Keychain

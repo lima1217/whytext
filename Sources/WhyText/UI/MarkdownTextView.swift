@@ -77,30 +77,39 @@ enum MarkdownRenderer {
         max(Spacing.x1_5, fontSize * 0.28)
     }
 
+    private enum ColorMode {
+        case display
+        /// Concrete colors so RTF/HTML paste looks correct in light-document apps.
+        case pasteboard
+    }
+
     static func render(_ markdown: String) -> AttributedString {
         AttributedString(renderNSAttributedString(markdown))
     }
 
     static func renderNSAttributedString(_ markdown: String, fontSize: CGFloat = 16) -> NSAttributedString {
+        renderNSAttributedString(markdown, fontSize: fontSize, colorMode: .display)
+    }
+
+    /// Styled attributed string for clipboard export (RTF / plain).
+    static func pasteboardAttributedString(_ markdown: String, fontSize: CGFloat = 16) -> NSAttributedString {
+        renderNSAttributedString(markdown, fontSize: fontSize, colorMode: .pasteboard)
+    }
+
+    private static func renderNSAttributedString(
+        _ markdown: String,
+        fontSize: CGFloat,
+        colorMode: ColorMode
+    ) -> NSAttributedString {
         let normalizedText = CJKLatinSpacer.apply(toPlainText: normalizeDisplayText(in: markdown))
         guard !normalizedText.isEmpty else {
             return NSAttributedString(string: "")
         }
 
         guard let attributed = parseMarkdown(normalizedText) else {
-            return styledPlainString(normalizedText, fontSize: fontSize)
+            return styledPlainString(normalizedText, fontSize: fontSize, colorMode: colorMode)
         }
-        return materialize(attributed, fontSize: fontSize)
-    }
-
-    static func plainText(_ markdown: String) -> String {
-        let normalizedText = CJKLatinSpacer.apply(toPlainText: normalizePlainText(in: markdown))
-        guard !normalizedText.isEmpty else { return "" }
-
-        guard let attributed = parseMarkdown(normalizedText) else {
-            return normalizedText
-        }
-        return materialize(attributed, fontSize: 16).string
+        return materialize(attributed, fontSize: fontSize, colorMode: colorMode)
     }
 
     /// Keep blank-line paragraph breaks; only squash runaway vertical gaps.
@@ -116,13 +125,6 @@ enum MarkdownRenderer {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func normalizePlainText(in text: String) -> String {
-        text
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
     private static func parseMarkdown(_ text: String) -> AttributedString? {
         var options = AttributedString.MarkdownParsingOptions()
         options.interpretedSyntax = .full
@@ -130,18 +132,26 @@ enum MarkdownRenderer {
         return try? AttributedString(markdown: text, options: options)
     }
 
-    private static func styledPlainString(_ text: String, fontSize: CGFloat) -> NSAttributedString {
+    private static func styledPlainString(
+        _ text: String,
+        fontSize: CGFloat,
+        colorMode: ColorMode
+    ) -> NSAttributedString {
         let mutable = NSMutableAttributedString(string: text)
         let fullRange = NSRange(location: 0, length: mutable.length)
         mutable.addAttribute(.font, value: NSFont.systemFont(ofSize: fontSize), range: fullRange)
-        mutable.addAttribute(.foregroundColor, value: NSColor.labelColor, range: fullRange)
+        mutable.addAttribute(.foregroundColor, value: bodyColor(colorMode), range: fullRange)
         mutable.addAttribute(.paragraphStyle, value: bodyParagraphStyle(fontSize: fontSize), range: fullRange)
         return mutable
     }
 
     /// Foundation markdown yields presentation intents without fonts or newlines.
     /// Materialize them into an NSTextView-friendly attributed string.
-    private static func materialize(_ attributed: AttributedString, fontSize: CGFloat) -> NSAttributedString {
+    private static func materialize(
+        _ attributed: AttributedString,
+        fontSize: CGFloat,
+        colorMode: ColorMode
+    ) -> NSAttributedString {
         let result = NSMutableAttributedString()
         let paragraphStyle = bodyParagraphStyle(fontSize: fontSize)
         var previousBlockID: Int?
@@ -160,7 +170,7 @@ enum MarkdownRenderer {
                         string: separator,
                         attributes: [
                             .font: NSFont.systemFont(ofSize: fontSize),
-                            .foregroundColor: NSColor.labelColor,
+                            .foregroundColor: bodyColor(colorMode),
                             .paragraphStyle: paragraphStyle,
                         ]
                     ))
@@ -180,7 +190,7 @@ enum MarkdownRenderer {
                         string: prefix,
                         attributes: [
                             .font: NSFont.systemFont(ofSize: fontSize),
-                            .foregroundColor: NSColor.labelColor,
+                            .foregroundColor: bodyColor(colorMode),
                             .paragraphStyle: paragraphStyle,
                         ]
                     ))
@@ -194,16 +204,15 @@ enum MarkdownRenderer {
                 headerLevel: block.headerLevel,
                 isCodeBlock: block.isCodeBlock
             )
+            let isCodeRun = block.isCodeBlock || isCode(run.inlinePresentationIntent)
             var attributes: [NSAttributedString.Key: Any] = [
                 .font: font,
-                .foregroundColor: block.isCodeBlock || isCode(run.inlinePresentationIntent)
-                    ? NSColor.secondaryLabelColor
-                    : NSColor.labelColor,
+                .foregroundColor: isCodeRun ? codeColor(colorMode) : bodyColor(colorMode),
                 .paragraphStyle: paragraphStyle,
             ]
             if let link = run.link {
                 attributes[.link] = link
-                attributes[.foregroundColor] = NSColor.linkColor
+                attributes[.foregroundColor] = linkColor(colorMode)
             }
             if isStrikethrough(run.inlinePresentationIntent) {
                 attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
@@ -214,6 +223,27 @@ enum MarkdownRenderer {
         }
 
         return result
+    }
+
+    private static func bodyColor(_ mode: ColorMode) -> NSColor {
+        switch mode {
+        case .display: return NSColor.labelColor
+        case .pasteboard: return NSColor.black
+        }
+    }
+
+    private static func codeColor(_ mode: ColorMode) -> NSColor {
+        switch mode {
+        case .display: return NSColor.secondaryLabelColor
+        case .pasteboard: return NSColor(calibratedWhite: 0.35, alpha: 1)
+        }
+    }
+
+    private static func linkColor(_ mode: ColorMode) -> NSColor {
+        switch mode {
+        case .display: return NSColor.linkColor
+        case .pasteboard: return NSColor(calibratedRed: 0.0, green: 0.4, blue: 0.85, alpha: 1)
+        }
     }
 
     private static func bodyParagraphStyle(fontSize: CGFloat) -> NSMutableParagraphStyle {

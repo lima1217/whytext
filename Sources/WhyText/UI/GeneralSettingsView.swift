@@ -49,7 +49,7 @@ struct GeneralSettingsView: View {
     // MARK: - Behavior
 
     private var behaviorCard: some View {
-        SettingsCard("选区浮点", subtitle: "适合鼠标选中后顺手点击，关闭后只保留快捷键触发。") {
+        SettingsCard("操作气泡", subtitle: "适合鼠标选中后顺手点击；关闭后只保留快捷键触发。") {
             HStack(alignment: .firstTextBaseline) {
                 Toggle("选中文本后显示操作气泡", isOn: $appModel.settingsStore.autoPopupOnSelection)
                 Spacer()
@@ -69,6 +69,7 @@ struct GeneralSettingsView: View {
 
                     Text("\(Int(appModel.settingsStore.translationFontSize)) pt")
                         .font(.system(size: SettingsUI.captionSize, design: .monospaced))
+                        .monospacedDigit()
                         .foregroundStyle(AstryxColor.textSecondary)
                 }
 

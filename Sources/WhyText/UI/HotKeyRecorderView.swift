@@ -18,13 +18,16 @@ struct HotKeyRecorderView: View {
                         .fill(SettingsUI.fieldBackground)
                 )
                 .shadowBorder(cornerRadius: Radius.element)
+                .accessibilityLabel("当前快捷键")
+                .accessibilityValue(shortcut?.displayString ?? "未设置")
 
             Button {
                 isRecording.toggle()
             } label: {
-                Label(isRecording ? "按键中..." : "录制", systemImage: isRecording ? "keyboard.badge.ellipsis" : "keyboard")
+                Label(isRecording ? "按键中…" : "录制", systemImage: isRecording ? "keyboard.badge.ellipsis" : "keyboard")
             }
             .buttonStyle(.quiet)
+            .accessibilityLabel(isRecording ? "正在录制快捷键，请按下组合键，按 Esc 取消" : "录制快捷键")
 
             Button {
                 shortcut = nil
@@ -34,6 +37,7 @@ struct HotKeyRecorderView: View {
             }
             .buttonStyle(.quiet)
             .disabled(shortcut == nil)
+            .accessibilityLabel("清除快捷键")
 
             if isRecording {
                 KeyCaptureView { captured in
@@ -46,6 +50,7 @@ struct HotKeyRecorderView: View {
                 .accessibilityHidden(true)
             }
         }
+        .accessibilityElement(children: .contain)
     }
 }
 

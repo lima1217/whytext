@@ -25,8 +25,7 @@ Use this checklist before replacing the local app in `/Applications`.
 - Select text and click the bubble’s explain (question-mark) action; confirm the panel title reflects 解释 and the explain prompt is used.
 - Confirm the bubble appears near the selection when the app provides selection bounds, and still appears near the mouse as fallback.
 - Confirm the result panel has rounded lower corners.
-- Confirm the copy button copies plain text.
-- Confirm clicking the result area copies plain text.
+- Confirm the copy button copies rich text (bold/headings/lists) into Notes/Pages, with plain-text fallback.
 
 ## Failure Cases
 

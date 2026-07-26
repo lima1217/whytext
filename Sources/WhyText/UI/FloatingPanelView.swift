@@ -56,6 +56,7 @@ struct FloatingPanelView: View {
                         )
                         .padding(.horizontal, PanelTokens.horizontalPadding)
                         .padding(.bottom, PanelTokens.bottomPadding)
+                        .accessibilityAddTraits(.updatesFrequently)
                         .transition(
                             MotionPreference.reduceMotion
                                 ? .opacity
@@ -70,7 +71,9 @@ struct FloatingPanelView: View {
         }
         .offset(x: shakeOffset)
         .onExitCommand { appModel.closePanel() }
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityLabel)
+        .accessibilityValue(accessibilityValue)
     }
 
     // MARK: - Content
@@ -120,6 +123,9 @@ struct FloatingPanelView: View {
             minHeight: PanelTokens.minContentHeight,
             alignment: .leading
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityAddTraits(.updatesFrequently)
     }
 
     private func skeletonBar(widthRatio: CGFloat) -> some View {
@@ -150,19 +156,34 @@ struct FloatingPanelView: View {
             HStack(alignment: .top, spacing: Spacing.x2) {
                 StatusDot(tone: .danger)
                     .padding(.top, 5)
+                    .accessibilityHidden(true)
                 Text(message)
                     .foregroundStyle(AstryxColor.textPrimary)
                     .font(.system(size: PanelTokens.bodyFontSize))
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Button(action: { appModel.retryLastAction() }) {
-                Label("重试", systemImage: "arrow.clockwise")
-                    .labelStyle(.titleAndIcon)
-                    .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
+            HStack(spacing: Spacing.x2) {
+                Spacer(minLength: 0)
+
+                if isConfigurationError(message) {
+                    Button(action: { appModel.openSettingsWindow() }) {
+                        Label("打开设置", systemImage: "gearshape")
+                            .labelStyle(.titleAndIcon)
+                            .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
+                    }
+                    .buttonStyle(.quiet)
+                }
+
+                if canRetry {
+                    Button(action: { appModel.retryLastAction() }) {
+                        Label("重试", systemImage: "arrow.clockwise")
+                            .labelStyle(.titleAndIcon)
+                            .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
+                    }
+                    .buttonStyle(.quiet(tint: Color.accentColor))
+                }
             }
-            .buttonStyle(.quiet(tint: Color.accentColor))
-            .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Spacing.x3)
@@ -171,6 +192,9 @@ struct FloatingPanelView: View {
                 .fill(AstryxColor.overlayHover)
         )
         .shadowBorder(cornerRadius: Radius.element)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("出错了")
+        .accessibilityValue(message)
         .onAppear {
             guard !MotionPreference.reduceMotion else { return }
             triggerShake()
@@ -232,10 +256,38 @@ struct FloatingPanelView: View {
         if appModel.panelState.isLoading {
             return "正在\(actionName)"
         }
+        if let error = appModel.panelState.errorMessage, !error.isEmpty {
+            return "\(actionName)失败"
+        }
         if hasResult {
-            return "\(actionName)结果，点击可复制"
+            return "\(actionName)结果"
         }
         return "\(actionName)窗口"
+    }
+
+    private var accessibilityValue: String {
+        if let error = appModel.panelState.errorMessage, !error.isEmpty {
+            return error
+        }
+        if let noticeText, !noticeText.isEmpty {
+            return noticeText
+        }
+        if hasResult {
+            let trimmed = appModel.panelState.resultText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.count > 120 {
+                return String(trimmed.prefix(120)) + "…"
+            }
+            return trimmed
+        }
+        return ""
+    }
+
+    private var canRetry: Bool {
+        appModel.panelState.lastAction != nil && appModel.panelState.lastInputText != nil
+    }
+
+    private func isConfigurationError(_ message: String) -> Bool {
+        message.contains("设置") || message.contains("API Key") || message.contains("服务商")
     }
 }
 
@@ -248,12 +300,16 @@ struct FloatingPanelTitlebarView: View {
     var body: some View {
         HStack(spacing: Spacing.x2) {
             if shouldShowStatus {
-                statusIcon
+                HStack(spacing: Spacing.x2) {
+                    statusIcon
 
-                Text(headerTitle)
-                    .font(AstryxFont.bodyMedium)
-                    .foregroundStyle(AstryxColor.textSecondary)
-                    .transition(.opacity.combined(with: .offset(y: 4)))
+                    Text(headerTitle)
+                        .font(AstryxFont.bodyMedium)
+                        .foregroundStyle(AstryxColor.textSecondary)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(headerTitle)
+                .transition(.opacity.combined(with: .offset(y: 4)))
             }
 
             Spacer(minLength: Spacing.x4)
@@ -275,17 +331,20 @@ struct FloatingPanelTitlebarView: View {
                 .accessibilityLabel(didCopy ? "已复制" : "复制结果")
             }
             .buttonStyle(.quietIcon)
-            .background(CopyTooltipAnchor(isPresented: isCopyHovered, text: "复制"))
+            .background(CopyTooltipAnchor(isPresented: isCopyHovered && hasResult, text: "复制"))
             .onHover { hovering in
                 isCopyHovered = hovering
             }
             .disabled(appModel.panelState.isLoading || !hasResult)
             .opacity(hasResult ? 1 : 0)
+            .allowsHitTesting(hasResult)
+            .accessibilityHidden(!hasResult)
             .help(didCopy ? "已复制" : "复制")
         }
         .frame(height: 32)
         .padding(.trailing, PanelTokens.horizontalPadding)
         .animation(AstryxMotion.smooth, value: shouldShowStatus)
+        .accessibilityElement(children: .contain)
         .onDisappear { copyResetTask?.cancel() }
     }
 
@@ -299,8 +358,8 @@ struct FloatingPanelTitlebarView: View {
     private var statusIcon: some View {
         ZStack {
             if let error = appModel.panelState.errorMessage, !error.isEmpty {
-                Image(systemName: Tone.warning.icon)
-                    .foregroundStyle(Tone.warning.color)
+                Image(systemName: Tone.danger.icon)
+                    .foregroundStyle(Tone.danger.color)
                     .font(.system(size: 14))
                     .transition(statusIconTransition)
             } else if appModel.panelState.isLoading {
@@ -317,6 +376,7 @@ struct FloatingPanelTitlebarView: View {
         }
         .frame(width: 14, height: 14)
         .animation(AstryxMotion.icon, value: contentStatusKey)
+        .accessibilityHidden(true)
     }
 
     private var statusIconTransition: AnyTransition {
@@ -333,7 +393,7 @@ struct FloatingPanelTitlebarView: View {
 
     private func copyResultIfPossible() {
         guard !appModel.panelState.isLoading, hasResult else { return }
-        appModel.copyResultPlainTextToPasteboard()
+        appModel.copyResultRichTextToPasteboard()
         didCopy = true
         copyResetTask?.cancel()
         copyResetTask = Task { @MainActor in

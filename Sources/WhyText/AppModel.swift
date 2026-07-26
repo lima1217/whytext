@@ -152,7 +152,7 @@ final class AppModel: ObservableObject {
         }
 
         let trimmed = sanitizeSelectedText(selectedText)
-        presentPanel(selectedText: trimmed, errorMessage: selectionError ?? (trimmed.isEmpty ? "未读取到选中文本" : nil))
+        presentPanel(selectedText: trimmed, errorMessage: selectionError ?? (trimmed.isEmpty ? "未读取到选中文本。请先选中一段文字，并确认已授权辅助功能。" : nil))
 
         guard selectionError == nil, !trimmed.isEmpty else {
             return
@@ -187,19 +187,30 @@ final class AppModel: ObservableObject {
         panelController.close()
     }
 
-    func copyResultToPasteboard() {
+    func copyResultRichTextToPasteboard() {
         guard !panelState.resultText.isEmpty else { return }
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(panelState.resultText, forType: .string)
-    }
 
-    func copyResultPlainTextToPasteboard() {
-        guard !panelState.resultText.isEmpty else { return }
-        let plain = MarkdownRenderer.plainText(panelState.resultText)
+        let fontSize = CGFloat(settingsStore.translationFontSize)
+        let attributed = MarkdownRenderer.pasteboardAttributedString(
+            panelState.resultText,
+            fontSize: fontSize
+        )
+        let range = NSRange(location: 0, length: attributed.length)
+
+        // RTF + plain only: AppKit HTML pasteboard encoding is unreliable across apps.
+        let item = NSPasteboardItem()
+        item.setString(attributed.string, forType: .string)
+
+        if let rtf = try? attributed.data(
+            from: range,
+            documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
+        ) {
+            item.setData(rtf, forType: .rtf)
+        }
+
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(plain, forType: .string)
+        pasteboard.writeObjects([item])
     }
 
     func run(action: PanelAction) {
@@ -302,21 +313,21 @@ final class AppModel: ObservableObject {
 
         if trimmedBaseURL.isEmpty || URL(string: trimmedBaseURL) == nil {
             report.baseURL = .unavailable
-            report.message = "Base URL 不合法"
+            report.message = "请填写有效的 Base URL，例如 https://api.deepseek.com"
         } else {
             report.baseURL = .available
         }
 
         if trimmedAPIKey.isEmpty {
             report.apiKey = .unavailable
-            report.message = report.message.isEmpty ? "API Key 为空" : report.message
+            report.message = report.message.isEmpty ? "请填写 API Key" : report.message
         } else {
             report.apiKey = .available
         }
 
         if trimmedModel.isEmpty {
             report.model = .unavailable
-            report.message = report.message.isEmpty ? "Model 为空" : report.message
+            report.message = report.message.isEmpty ? "请填写 Model 名称" : report.message
         } else {
             report.model = .available
         }
@@ -359,19 +370,19 @@ final class AppModel: ObservableObject {
 
     private func preflightForTranslation() -> TranslationPreflight? {
         guard let provider = settingsStore.selectedProvider else {
-            panelState.errorMessage = "请先在设置里配置 Provider"
+            panelState.errorMessage = "请先在设置中添加服务商"
             return nil
         }
 
         let apiKey = settingsStore.apiKey(for: provider.id).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !apiKey.isEmpty else {
-            panelState.errorMessage = "未设置 API Key（请在设置里填写）"
+            panelState.errorMessage = "请先在设置中填写 API Key"
             return nil
         }
 
         let selectedText = sanitizeSelectedText(panelState.selectedText)
         guard !selectedText.isEmpty else {
-            panelState.errorMessage = "未读取到选中文本"
+            panelState.errorMessage = "未读取到选中文本。请先选中一段文字，并确认已授权辅助功能。"
             return nil
         }
 
@@ -597,19 +608,19 @@ final class AppModel: ObservableObject {
         let lowercased = message.lowercased()
 
         if lowercased.contains("401") || lowercased.contains("unauthorized") || lowercased.contains("invalid key") {
-            return "API Key 无效或已过期（401）"
+            return "API Key 无效或已过期。请在设置中更新后重试。"
         }
         if lowercased.contains("429") || lowercased.contains("rate limit") {
-            return "请求过于频繁，请稍后重试（429）"
+            return "请求过于频繁，请稍后重试。"
         }
         if lowercased.contains("timed out") || lowercased.contains("timeout") {
-            return "网络超时，请检查网络后重试"
+            return "网络超时。请检查网络后重试。"
         }
         if lowercased.contains("403") || lowercased.contains("forbidden") || lowercased.contains("permission") {
-            return "无权限访问该模型或接口（403）"
+            return "无权限访问该模型或接口。请检查 API Key 与模型名称。"
         }
         if lowercased.contains("empty") || lowercased.contains("no content") {
-            return "模型未返回内容，请重试"
+            return "模型未返回内容。请重试，或换一个模型。"
         }
 
         return message
