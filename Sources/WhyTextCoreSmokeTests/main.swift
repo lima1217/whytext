@@ -8,6 +8,7 @@ enum WhyTextCoreSmokeTests {
         testCJKLatinSpacer()
         testTextChunker()
         testAccessibilitySelectionHelpers()
+        testSelectionAutoPopupPolicy()
         print("WhyTextCore smoke tests passed")
     }
 
@@ -101,6 +102,63 @@ enum WhyTextCoreSmokeTests {
         expect(
             AccessibilitySelectionHelpers.sanitizeSelectedText("hello\r\n\r\n\r\nworld\u{200B}") == "hello\n\nworld",
             "sanitize line endings and zero-width"
+        )
+    }
+
+    private static func testSelectionAutoPopupPolicy() {
+        expect(
+            SelectionAutoPopupPolicy.acceptsAXSelection(
+                textLength: 5,
+                hasAnchorRect: true,
+                anchorNearMouse: true,
+                allowMissingAnchor: false
+            ),
+            "anchored near-mouse selection should show bubble"
+        )
+        expect(
+            SelectionAutoPopupPolicy.acceptsAXSelection(
+                textLength: 5,
+                hasAnchorRect: true,
+                anchorNearMouse: false,
+                allowMissingAnchor: true
+            ),
+            "intentional gesture should accept AX text even with far/wrong anchor (old clipboard path covered this)"
+        )
+        expect(
+            !SelectionAutoPopupPolicy.acceptsAXSelection(
+                textLength: 5,
+                hasAnchorRect: true,
+                anchorNearMouse: false,
+                allowMissingAnchor: false
+            ),
+            "far anchor without intentional gesture must not show bubble"
+        )
+        expect(
+            SelectionAutoPopupPolicy.acceptsAXSelection(
+                textLength: 5,
+                hasAnchorRect: false,
+                anchorNearMouse: false,
+                allowMissingAnchor: true
+            ),
+            "intentional drag/multi-click with AX text but no bounds should still show bubble"
+        )
+        expect(
+            !SelectionAutoPopupPolicy.acceptsAXSelection(
+                textLength: 5,
+                hasAnchorRect: false,
+                anchorNearMouse: false,
+                allowMissingAnchor: false
+            ),
+            "missing anchor without intentional gesture must not show bubble"
+        )
+        expect(
+            !SelectionAutoPopupPolicy.acceptsAXSelection(
+                textLength: 1,
+                hasAnchorRect: false,
+                anchorNearMouse: false,
+                allowMissingAnchor: true
+            ),
+            "single-character selection is ignored"
         )
     }
 

@@ -9,7 +9,9 @@ final class SelectionAutoPopupCoordinator {
 
     private var selectionMonitor: Any?
     private var mouseDownMonitor: Any?
-    private var mouseDownLocation: NSPoint?
+    private var mouseDraggedMonitor: Any?
+    /// Off-main global monitors must not touch MainActor state; this box is the seam.
+    private let gestureTracker = GestureTracker()
     private var lastAutoPopupText: String = ""
     private var lastAutoPopupAt = Date.distantPast
     private var pendingSelectionText: String = ""
@@ -38,6 +40,9 @@ final class SelectionAutoPopupCoordinator {
         if let mouseDownMonitor {
             NSEvent.removeMonitor(mouseDownMonitor)
         }
+        if let mouseDraggedMonitor {
+            NSEvent.removeMonitor(mouseDraggedMonitor)
+        }
         autoPopupTask?.cancel()
     }
 
@@ -54,9 +59,16 @@ final class SelectionAutoPopupCoordinator {
             NSEvent.removeMonitor(mouseDownMonitor)
             self.mouseDownMonitor = nil
         }
+        if let mouseDraggedMonitor {
+            NSEvent.removeMonitor(mouseDraggedMonitor)
+            self.mouseDraggedMonitor = nil
+        }
 
         autoPopupTask?.cancel()
         autoPopupTask = nil
+        gestureTracker.clear()
+
+        BubbleDebugLog.log("setEnabled(\(enabled))")
 
         guard enabled else {
             clearPendingSelection()
@@ -64,19 +76,49 @@ final class SelectionAutoPopupCoordinator {
             return
         }
 
-        // Track mouse-down position so we can distinguish clicks from drag-selections.
-        mouseDownMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] _ in
-            self?.mouseDownLocation = NSEvent.mouseLocation
+        // Record gesture state synchronously in the monitor callbacks (may be
+        // off-main). Only hop to MainActor once we have a complete mouseUp.
+        mouseDownMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown]) { [gestureTracker] _ in
+            let location = NSEvent.mouseLocation
+            gestureTracker.mouseDown(at: location)
+            BubbleDebugLog.log("mouseDown at \(location) main=\(Thread.isMainThread)")
         }
 
-        selectionMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseUp]) { [weak self] event in
-            guard let self else { return }
+        mouseDraggedMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDragged]) { [gestureTracker] _ in
+            gestureTracker.mouseDragged()
+        }
+
+        selectionMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseUp]) { [weak self, gestureTracker] event in
             let clickCount = event.clickCount
-            self.autoPopupTask?.cancel()
-            self.autoPopupTask = Task { @MainActor in
-                await self.autoPopupOnSelectionIfNeeded(mouseUpClickCount: clickCount)
+            let upLocation = NSEvent.mouseLocation
+            guard let gesture = gestureTracker.consumeMouseUp(
+                at: upLocation,
+                dragThreshold: Self.autoPopupDragThreshold
+            ) else {
+                BubbleDebugLog.log("mouseUp clicks=\(clickCount) gate: no mouseDownLocation")
+                return
+            }
+
+            BubbleDebugLog.log(
+                "mouseUp clicks=\(clickCount) distance=\(String(format: "%.1f", gesture.distance)) draggedEvent=\(gesture.sawDragEvent) drag=\(gesture.didDragSelect) multi=\(clickCount >= 2)"
+            )
+
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.autoPopupTask?.cancel()
+                self.autoPopupTask = Task { @MainActor in
+                    await self.autoPopupOnSelectionIfNeeded(
+                        mouseUpClickCount: clickCount,
+                        mouseUpLocation: upLocation,
+                        didDragSelect: gesture.didDragSelect
+                    )
+                }
             }
         }
+
+        BubbleDebugLog.log(
+            "monitors installed down=\(mouseDownMonitor != nil) drag=\(mouseDraggedMonitor != nil) up=\(selectionMonitor != nil)"
+        )
     }
 
     func handlePanelDidClose() {
@@ -94,51 +136,58 @@ final class SelectionAutoPopupCoordinator {
     private func clearPendingSelection() {
         pendingSelectionText = ""
         pendingSelectionAnchorRect = nil
-        mouseDownLocation = nil
+        gestureTracker.clear()
     }
 
-    private func autoPopupOnSelectionIfNeeded(mouseUpClickCount: Int) async {
+    private func autoPopupOnSelectionIfNeeded(
+        mouseUpClickCount: Int,
+        mouseUpLocation: NSPoint,
+        didDragSelect: Bool
+    ) async {
         if isPanelVisible() {
+            BubbleDebugLog.log("gate: panel visible")
             return
         }
 
         let now = Date()
         if now < suppressAutoPopupUntil {
+            BubbleDebugLog.log("gate: suppressed until \(suppressAutoPopupUntil)")
             return
         }
 
-        let mouseUpLocation = NSEvent.mouseLocation
-        guard let downLocation = mouseDownLocation else {
-            return
-        }
-
-        let dx = mouseUpLocation.x - downLocation.x
-        let dy = mouseUpLocation.y - downLocation.y
-        let distance = sqrt(dx * dx + dy * dy)
-        let didDragSelect = distance >= Self.autoPopupDragThreshold
         let didMultiClickSelect = mouseUpClickCount >= 2
         if !didDragSelect && !didMultiClickSelect {
-            mouseDownLocation = nil
+            BubbleDebugLog.log("gate: not an intentional selection gesture")
             return
         }
-        mouseDownLocation = nil
 
-        // Auto-popup never uses clipboard Cmd+C fallback or unanchored AX text —
-        // both can surface unrelated/sensitive content from another control.
-        let selection = await readSelectionForAutoPopup(near: mouseUpLocation)
-        guard !Task.isCancelled else { return }
+        // Prefer AX text (with or without a trustworthy anchor). When AX is empty,
+        // intentional gestures may use the clipboard Cmd+C fallback — same as the
+        // pre-778c115 path that users relied on in Chrome / Electron / PDF viewers.
+        let allowMissingAnchor = didDragSelect || didMultiClickSelect
+        let selection = await readSelectionForAutoPopup(
+            near: mouseUpLocation,
+            allowMissingAnchor: allowMissingAnchor
+        )
+        guard !Task.isCancelled else {
+            BubbleDebugLog.log("gate: task cancelled after read")
+            return
+        }
         if isPanelVisible() || Date() < suppressAutoPopupUntil {
+            BubbleDebugLog.log("gate: panel visible or suppressed after read")
             return
         }
 
         let trimmed = selection.text
-        guard trimmed.count >= 2, selection.anchorRect != nil else {
+        guard trimmed.count >= SelectionAutoPopupPolicy.minimumTextLength else {
+            BubbleDebugLog.log("gate: final text too short len=\(trimmed.count)")
             pendingSelectionText = ""
             pendingSelectionAnchorRect = nil
             return
         }
 
         if trimmed == lastAutoPopupText, now.timeIntervalSince(lastAutoPopupAt) < 0.6 {
+            BubbleDebugLog.log("gate: dedupe same text within 0.6s")
             return
         }
 
@@ -149,10 +198,14 @@ final class SelectionAutoPopupCoordinator {
         pendingSelectionAnchorRect = selection.anchorRect
 
         let point = NSEvent.mouseLocation
+        BubbleDebugLog.log("SHOW bubble at \(point) anchor=\(selection.anchorRect?.debugDescription ?? "nil") textLen=\(trimmed.count)")
         selectionBubbleController.show(at: point, anchorRect: selection.anchorRect)
     }
 
-    private func readSelectionForAutoPopup(near mouseLocation: NSPoint) async -> SelectionReader.Result {
+    private func readSelectionForAutoPopup(
+        near mouseLocation: NSPoint,
+        allowMissingAnchor: Bool
+    ) async -> SelectionReader.Result {
         // Try immediately, then back off — stop as soon as AX exposes a usable selection.
         let delays: [UInt64] = [0, 50_000_000, 120_000_000, 250_000_000]
 
@@ -161,18 +214,53 @@ final class SelectionAutoPopupCoordinator {
                 try? await Task.sleep(nanoseconds: delay)
             }
             guard !Task.isCancelled else {
+                BubbleDebugLog.log("read[\(delay / 1_000_000)ms]: task cancelled")
                 return SelectionReader.Result(text: "", anchorRect: nil)
             }
 
-            let selection = try? await selectionReader.readSelectedText(allowClipboardFallback: false)
+            var selection: SelectionReader.Result?
+            var readError: String?
+            do {
+                selection = try await selectionReader.readSelectedText(allowClipboardFallback: false)
+            } catch {
+                readError = String(describing: error)
+            }
             let trimmed = AccessibilitySelectionHelpers.sanitizeSelectedText(selection?.text ?? "")
-            if trimmed.count >= 2,
-               let anchorRect = selection?.anchorRect,
-               isAutoPopupSelectionNearMouse(anchorRect: anchorRect, mouseLocation: mouseLocation) {
-                return SelectionReader.Result(text: trimmed, anchorRect: anchorRect)
+            let anchorRect = selection?.anchorRect
+            let nearMouse = anchorRect.map {
+                isAutoPopupSelectionNearMouse(anchorRect: $0, mouseLocation: mouseLocation)
+            } ?? false
+
+            let accepted = SelectionAutoPopupPolicy.acceptsAXSelection(
+                textLength: trimmed.count,
+                hasAnchorRect: anchorRect != nil,
+                anchorNearMouse: nearMouse,
+                allowMissingAnchor: allowMissingAnchor
+            )
+            BubbleDebugLog.log(
+                "read[\(delay / 1_000_000)ms]: error=\(readError ?? "nil") textLen=\(trimmed.count) anchor=\(anchorRect != nil) nearMouse=\(nearMouse) allowMissingAnchor=\(allowMissingAnchor) accepted=\(accepted)"
+            )
+
+            if accepted {
+                // Drop untrustworthy anchors so the bubble parks near the mouse.
+                let usableAnchor = nearMouse ? anchorRect : nil
+                return SelectionReader.Result(text: trimmed, anchorRect: usableAnchor)
             }
         }
 
+        if allowMissingAnchor {
+            BubbleDebugLog.log("read: trying clipboard fallback")
+            if let fallback = try? await selectionReader.readSelectedText(allowClipboardFallback: true) {
+                let fallbackText = AccessibilitySelectionHelpers.sanitizeSelectedText(fallback.text)
+                if fallbackText.count >= SelectionAutoPopupPolicy.minimumTextLength {
+                    BubbleDebugLog.log("read: clipboard fallback ok textLen=\(fallbackText.count)")
+                    return SelectionReader.Result(text: fallbackText, anchorRect: nil)
+                }
+            }
+            BubbleDebugLog.log("read: clipboard fallback empty")
+        }
+
+        BubbleDebugLog.log("read: all attempts rejected")
         return SelectionReader.Result(text: "", anchorRect: nil)
     }
 
@@ -190,5 +278,61 @@ final class SelectionAutoPopupCoordinator {
         return [raw, flipped].contains { rect in
             rect.insetBy(dx: -Self.autoPopupAnchorTolerance, dy: -Self.autoPopupAnchorTolerance).contains(mouseLocation)
         }
+    }
+}
+
+/// Thread-safe mouse gesture state for global event monitors.
+private final class GestureTracker: @unchecked Sendable {
+    private let lock = NSLock()
+    private var mouseDownLocation: NSPoint?
+    private var sawDragEvent = false
+
+    struct Outcome {
+        var distance: CGFloat
+        var sawDragEvent: Bool
+        var didDragSelect: Bool
+    }
+
+    func mouseDown(at point: NSPoint) {
+        lock.lock()
+        mouseDownLocation = point
+        sawDragEvent = false
+        lock.unlock()
+    }
+
+    func mouseDragged() {
+        lock.lock()
+        if mouseDownLocation != nil {
+            sawDragEvent = true
+        }
+        lock.unlock()
+    }
+
+    func consumeMouseUp(at point: NSPoint, dragThreshold: CGFloat) -> Outcome? {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard let down = mouseDownLocation else { return nil }
+        let dx = point.x - down.x
+        let dy = point.y - down.y
+        let distance = sqrt(dx * dx + dy * dy)
+        let dragged = sawDragEvent
+        mouseDownLocation = nil
+        sawDragEvent = false
+        // Require real pointer travel. A lone leftMouseDragged with ~0 distance
+        // (trackpad noise / click jitter) must not count as text selection —
+        // that falsely triggers clipboard fallback and a system beep.
+        return Outcome(
+            distance: distance,
+            sawDragEvent: dragged,
+            didDragSelect: distance >= dragThreshold
+        )
+    }
+
+    func clear() {
+        lock.lock()
+        mouseDownLocation = nil
+        sawDragEvent = false
+        lock.unlock()
     }
 }

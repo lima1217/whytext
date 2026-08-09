@@ -52,17 +52,20 @@ final class AppModel: ObservableObject {
             panelController?.isVisible ?? false
         }
 
+        BubbleDebugLog.log(
+            "startup axTrusted=\(selectionService.status() == .trusted) autoPopupSetting=\(settingsStore.autoPopupOnSelection) version=\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?") path=\(Bundle.main.bundlePath)"
+        )
+
         settingsStore.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
 
+        // `@Published` sinks emit the current value on subscribe — that installs monitors once.
         settingsStore.$autoPopupOnSelection
             .sink { [weak self] enabled in
                 self?.selectionAutoPopup.setEnabled(enabled)
             }
             .store(in: &cancellables)
-
-        selectionAutoPopup.setEnabled(settingsStore.autoPopupOnSelection)
 
         settingsStore.$hotKeyShortcut
             .sink { [weak self] shortcut in
