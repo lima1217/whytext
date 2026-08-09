@@ -147,22 +147,7 @@ final class SettingsStore: ObservableObject {
     }
 
     func apiKey(for providerID: UUID) -> String {
-        if let idx = providers.firstIndex(where: { $0.id == providerID }) {
-            let cached = providers[idx].apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !cached.isEmpty {
-                return cached
-            }
-        }
-
-        let key = apiKeychainStore.apiKey(for: providerID)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-        if !key.isEmpty,
-           let idx = providers.firstIndex(where: { $0.id == providerID }),
-           providers[idx].apiKey != key {
-            providers[idx].apiKey = key
-        }
-
-        return key
+        apiKeychainStore.apiKey(for: providerID)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
     func saveAPIKey(_ value: String, for providerID: UUID) {
@@ -173,18 +158,10 @@ final class SettingsStore: ObservableObject {
         }
 
         _ = apiKeychainStore.saveAPIKey(trimmed, for: providerID)
-
-        if let idx = providers.firstIndex(where: { $0.id == providerID }) {
-            providers[idx].apiKey = trimmed
-        }
     }
 
     func clearAPIKey(for providerID: UUID) {
         _ = apiKeychainStore.deleteAPIKey(for: providerID)
-
-        if let idx = providers.firstIndex(where: { $0.id == providerID }), !providers[idx].apiKey.isEmpty {
-            providers[idx].apiKey = ""
-        }
     }
 
     func resetTranslatePromptTemplateToDefault() {

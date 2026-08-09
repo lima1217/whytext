@@ -19,14 +19,11 @@ enum TranslationErrorCode: String, Codable {
 }
 
 struct UnifiedTranslationRequest {
-    static let defaultDeviceDescriptor = "\(ProcessInfo.processInfo.hostName) / \(ProcessInfo.processInfo.operatingSystemVersionString)"
-
     var model: String
     var sourceText: String
     var sourceLanguage: String
     var targetLanguage: String
     var mode: TranslationMode
-    var device: String
     var promptTemplate: String
     var stream: Bool
     var includeStructureHint: Bool = true
@@ -61,16 +58,22 @@ struct UnifiedTranslationResponse {
     var sourceLanguage: String
     var targetLanguage: String
     var mode: TranslationMode
-    var device: String
     var translatedText: String
     var errorCode: TranslationErrorCode?
 }
 
 final class LLMClient {
-    private let injectedSession: URLSession?
+    private let session: URLSession
+    private let allowsTransientRetry: Bool
 
     init(session: URLSession? = nil) {
-        self.injectedSession = session
+        if let session {
+            self.session = session
+            self.allowsTransientRetry = false
+        } else {
+            self.session = Self.makeURLSession()
+            self.allowsTransientRetry = true
+        }
     }
 
     func complete(prompt: String, provider: LLMProvider, apiKey: String) async throws -> String {
@@ -80,7 +83,6 @@ final class LLMClient {
             sourceLanguage: "auto",
             targetLanguage: "auto",
             mode: .translate,
-            device: UnifiedTranslationRequest.defaultDeviceDescriptor,
             promptTemplate: "{{text}}",
             stream: false,
             includeStructureHint: false
@@ -125,7 +127,6 @@ final class LLMClient {
                 sourceLanguage: request.sourceLanguage,
                 targetLanguage: request.targetLanguage,
                 mode: request.mode,
-                device: request.device,
                 translatedText: trimmed,
                 errorCode: nil
             )
@@ -145,7 +146,6 @@ final class LLMClient {
             sourceLanguage: "auto",
             targetLanguage: "auto",
             mode: .translate,
-            device: UnifiedTranslationRequest.defaultDeviceDescriptor,
             promptTemplate: "{{text}}",
             stream: true,
             includeStructureHint: false
@@ -168,7 +168,7 @@ final class LLMClient {
                         baseURL: provider.baseURL
                     )
 
-                    let (bytes, response) = try await activeSession().bytes(for: httpRequest)
+                    let (bytes, response) = try await session.bytes(for: httpRequest)
                     try Task.checkCancellation()
 
                     guard let http = response as? HTTPURLResponse else {
@@ -238,25 +238,17 @@ final class LLMClient {
         return request
     }
 
-    private func activeSession() -> URLSession {
-        if let injectedSession {
-            return injectedSession
-        }
-        return Self.makeURLSession()
-    }
-
     private func performDataRequest(_ request: URLRequest) async throws -> (Data, URLResponse) {
-        let session = activeSession()
         let (data, response) = try await session.data(for: request)
 
-        guard let http = response as? HTTPURLResponse,
-              [502, 503, 504].contains(http.statusCode),
-              injectedSession == nil else {
+        guard allowsTransientRetry,
+              let http = response as? HTTPURLResponse,
+              [502, 503, 504].contains(http.statusCode) else {
             return (data, response)
         }
 
         try? await Task.sleep(nanoseconds: 250_000_000)
-        return try await URLSession.shared.data(for: request)
+        return try await session.data(for: request)
     }
 
     private static func makeURLSession() -> URLSession {
@@ -264,6 +256,7 @@ final class LLMClient {
         configuration.waitsForConnectivity = true
         configuration.timeoutIntervalForRequest = 60
         configuration.timeoutIntervalForResource = 120
+        configuration.httpMaximumConnectionsPerHost = 4
         return URLSession(configuration: configuration)
     }
 
@@ -359,6 +352,24 @@ enum LLMError: LocalizedError {
             return message
         default:
             return nil
+        }
+    }
+
+    /// Whether a failed streaming request may safely retry once without streaming.
+    /// Auth, rate limits, timeouts, and hard transport failures should not double-hit the API.
+    var shouldAttemptNonStreamingFallback: Bool {
+        switch self {
+        case .invalidResponse, .emptyOutput:
+            return true
+        case .remoteError(let code, let statusCode, _):
+            switch code {
+            case .unauthorized, .rateLimited, .noPermission, .timeout:
+                return false
+            case .invalidBaseURL, .network, .emptyResponse, .invalidResponse, .unknown:
+                return [400, 404, 415, 422].contains(statusCode)
+            }
+        case .invalidBaseURL, .transportError:
+            return false
         }
     }
 

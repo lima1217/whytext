@@ -11,6 +11,7 @@ let package = Package(
     products: [
         .library(name: "WhyTextCore", targets: ["WhyTextCore"]),
         .executable(name: "WhyText", targets: ["WhyText"]),
+        .executable(name: "WhyTextCoreSmokeTests", targets: ["WhyTextCoreSmokeTests"]),
     ],
     targets: [
         .target(
@@ -25,6 +26,8 @@ let package = Package(
                 .linkedFramework("Security"),
             ]
         ),
+        // Executable smoke tests stay portable for Command Line Tools–only setups.
+        // Full Xcode also exposes these via `swift run WhyTextCoreSmokeTests`.
         .executableTarget(
             name: "WhyTextCoreSmokeTests",
             dependencies: ["WhyTextCore"],

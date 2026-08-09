@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          CLANG_MODULE_CACHE_PATH=/tmp/clang-module-cache \
+            swift build --cache-path /tmp/swiftpm-cache
+
+      - name: Core smoke tests
+        run: |
+          CLANG_MODULE_CACHE_PATH=/tmp/clang-module-cache \
+            swift run WhyTextCoreSmokeTests --cache-path /tmp/swiftpm-cache

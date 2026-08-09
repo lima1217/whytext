@@ -57,7 +57,9 @@ final class PromptRunner {
                         await maybeUpdate(output + current)
                     }
                     output += current
-                } catch {
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch let error as LLMError where error.shouldAttemptNonStreamingFallback {
                     var fallbackRequest = request
                     fallbackRequest.stream = false
 
@@ -68,6 +70,8 @@ final class PromptRunner {
                     )
                     output += response.translatedText
                     await maybeUpdate(output, force: true)
+                } catch {
+                    throw error
                 }
             } else {
                 let response = try await llmClient.complete(
@@ -102,7 +106,6 @@ final class PromptRunner {
             sourceLanguage: "auto",
             targetLanguage: "auto",
             mode: mode,
-            device: UnifiedTranslationRequest.defaultDeviceDescriptor,
             promptTemplate: template,
             stream: stream,
             includeStructureHint: mode == .translate

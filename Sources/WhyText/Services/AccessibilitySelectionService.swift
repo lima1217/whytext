@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import Foundation
+import WhyTextCore
 
 struct SelectionDiagnostics: Equatable {
     var report: String
@@ -112,7 +113,7 @@ final class AccessibilitySelectionService {
             selectedText = result.text
             lines.append("getSelectedText: success")
             lines.append("selectedLength: \(result.text.count)")
-            lines.append("selectedPreview: \(preview(result.text))")
+            lines.append("selectedPreview: \(AccessibilitySelectionHelpers.preview(result.text))")
             if let anchorRect = result.anchorRect {
                 lines.append("selectedAnchorRect: \(anchorRect.debugDescription)")
             } else {
@@ -502,12 +503,13 @@ final class AccessibilitySelectionService {
         let role = copyStringAttribute(kAXRoleAttribute as CFString, from: element) ?? "(none)"
         let subrole = copyStringAttribute(kAXSubroleAttribute as CFString, from: element) ?? "(none)"
         let title = copyStringAttribute(kAXTitleAttribute as CFString, from: element) ?? "(none)"
-        let valuePreview = copyStringAttribute(kAXValueAttribute as CFString, from: element).map { preview($0) } ?? "(none)"
+        let valuePreview = copyStringAttribute(kAXValueAttribute as CFString, from: element)
+            .map { AccessibilitySelectionHelpers.preview($0) } ?? "(none)"
 
         var lines: [String] = []
         lines.append("\(prefix).role: \(role)")
         lines.append("\(prefix).subrole: \(subrole)")
-        lines.append("\(prefix).title: \(preview(title))")
+        lines.append("\(prefix).title: \(AccessibilitySelectionHelpers.preview(title))")
         lines.append("\(prefix).valuePreview: \(valuePreview)")
         lines.append("\(prefix).hasAXSelectedText: \(names.contains(kAXSelectedTextAttribute as String))")
         lines.append("\(prefix).hasAXSelectedTextRange: \(names.contains(kAXSelectedTextRangeAttribute as String))")
@@ -679,25 +681,16 @@ final class AccessibilitySelectionService {
     }
 
     private func substring(_ text: String, utf16Range: CFRange) -> String? {
-        guard utf16Range.location != kCFNotFound,
-              utf16Range.location >= 0,
-              utf16Range.length > 0 else {
-            return nil
-        }
-
-        let nsText = text as NSString
-        let end = utf16Range.location + utf16Range.length
-        guard end <= nsText.length else {
-            return nil
-        }
-
-        return nsText.substring(with: NSRange(location: utf16Range.location, length: utf16Range.length))
+        guard utf16Range.location != kCFNotFound else { return nil }
+        return AccessibilitySelectionHelpers.substringUTF16(
+            text,
+            location: utf16Range.location,
+            length: utf16Range.length
+        )
     }
 
     private func nonEmptyTrimmed(_ text: String?) -> String? {
-        guard let text else { return nil }
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
+        AccessibilitySelectionHelpers.nonEmptyTrimmed(text)
     }
 
     private func isChromiumBundleID(_ bundleID: String?) -> Bool {
@@ -712,15 +705,6 @@ final class AccessibilitySelectionService {
 
     private func elementKey(_ element: AXUIElement) -> Int {
         Int(CFHash(element))
-    }
-
-    private func preview(_ text: String, maxLength: Int = 120) -> String {
-        let compact = text.replacingOccurrences(of: "\n", with: "\\n")
-        if compact.count <= maxLength {
-            return compact
-        }
-        let end = compact.index(compact.startIndex, offsetBy: maxLength)
-        return String(compact[..<end]) + "..."
     }
 }
 

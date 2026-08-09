@@ -1,0 +1,30 @@
+import Foundation
+
+enum TranslationErrorPresenter {
+    static func userFacingMessage(for error: Error) -> String {
+        if let llmError = error as? LLMError {
+            return llmError.localizedDescription
+        }
+
+        let message = error.localizedDescription
+        let lowercased = message.lowercased()
+
+        if lowercased.contains("401") || lowercased.contains("unauthorized") || lowercased.contains("invalid key") {
+            return "API Key 无效或已过期。请在设置中更新后重试。"
+        }
+        if lowercased.contains("429") || lowercased.contains("rate limit") {
+            return "请求过于频繁，请稍后重试。"
+        }
+        if lowercased.contains("timed out") || lowercased.contains("timeout") {
+            return "网络超时。请检查网络后重试。"
+        }
+        if lowercased.contains("403") || lowercased.contains("forbidden") || lowercased.contains("permission") {
+            return "无权限访问该模型或接口。请检查 API Key 与模型名称。"
+        }
+        if lowercased.contains("empty") || lowercased.contains("no content") {
+            return "模型未返回内容。请重试，或换一个模型。"
+        }
+
+        return message
+    }
+}

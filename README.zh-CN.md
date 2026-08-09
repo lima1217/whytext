@@ -52,6 +52,9 @@ xcode-select --install
 CLANG_MODULE_CACHE_PATH=/tmp/clang-module-cache \
   swift build --cache-path /tmp/swiftpm-cache
 
+CLANG_MODULE_CACHE_PATH=/tmp/clang-module-cache \
+  swift run WhyTextCoreSmokeTests --cache-path /tmp/swiftpm-cache
+
 .build/debug/WhyText
 ```
 
@@ -82,12 +85,17 @@ open ./dist/WhyText.app
 ```text
 Sources/WhyText/
   WhyTextApp.swift          # 应用入口（MenuBarExtra）
-  AppModel.swift            # 主状态与业务流程
-  Services/                 # 选区读取、快捷键、浮窗、LLM 请求等
+  AppModel.swift            # 主状态编排
+  Models/                   # 面板 / 连通性 / 翻译预检模型
+  Services/                 # 选区、翻译会话、快捷键、浮窗、LLM 等
   Stores/                   # 设置存储
   UI/                       # 各设置页与浮窗视图
   Utils/                    # 工具函数
+Sources/WhyTextCore/        # 可单测的纯逻辑（分段、端点、选区辅助）
+Sources/WhyTextCoreSmokeTests/  # Core smoke 测试（CLT 友好）
+VERSION                     # 短版本号 + build 号（打包脚本读取）
 scripts/build-app.sh        # 打包 .app 脚本
+.github/workflows/ci.yml    # 构建 + smoke 测试
 ```
 
 ## 常见问题

@@ -7,8 +7,21 @@ cd "$ROOT_DIR"
 APP_NAME="WhyText"
 APP_ID="com.whytext.local"
 ICON_PATH="$ROOT_DIR/Resources/AppIcon.icns"
+VERSION_FILE="$ROOT_DIR/VERSION"
 LOCAL_SIGNING_IDENTITY="WhyText Local Code Signing"
-LOCAL_SIGNING_PASSWORD="whytext-local-signing"
+
+if [[ ! -f "$VERSION_FILE" ]]; then
+  echo "VERSION file not found: $VERSION_FILE" >&2
+  exit 1
+fi
+
+APP_VERSION="$(sed -n '1p' "$VERSION_FILE" | tr -d '[:space:]')"
+APP_BUILD="$(sed -n '2p' "$VERSION_FILE" | tr -d '[:space:]')"
+
+if [[ -z "$APP_VERSION" || -z "$APP_BUILD" ]]; then
+  echo "VERSION must contain short version on line 1 and build number on line 2." >&2
+  exit 1
+fi
 
 CLANG_MODULE_CACHE_PATH="${CLANG_MODULE_CACHE_PATH:-/tmp/clang-module-cache}"
 SWIFTPM_CACHE_PATH="${SWIFTPM_CACHE_PATH:-/tmp/swiftpm-cache}"
@@ -71,6 +84,12 @@ EOF
     -out "$tmpdir/cert.pem" \
     -config "$tmpdir/openssl.cnf" >/dev/null 2>&1
 
+  local signing_password="${LOCAL_SIGNING_PASSWORD:-}"
+  if [[ -z "$signing_password" ]]; then
+    signing_password="$(openssl rand -base64 24)"
+    echo "Generated LOCAL_SIGNING_PASSWORD for one-time keychain import (not printed)." >&2
+  fi
+
   openssl pkcs12 \
     -legacy \
     -export \
@@ -78,12 +97,12 @@ EOF
     -inkey "$tmpdir/key.pem" \
     -in "$tmpdir/cert.pem" \
     -name "$LOCAL_SIGNING_IDENTITY" \
-    -passout "pass:$LOCAL_SIGNING_PASSWORD" >/dev/null 2>&1
+    -passout "pass:$signing_password" >/dev/null 2>&1
 
+  # Prefer an explicit codesign ACL over -A (which allows any process to use the key).
   security import "$tmpdir/identity.p12" \
     -k "$HOME/Library/Keychains/login.keychain-db" \
-    -P "$LOCAL_SIGNING_PASSWORD" \
-    -A \
+    -P "$signing_password" \
     -T /usr/bin/codesign >/dev/null
 
   security add-trusted-cert \
@@ -156,9 +175,9 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.2.2</string>
+  <string>$APP_VERSION</string>
   <key>CFBundleVersion</key>
-  <string>6</string>
+  <string>$APP_BUILD</string>
   <key>LSMinimumSystemVersion</key>
   <string>13.0</string>
   <key>LSUIElement</key>

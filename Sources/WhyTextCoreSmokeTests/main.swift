@@ -7,6 +7,7 @@ enum WhyTextCoreSmokeTests {
         try testProviderEndpointBuilder()
         testCJKLatinSpacer()
         testTextChunker()
+        testAccessibilitySelectionHelpers()
         print("WhyTextCore smoke tests passed")
     }
 
@@ -81,6 +82,26 @@ enum WhyTextCoreSmokeTests {
 
         let long = TextChunker.chunk(text: "alpha beta gamma", maxCharacters: 10, splitLongInput: true)
         expect(long.chunks == ["alpha", "beta gamma"], "long text should split on whitespace")
+    }
+
+    private static func testAccessibilitySelectionHelpers() {
+        expect(AccessibilitySelectionHelpers.preview("hello") == "hello", "short preview unchanged")
+        expect(AccessibilitySelectionHelpers.preview("a\nb") == "a\\nb", "preview escapes newlines")
+        expect(
+            AccessibilitySelectionHelpers.preview(String(repeating: "x", count: 130), maxLength: 10) == "xxxxxxxxxx...",
+            "preview truncates with ellipsis"
+        )
+
+        expect(AccessibilitySelectionHelpers.nonEmptyTrimmed("   ") == nil, "blank becomes nil")
+        expect(AccessibilitySelectionHelpers.nonEmptyTrimmed("  hi  ") == "hi", "trim non-empty")
+
+        expect(AccessibilitySelectionHelpers.substringUTF16("abcdef", location: 1, length: 3) == "bcd", "utf16 substring")
+        expect(AccessibilitySelectionHelpers.substringUTF16("abc", location: 2, length: 5) == nil, "oob utf16 substring")
+
+        expect(
+            AccessibilitySelectionHelpers.sanitizeSelectedText("hello\r\n\r\n\r\nworld\u{200B}") == "hello\n\nworld",
+            "sanitize line endings and zero-width"
+        )
     }
 
     private static func expect(_ condition: @autoclosure () -> Bool, _ message: String) {

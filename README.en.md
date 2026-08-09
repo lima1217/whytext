@@ -52,6 +52,9 @@ Open `Package.swift` in Xcode and click Run.
 CLANG_MODULE_CACHE_PATH=/tmp/clang-module-cache \
   swift build --cache-path /tmp/swiftpm-cache
 
+CLANG_MODULE_CACHE_PATH=/tmp/clang-module-cache \
+  swift run WhyTextCoreSmokeTests --cache-path /tmp/swiftpm-cache
+
 .build/debug/WhyText
 ```
 
@@ -82,12 +85,17 @@ The build script signs with a `Developer ID Application` or `Apple Development` 
 ```text
 Sources/WhyText/
   WhyTextApp.swift          # App entry (MenuBarExtra)
-  AppModel.swift            # Main state and workflow
-  Services/                 # Selection, hotkey, panel, LLM request logic
+  AppModel.swift            # Main state orchestration
+  Models/                   # Panel / connectivity / translation preflight models
+  Services/                 # Selection, translation session, hotkey, panel, LLM
   Stores/                   # Settings storage
   UI/                       # Settings pages and panel views
   Utils/                    # Utility helpers
+Sources/WhyTextCore/        # Testable pure logic (chunking, endpoints, selection helpers)
+Sources/WhyTextCoreSmokeTests/  # Core smoke tests (CLT-friendly)
+VERSION                     # Short version + build number (read by packaging script)
 scripts/build-app.sh        # Build script for .app bundle
+.github/workflows/ci.yml    # Build + smoke tests
 ```
 
 ## FAQ
