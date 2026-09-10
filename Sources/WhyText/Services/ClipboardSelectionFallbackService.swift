@@ -178,7 +178,7 @@ final class ClipboardSelectionFallbackService {
         }
 
         let item = NSPasteboardItem()
-        for type, data in snapshot.typeData {
+        for (type, data) in snapshot.typeData {
             item.setData(data, forType: type)
         }
 
