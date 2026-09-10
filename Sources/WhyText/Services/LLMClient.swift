@@ -430,10 +430,15 @@ private enum ProviderAdapter {
     func requestBody(from request: UnifiedTranslationRequest, stream: Bool, baseURL: String) throws -> Data {
         switch self {
         case .chatCompletions:
-            // DeepSeek thinking defaults to enabled and slows translation; turn it off.
-            let thinking: ThinkingConfig? = Self.supportsThinkingToggle(baseURL: baseURL)
-                ? ThinkingConfig(type: "disabled")
-                : nil
+            // DeepSeek thinking defaults to enabled and slows translation; turn it
+            // off for translation. The chat endpoint's knob is binary, so keep it
+            // enabled for explanation instead of an effort level.
+            let thinking: ThinkingConfig?
+            if Self.supportsThinkingToggle(baseURL: baseURL) {
+                thinking = ThinkingConfig(type: request.mode == .explain ? "enabled" : "disabled")
+            } else {
+                thinking = nil
+            }
             let body = ChatCompletionsRequest(
                 model: request.model,
                 messages: [ChatMessage(role: "user", content: request.renderedPrompt)],
@@ -443,10 +448,14 @@ private enum ProviderAdapter {
             )
             return try JSONEncoder().encode(body)
         case .responses:
+            // Translation is latency-sensitive and needs no reasoning; explanation
+            // benefits from deeper thinking, so give it a high effort budget.
+            let effort = request.mode == .explain ? "high" : "none"
             let body = ResponsesRequest(
                 model: request.model,
                 input: request.renderedPrompt,
-                stream: stream
+                stream: stream,
+                reasoning: ReasoningConfig(effort: effort)
             )
             return try JSONEncoder().encode(body)
         }
@@ -515,6 +524,10 @@ private struct ThinkingConfig: Encodable {
     var type: String
 }
 
+private struct ReasoningConfig: Encodable {
+    var effort: String
+}
+
 private struct ChatCompletionsRequest: Encodable {
     var model: String
     var messages: [ChatMessage]
@@ -540,6 +553,7 @@ private struct ResponsesRequest: Encodable {
     var model: String
     var input: String
     var stream: Bool?
+    var reasoning: ReasoningConfig?
 }
 
 private struct ChatCompletionsStreamChunk: Decodable {
@@ -684,10 +698,6 @@ private func parseResponsesDelta(from data: Data) -> String? {
         return delta
     }
 
-    if let delta = json["delta"] as? String {
-        return delta
-    }
-
     return nil
 }
 
@@ -726,7 +736,8 @@ private struct ResponsesResponse: Decodable {
 
         for item in output ?? [] {
             for content in item.content ?? [] {
-                if let text = content.text {
+                let type = content.type
+                if (type == "output_text" || type == "text"), let text = content.text {
                     return text
                 }
             }
@@ -749,7 +760,8 @@ private func bestEffortText(from data: Data) -> String? {
         for item in output {
             if let content = item["content"] as? [[String: Any]] {
                 for part in content {
-                    if let text = part["text"] as? String {
+                    let type = part["type"] as? String
+                    if (type == "output_text" || type == "text"), let text = part["text"] as? String {
                         return text
                     }
                 }
