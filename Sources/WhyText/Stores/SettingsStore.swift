@@ -16,6 +16,27 @@ final class SettingsStore: ObservableObject {
         3. 到此为止。
            完成标准：没有延伸议论、背景科普、或「还可以这样理解」。
 
+        拿不准的专名、术语或背景，先搜索，拿到更精确的上下文再解释；搜完仍存疑的，照旧标成不确定。
+
+        简体中文；短句；能短则短。
+
+        {{text}}
+        """
+
+    /// The explain default before server-side search was enabled. Saved copies of
+    /// it upgrade to the current default once, while customized prompts stay put.
+    static let legacyExplainPromptTemplate = """
+        用白话讲清下面文字的要义。
+
+        要义：作者实际想表达的意思。忠于原文事实与语气；只写原文能支撑的内容。
+
+        1. 先用一句话点出它在讲什么。
+           完成标准：读者不看原文也能抓住主题。
+        2. 再用通俗话补上理解所需的关键点（难词、专名、隐含前提、句子关系）。
+           完成标准：每一句都能回溯到原文；说不清的标成不确定，不当成事实。
+        3. 到此为止。
+           完成标准：没有延伸议论、背景科普、或「还可以这样理解」。
+
         简体中文；短句；能短则短。
 
         {{text}}
@@ -77,6 +98,13 @@ final class SettingsStore: ObservableObject {
 
             if self.explainPromptTemplate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 self.explainPromptTemplate = Self.defaultExplainPromptTemplate
+            }
+
+            let explain = self.explainPromptTemplate
+            if explain.trimmingCharacters(in: .whitespacesAndNewlines)
+                    == Self.legacyExplainPromptTemplate.trimmingCharacters(in: .whitespacesAndNewlines) {
+                self.explainPromptTemplate = Self.defaultExplainPromptTemplate
+                schedulePersist()
             }
 
             if self.providers.isEmpty {
