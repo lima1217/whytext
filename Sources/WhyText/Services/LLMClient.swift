@@ -77,6 +77,9 @@ struct UnifiedTranslationResponse {
 final class LLMClient {
     private let session: URLSession
     private let allowsTransientRetry: Bool
+    /// Provider/model pairs that rejected optional parameters with HTTP 400.
+    private var minimalParameterKeys = Set<String>()
+    private let minimalParametersLock = NSLock()
 
     init(session: URLSession? = nil) {
         if let session {
@@ -108,15 +111,31 @@ final class LLMClient {
         do {
             let adapter = ProviderAdapter(mode: provider.apiMode)
             let url = try adapter.endpointURL(baseURL: provider.baseURL)
-            var httpRequest = makeRequest(url: url, apiKey: apiKey)
-            httpRequest.httpBody = try adapter.requestBody(
-                from: request,
-                stream: false,
-                baseURL: provider.baseURL
-            )
+            let makeHTTPRequest = { (minimal: Bool) throws -> URLRequest in
+                var httpRequest = self.makeRequest(url: url, apiKey: apiKey)
+                httpRequest.httpBody = try adapter.requestBody(
+                    from: request,
+                    stream: false,
+                    baseURL: provider.baseURL,
+                    minimal: minimal
+                )
+                return httpRequest
+            }
 
-            let (data, response) = try await performDataRequest(httpRequest)
+            let key = parameterCompatibilityKey(provider)
+            let startMinimal = usesMinimalParameters(key)
+            var (data, response) = try await performDataRequest(makeHTTPRequest(startMinimal))
             try Task.checkCancellation()
+
+            // Optional knobs (temperature, reasoning, thinking, tools) are rejected
+            // by some models and proxies. Retry once without them and remember.
+            if !startMinimal, (response as? HTTPURLResponse)?.statusCode == 400 {
+                (data, response) = try await performDataRequest(makeHTTPRequest(true))
+                try Task.checkCancellation()
+                if let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
+                    markUsesMinimalParameters(key)
+                }
+            }
 
             guard let http = response as? HTTPURLResponse else {
                 throw LLMError.invalidResponse
@@ -172,16 +191,31 @@ final class LLMClient {
                 do {
                     let adapter = ProviderAdapter(mode: provider.apiMode)
                     let url = try adapter.endpointURL(baseURL: provider.baseURL)
-                    var httpRequest = makeRequest(url: url, apiKey: apiKey)
-                    httpRequest.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-                    httpRequest.httpBody = try adapter.requestBody(
-                        from: request,
-                        stream: true,
-                        baseURL: provider.baseURL
-                    )
+                    let makeHTTPRequest = { (minimal: Bool) throws -> URLRequest in
+                        var httpRequest = self.makeRequest(url: url, apiKey: apiKey)
+                        httpRequest.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+                        httpRequest.httpBody = try adapter.requestBody(
+                            from: request,
+                            stream: true,
+                            baseURL: provider.baseURL,
+                            minimal: minimal
+                        )
+                        return httpRequest
+                    }
 
-                    let (bytes, response) = try await session.bytes(for: httpRequest)
+                    let key = parameterCompatibilityKey(provider)
+                    let startMinimal = usesMinimalParameters(key)
+                    var (bytes, response) = try await session.bytes(for: makeHTTPRequest(startMinimal))
                     try Task.checkCancellation()
+
+                    if !startMinimal, (response as? HTTPURLResponse)?.statusCode == 400 {
+                        bytes.task.cancel()
+                        (bytes, response) = try await session.bytes(for: makeHTTPRequest(true))
+                        try Task.checkCancellation()
+                        if let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
+                            markUsesMinimalParameters(key)
+                        }
+                    }
 
                     guard let http = response as? HTTPURLResponse else {
                         throw LLMError.invalidResponse
@@ -239,6 +273,22 @@ final class LLMClient {
                 task.cancel()
             }
         }
+    }
+
+    private func parameterCompatibilityKey(_ provider: LLMProvider) -> String {
+        "\(provider.apiMode)|\(provider.baseURL)|\(provider.model)"
+    }
+
+    private func usesMinimalParameters(_ key: String) -> Bool {
+        minimalParametersLock.lock()
+        defer { minimalParametersLock.unlock() }
+        return minimalParameterKeys.contains(key)
+    }
+
+    private func markUsesMinimalParameters(_ key: String) {
+        minimalParametersLock.lock()
+        minimalParameterKeys.insert(key)
+        minimalParametersLock.unlock()
     }
 
     private func makeRequest(url: URL, apiKey: String) -> URLRequest {
@@ -443,7 +493,27 @@ private enum ProviderAdapter {
         }
     }
 
-    func requestBody(from request: UnifiedTranslationRequest, stream: Bool, baseURL: String) throws -> Data {
+    /// `minimal` drops every optional knob for models or proxies that reject them.
+    func requestBody(from request: UnifiedTranslationRequest, stream: Bool, baseURL: String, minimal: Bool = false) throws -> Data {
+        if minimal {
+            switch self {
+            case .chatCompletions:
+                let body = ChatCompletionsRequest(
+                    model: request.model,
+                    messages: [ChatMessage(role: "user", content: request.renderedPrompt(supportsWebSearch: false))],
+                    stream: stream
+                )
+                return try JSONEncoder().encode(body)
+            case .responses:
+                let body = ResponsesRequest(
+                    model: request.model,
+                    input: request.renderedPrompt(supportsWebSearch: false),
+                    stream: stream
+                )
+                return try JSONEncoder().encode(body)
+            }
+        }
+
         switch self {
         case .chatCompletions:
             // DeepSeek thinking defaults to enabled and slows translation; turn it
