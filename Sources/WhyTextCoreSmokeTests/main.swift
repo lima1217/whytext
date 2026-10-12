@@ -9,6 +9,8 @@ enum WhyTextCoreSmokeTests {
         testTextChunker()
         testAccessibilitySelectionHelpers()
         testSelectionAutoPopupPolicy()
+        testSSEEventParser()
+        testLLMStreamEventParser()
         print("WhyTextCore smoke tests passed")
     }
 
@@ -159,6 +161,90 @@ enum WhyTextCoreSmokeTests {
                 allowMissingAnchor: true
             ),
             "single-character selection is ignored"
+        )
+    }
+
+    private static func testSSEEventParser() {
+        func parse(_ body: String) -> [SSEEvent] {
+            var parser = SSEEventParser()
+            var events: [SSEEvent] = []
+            for byte in Array(body.utf8) {
+                events.append(contentsOf: parser.append(byte: byte))
+            }
+            events.append(contentsOf: parser.finish())
+            return events
+        }
+
+        let lf = parse("data: one\n\ndata: two\n\n")
+        expect(lf.map(\.data) == ["one", "two"], "LF-delimited events")
+
+        let crlf = parse("data: one\r\n\r\ndata: two\r\n\r\n")
+        expect(crlf.map(\.data) == ["one", "two"], "CRLF-delimited events")
+
+        let multiline = parse("event: delta\ndata: a\ndata: b\n\n")
+        expect(multiline == [SSEEvent(event: "delta", data: "a\nb", id: nil)], "multi-line data joins with newline")
+
+        let commentsAndBOM = parse("\u{FEFF}: keep-alive\ndata: x\n\n")
+        expect(commentsAndBOM.map(\.data) == ["x"], "BOM and comment lines are skipped")
+
+        let unterminated = parse("data: tail")
+        expect(unterminated.map(\.data) == ["tail"], "finish() flushes an unterminated event")
+
+        let utf8 = parse("data: 你好\n\n")
+        expect(utf8.map(\.data) == ["你好"], "multi-byte UTF-8 survives byte-wise parsing")
+    }
+
+    private static func testLLMStreamEventParser() {
+        func json(_ string: String) -> [String: Any] {
+            (try? JSONSerialization.jsonObject(with: Data(string.utf8))) as? [String: Any] ?? [:]
+        }
+
+        func chat(_ string: String) -> LLMStreamEvent? {
+            try? LLMStreamEventParser.chatCompletionsEvent(from: json(string))
+        }
+
+        func responses(_ string: String) -> LLMStreamEvent? {
+            try? LLMStreamEventParser.responsesEvent(from: json(string))
+        }
+
+        func chatError(_ string: String) -> String? {
+            do {
+                _ = try LLMStreamEventParser.chatCompletionsEvent(from: json(string))
+                return nil
+            } catch let error as LLMStreamProviderError {
+                return error.message
+            } catch {
+                return nil
+            }
+        }
+
+        func responsesError(_ string: String) -> String? {
+            do {
+                _ = try LLMStreamEventParser.responsesEvent(from: json(string))
+                return nil
+            } catch let error as LLMStreamProviderError {
+                return error.message
+            } catch {
+                return nil
+            }
+        }
+
+        expect(chat(#"{"choices":[{"delta":{"content":"hi"}}]}"#) == .text("hi"), "chat text delta")
+        expect(chat(#"{"choices":[{"delta":{"content":"","reasoning_content":"hmm"}}]}"#) == .activity(.thinking), "chat reasoning delta")
+        expect(chat(#"{"choices":[{"delta":{"role":"assistant"}}]}"#) == nil, "chat role-only delta")
+        expect(chat(#"{"error":null,"choices":[{"delta":{"content":"ok"}}]}"#) == .text("ok"), "chat null error field is ignored")
+        expect(chatError(#"{"error":{"message":"quota exceeded"}}"#) == "quota exceeded", "chat in-stream error")
+
+        expect(responses(#"{"type":"response.output_text.delta","delta":"hi"}"#) == .text("hi"), "responses text delta")
+        expect(responses(#"{"type":"response.output_text.annotation.added","annotation":{}}"#) == nil, "responses annotation is not text")
+        expect(responses(#"{"type":"response.output_item.added","item":{"type":"reasoning"}}"#) == .activity(.thinking), "responses reasoning item")
+        expect(responses(#"{"type":"response.output_item.added","item":{"type":"web_search_call"}}"#) == .activity(.searching), "responses search item")
+        expect(responses(#"{"type":"response.web_search_call.searching"}"#) == .activity(.searching), "responses search progress")
+        expect(responses(#"{"type":"response.completed"}"#) == nil, "responses completion")
+        expect(responsesError(#"{"type":"error","message":"bad request"}"#) == "bad request", "responses error event")
+        expect(
+            responsesError(#"{"type":"response.failed","response":{"error":{"message":"server overloaded"}}}"#) == "server overloaded",
+            "responses failed event"
         )
     }
 

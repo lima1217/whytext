@@ -1,4 +1,5 @@
 import Foundation
+import WhyTextCore
 
 struct PanelState: Equatable {
     var selectedText: String = ""
