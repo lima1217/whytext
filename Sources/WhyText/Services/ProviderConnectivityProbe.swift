@@ -1,4 +1,5 @@
 import Foundation
+import WhyTextCore
 
 struct ProviderConnectivityProbe {
     private let llmClient: LLMClient
@@ -21,21 +22,21 @@ struct ProviderConnectivityProbe {
 
         if trimmedBaseURL.isEmpty || URL(string: trimmedBaseURL) == nil {
             report.baseURL = .unavailable
-            report.message = "请填写有效的 Base URL，例如 https://api.deepseek.com"
+            report.message = L10n.t("请填写有效的 Base URL，例如 https://api.deepseek.com")
         } else {
             report.baseURL = .available
         }
 
         if trimmedAPIKey.isEmpty {
             report.apiKey = .unavailable
-            report.message = report.message.isEmpty ? "请填写 API Key" : report.message
+            report.message = report.message.isEmpty ? L10n.t("请填写 API Key") : report.message
         } else {
             report.apiKey = .available
         }
 
         if trimmedModel.isEmpty {
             report.model = .unavailable
-            report.message = report.message.isEmpty ? "请填写 Model 名称" : report.message
+            report.message = report.message.isEmpty ? L10n.t("请填写 Model 名称") : report.message
         } else {
             report.model = .available
         }
@@ -60,7 +61,7 @@ struct ProviderConnectivityProbe {
             report.baseURL = .available
             report.apiKey = .available
             report.model = .available
-            report.message = "连通成功"
+            report.message = L10n.t("连通成功")
             return report
         } catch let error as LLMError {
             let message = connectivityErrorMessage(for: error)

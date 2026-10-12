@@ -12,6 +12,10 @@ final class AppModel: ObservableObject {
     @Published var selectionDiagnosticsPending: Bool = false
     /// Pinned panels ignore clicks outside them; persists across panel openings.
     @Published var isPanelPinned: Bool = false
+    /// Why a shortcut isn't active, if it isn't. Kept as state, not text, so the
+    /// message follows the interface language.
+    @Published private(set) var hotKeyIssue: HotKeyIssue?
+    @Published private(set) var ocrHotKeyIssue: HotKeyIssue?
 
     var settingsStore: SettingsStore
     let historyStore: HistoryStore
@@ -97,29 +101,25 @@ final class AppModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        settingsStore.$hotKeyShortcut
-            .sink { [weak self] shortcut in
-                self?.updateHotKeyRegistration(shortcut)
+        settingsStore.$interfaceLanguage
+            .sink { [weak self] language in
+                L10n.language = language
+                self?.settingsWindowController.refreshTitle()
             }
             .store(in: &cancellables)
 
-        updateHotKeyRegistration(settingsStore.hotKeyShortcut)
+        // Both at once: the screenshot shortcut must not reuse the main one.
+        settingsStore.$hotKeyShortcut
+            .combineLatest(settingsStore.$ocrHotKeyShortcut)
+            .sink { [weak self] main, ocr in
+                self?.registerHotKeys(main: main, ocr: ocr)
+            }
+            .store(in: &cancellables)
         hotKeyManager.onPressed = { [weak self] in
             Task { @MainActor in
                 self?.openPanelFromHotKey()
             }
         }
-
-        settingsStore.$ocrHotKeyShortcut
-            .sink { [weak self] shortcut in
-                guard let self else { return }
-                if let shortcut {
-                    try? self.ocrHotKeyManager.register(shortcut: shortcut)
-                } else {
-                    self.ocrHotKeyManager.unregister()
-                }
-            }
-            .store(in: &cancellables)
 
         ocrHotKeyManager.onPressed = { [weak self] in
             Task { @MainActor in
@@ -161,6 +161,8 @@ final class AppModel: ObservableObject {
     }
 
     func openSettingsWindow() {
+        // System shortcuts may have changed since launch.
+        registerHotKeys(main: settingsStore.hotKeyShortcut, ocr: settingsStore.ocrHotKeyShortcut)
         settingsWindowController.show {
             SettingsView()
                 .environmentObject(self)
@@ -203,7 +205,7 @@ final class AppModel: ObservableObject {
             selectedText = AccessibilitySelectionHelpers.sanitizeSelectedText(selection.text)
         } catch SelectionError.notTrusted {
             openManualInput(
-                hint: "未授权辅助功能，读不到选中文本。可以直接输入或粘贴：",
+                hint: L10n.t("未授权辅助功能，读不到选中文本。可以直接输入或粘贴："),
                 needsAccessibility: true
             )
             return
@@ -309,7 +311,7 @@ final class AppModel: ObservableObject {
     private var transcriptMarkdown: String {
         var parts = [panelState.resultText.trimmingCharacters(in: .whitespacesAndNewlines)]
         for turn in panelState.followUps where !turn.answer.isEmpty {
-            parts.append("**问：\(turn.question)**")
+            parts.append("**" + L10n.f("问：%@", turn.question) + "**")
             parts.append(turn.answer.trimmingCharacters(in: .whitespacesAndNewlines))
         }
         return parts.joined(separator: "\n\n")
@@ -579,21 +581,21 @@ final class AppModel: ObservableObject {
 
     private func preflightForTranslation() -> TranslationPreflight? {
         guard let provider = settingsStore.selectedProvider else {
-            panelState.errorMessage = "请先在设置中添加服务商"
+            panelState.errorMessage = L10n.t("请先在设置中添加服务商")
             panelState.errorNeedsSettings = true
             return nil
         }
 
         let apiKey = settingsStore.apiKey(for: provider.id).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !apiKey.isEmpty else {
-            panelState.errorMessage = "请先在设置中填写 API Key"
+            panelState.errorMessage = L10n.t("请先在设置中填写 API Key")
             panelState.errorNeedsSettings = true
             return nil
         }
 
         let selectedText = AccessibilitySelectionHelpers.sanitizeSelectedText(panelState.selectedText)
         guard !selectedText.isEmpty else {
-            panelState.errorMessage = "未读取到选中文本。请先选中一段文字，并确认已授权辅助功能。"
+            panelState.errorMessage = L10n.t("未读取到选中文本。请先选中一段文字，并确认已授权辅助功能。")
             return nil
         }
 
@@ -615,7 +617,7 @@ final class AppModel: ObservableObject {
 
     func runSelectionDiagnosticsWithDelay(seconds: Double = 2.0) {
         selectionDiagnosticsPending = true
-        selectionDiagnosticsReport = "等待 \(String(format: "%.1f", seconds)) 秒后采样，请切回目标应用并选中文本..."
+        selectionDiagnosticsReport = L10n.f("等待 %@ 秒后采样，请切回目标应用并选中文本…", String(format: "%.1f", seconds))
         selectionDiagnosticsTextPreview = ""
 
         Task { @MainActor [weak self] in
@@ -628,15 +630,30 @@ final class AppModel: ObservableObject {
         selectionService.openAccessibilitySettings()
     }
 
-    private func updateHotKeyRegistration(_ shortcut: KeyboardShortcut?) {
-        do {
-            if let shortcut {
-                try hotKeyManager.register(shortcut: shortcut)
-            } else {
-                hotKeyManager.unregister()
-            }
-        } catch {
-            // Best-effort.
+    private func registerHotKeys(main: KeyboardShortcut?, ocr: KeyboardShortcut?) {
+        hotKeyIssue = Self.register(main, with: hotKeyManager)
+
+        if let ocr, ocr == main {
+            ocrHotKeyManager.unregister()
+            ocrHotKeyIssue = .sameAsTranslateShortcut
+        } else {
+            ocrHotKeyIssue = Self.register(ocr, with: ocrHotKeyManager)
         }
+    }
+
+    /// Registration itself rarely fails; the useful check is against enabled macOS
+    /// shortcuts. Other apps' shortcuts can't be detected, so Settings mentions it.
+    private static func register(_ shortcut: KeyboardShortcut?, with manager: HotKeyManager) -> HotKeyIssue? {
+        guard let shortcut else {
+            manager.unregister()
+            return nil
+        }
+        do {
+            try manager.register(shortcut: shortcut)
+        } catch {
+            manager.unregister()
+            return .registrationFailed(shortcut)
+        }
+        return HotKeyManager.conflictsWithSystemShortcut(shortcut) ? .conflictsWithSystemShortcut(shortcut) : nil
     }
 }

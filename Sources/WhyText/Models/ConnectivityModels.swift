@@ -1,4 +1,5 @@
 import Foundation
+import WhyTextCore
 
 enum ConnectivityCheckState: Equatable {
     case available
@@ -8,11 +9,11 @@ enum ConnectivityCheckState: Equatable {
     var label: String {
         switch self {
         case .available:
-            "可用"
+            L10n.t("可用")
         case .unavailable:
-            "不可用"
+            L10n.t("不可用")
         case .unknown:
-            "待确认"
+            L10n.t("待确认")
         }
     }
 }

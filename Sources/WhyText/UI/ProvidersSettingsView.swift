@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import WhyTextCore
 
 struct ProvidersSettingsView: View {
     @EnvironmentObject private var appModel: AppModel
@@ -36,11 +37,11 @@ struct ProvidersSettingsView: View {
     // MARK: - Provider List Bar
 
     private var providerHeader: some View {
-        SettingsCard("服务商", subtitle: "选择一个服务商，填写接口、模型和 API Key 后先测试连通性。") {
+        SettingsCard(L10n.t("服务商"), subtitle: L10n.t("选择一个服务商，填写接口、模型和 API Key 后先测试连通性。")) {
             HStack(spacing: Spacing.x2_5) {
-                Picker("服务商", selection: providerSelectionBinding) {
+                Picker(L10n.t("服务商"), selection: providerSelectionBinding) {
                     ForEach(appModel.settingsStore.providers) { provider in
-                        Text(provider.name.isEmpty ? "未命名" : provider.name)
+                        Text(provider.name.isEmpty ? L10n.t("未命名") : provider.name)
                             .tag(Optional(provider.id))
                     }
                 }
@@ -52,10 +53,10 @@ struct ProvidersSettingsView: View {
                 Button {
                     showAddTemplate = true
                 } label: {
-                    Label("添加", systemImage: "plus")
+                    Label(L10n.t("添加"), systemImage: "plus")
                 }
                 .buttonStyle(.quiet)
-                .accessibilityLabel("添加服务商")
+                .accessibilityLabel(L10n.t("添加服务商"))
                 .popover(isPresented: $showAddTemplate) {
                     addTemplatePopover
                 }
@@ -64,10 +65,10 @@ struct ProvidersSettingsView: View {
                     Button {
                         appModel.settingsStore.removeProviders(withIDs: [id])
                     } label: {
-                        Label("移除", systemImage: "trash")
+                        Label(L10n.t("移除"), systemImage: "trash")
                     }
                     .buttonStyle(.quiet(tint: Tone.danger.color.opacity(0.85)))
-                    .accessibilityLabel("移除当前服务商")
+                    .accessibilityLabel(L10n.t("移除当前服务商"))
                 }
             }
         }
@@ -77,7 +78,7 @@ struct ProvidersSettingsView: View {
 
     private var addTemplatePopover: some View {
         VStack(alignment: .leading, spacing: Spacing.x1) {
-            SectionLabel(text: "内置模板")
+            SectionLabel(text: L10n.t("内置模板"))
                 .padding(.horizontal, Spacing.x2)
                 .padding(.top, Spacing.x1_5)
                 .padding(.bottom, Spacing.half)
@@ -118,20 +119,20 @@ struct ProvidersSettingsView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        SettingsCard("还没有服务商", subtitle: "添加一个服务商后，才能翻译选中文本。") {
+        SettingsCard(L10n.t("还没有服务商"), subtitle: L10n.t("添加一个服务商后，才能翻译选中文本。")) {
             VStack(spacing: Spacing.x3) {
                 Image(systemName: "network")
                     .font(.system(size: 28, weight: .light))
                     .foregroundStyle(AstryxColor.borderEmphasized)
                     .accessibilityHidden(true)
-                Text("从模板添加 DeepSeek、OpenAI，或自定义接口。")
+                Text(L10n.t("从模板添加 DeepSeek、OpenAI，或自定义接口。"))
                     .font(AstryxFont.captionM)
                     .foregroundStyle(AstryxColor.textSecondary)
                     .multilineTextAlignment(.center)
                 Button {
                     showAddTemplate = true
                 } label: {
-                    Label("添加服务商", systemImage: "plus")
+                    Label(L10n.t("添加服务商"), systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -185,7 +186,7 @@ private enum ProviderTemplate: String, CaseIterable, Identifiable {
         switch self {
         case .deepSeek: "DeepSeek"
         case .openAI: "OpenAI"
-        case .custom: "自定义"
+        case .custom: L10n.t("自定义")
         }
     }
 
@@ -193,7 +194,7 @@ private enum ProviderTemplate: String, CaseIterable, Identifiable {
         switch self {
         case .deepSeek: "api.deepseek.com"
         case .openAI: "api.openai.com"
-        case .custom: "填写自定义接口"
+        case .custom: L10n.t("填写自定义接口")
         }
     }
 
@@ -235,13 +236,13 @@ private struct ProviderDetailView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: SettingsUI.sectionSpacing) {
-            SettingsCard("接口", subtitle: "Base URL 不需要填写具体 endpoint，应用会根据 API 格式拼接请求路径。") {
+            SettingsCard(L10n.t("接口"), subtitle: L10n.t("Base URL 不需要填写具体 endpoint，应用会根据 API 格式拼接请求路径。")) {
                 VStack(alignment: .leading, spacing: SettingsUI.fieldSpacing) {
-                    labeledField(title: "名称", placeholder: "My Provider", text: $provider.name)
+                    labeledField(title: L10n.t("名称"), placeholder: "My Provider", text: $provider.name)
                     labeledField(title: "Base URL", placeholder: "https://api.deepseek.com", text: $provider.baseURL, monospaced: true)
                     labeledField(title: "Model", placeholder: "deepseek-chat", text: $provider.model, monospaced: true)
 
-                    LabeledSettingsField("API 格式") {
+                    LabeledSettingsField(L10n.t("API 格式")) {
                         Picker("", selection: $provider.apiMode) {
                             ForEach(LLMAPIMode.allCases) { mode in
                                 Text(mode.displayName).tag(mode)
@@ -252,7 +253,7 @@ private struct ProviderDetailView: View {
                 }
             }
 
-            SettingsCard("API Key", subtitle: "输入后会自动保存到 macOS Keychain，本地设置不会明文持久化。") {
+            SettingsCard("API Key", subtitle: L10n.t("输入后会自动保存到 macOS Keychain，本地设置不会明文持久化。")) {
                 VStack(alignment: .leading, spacing: SettingsUI.fieldSpacing) {
                     HStack(spacing: Spacing.x2) {
                         if showAPIKey {
@@ -280,32 +281,32 @@ private struct ProviderDetailView: View {
                             .minHitArea(40)
                         }
                         .buttonStyle(.quietIcon)
-                        .help(showAPIKey ? "隐藏 API Key" : "显示 API Key")
-                        .accessibilityLabel(showAPIKey ? "隐藏 API Key" : "显示 API Key")
+                        .help(showAPIKey ? L10n.t("隐藏 API Key") : L10n.t("显示 API Key"))
+                        .accessibilityLabel(showAPIKey ? L10n.t("隐藏 API Key") : L10n.t("显示 API Key"))
                     }
 
                     HStack(spacing: Spacing.x2_5) {
                         StatusBadge(
-                            text: apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "未填写" : "已保存到 Keychain",
+                            text: apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? L10n.t("未填写") : L10n.t("已保存到 Keychain"),
                             tone: apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .warning : .success
                         )
 
                         Spacer()
 
-                        Button("粘贴") {
+                        Button(L10n.t("粘贴")) {
                             apiKeyDraft = NSPasteboard.general.string(forType: .string) ?? ""
                         }
-                        .accessibilityLabel("粘贴 API Key")
+                        .accessibilityLabel(L10n.t("粘贴 API Key"))
 
-                        Button("修复钥匙串") {
+                        Button(L10n.t("修复钥匙串")) {
                             repairKeychainEntry()
                         }
-                        .help("重新写入当前 API Key 到钥匙串")
+                        .help(L10n.t("重新写入当前 API Key 到钥匙串"))
 
-                        Button("清除") {
+                        Button(L10n.t("清除")) {
                             apiKeyDraft = ""
                         }
-                        .accessibilityLabel("清除 API Key")
+                        .accessibilityLabel(L10n.t("清除 API Key"))
                     }
 
                     if let keychainRepairMessage, !keychainRepairMessage.isEmpty {
@@ -316,16 +317,16 @@ private struct ProviderDetailView: View {
                 }
             }
 
-            SettingsCard("连通性", subtitle: "保存配置后做一次真实请求，确认 URL、Key 和模型都能工作。") {
+            SettingsCard(L10n.t("连通性"), subtitle: L10n.t("保存配置后做一次真实请求，确认 URL、Key 和模型都能工作。")) {
                 VStack(alignment: .leading, spacing: SettingsUI.fieldSpacing) {
                     HStack {
                         Button {
                             runConnectivityTest()
                         } label: {
-                            Label(isTestingConnectivity ? "测试中…" : "测试连通性", systemImage: isTestingConnectivity ? "clock" : "bolt.horizontal")
+                            Label(isTestingConnectivity ? L10n.t("测试中…") : L10n.t("测试连通性"), systemImage: isTestingConnectivity ? "clock" : "bolt.horizontal")
                         }
                         .disabled(isTestingConnectivity)
-                        .accessibilityLabel(isTestingConnectivity ? "正在测试连通性" : "测试连通性")
+                        .accessibilityLabel(isTestingConnectivity ? L10n.t("正在测试连通性") : L10n.t("测试连通性"))
 
                         Spacer()
                     }
@@ -413,12 +414,12 @@ private struct ProviderDetailView: View {
     private func repairKeychainEntry() {
         let trimmed = apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            keychainRepairMessage = "请先填写 API Key，再执行修复。"
+            keychainRepairMessage = L10n.t("请先填写 API Key，再执行修复。")
             return
         }
 
         saveAPIKey(trimmed)
-        keychainRepairMessage = "已重新保存到钥匙串。"
+        keychainRepairMessage = L10n.t("已重新保存到钥匙串。")
     }
 
     private func runConnectivityTest() {

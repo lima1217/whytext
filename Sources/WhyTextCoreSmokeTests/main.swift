@@ -16,6 +16,7 @@ enum WhyTextCoreSmokeTests {
         testRecentList()
         testSemanticVersion()
         testOCRTextLayout()
+        try testLocalization()
         print("WhyTextCore smoke tests passed")
     }
 
@@ -364,6 +365,68 @@ enum WhyTextCoreSmokeTests {
             line("This is the first line, and", row: 0),
         ])
         expect(unsorted == "This is the first line, and second line of the same paragraph", "lines are ordered top to bottom")
+    }
+
+    private static func testLocalization() throws {
+        let match = { InterfaceLanguage.match(preferredLanguages: $0) }
+        expect(match(["zh-Hans-CN"]) == .simplifiedChinese, "zh-Hans maps to Simplified Chinese")
+        expect(match(["zh-Hant-TW"]) == .traditionalChinese && match(["zh-HK"]) == .traditionalChinese, "zh-Hant and zh-HK map to Traditional Chinese")
+        expect(match(["fr-FR", "ja-JP"]) == .japanese, "first supported preferred language wins")
+        expect(match(["fr-FR"]) == .english, "unsupported languages fall back to English")
+        expect(InterfaceLanguage.korean.resolved() == .korean, "concrete languages resolve to themselves")
+
+        let tables: [(InterfaceLanguage, [String: String])] = InterfaceLanguage.allCases.compactMap { language in
+            guard language != .system, let table = L10n.table(for: language) else { return nil }
+            return (language, table)
+        }
+        expect(tables.count == 4, "four translated tables")
+
+        let placeholder = try NSRegularExpression(pattern: #"%(?:\d\$)?@|\{\{(?:text|target)\}\}"#)
+        func tokens(_ string: String) -> [String] {
+            placeholder.matches(in: string, range: NSRange(string.startIndex..., in: string))
+                .map { (string as NSString).substring(with: $0.range) }
+                .sorted()
+        }
+
+        // Every key the app uses must be translated everywhere. Read from the source
+        // tree, so this runs from the package root (as `swift run` and CI do).
+        let usedKeys = try localizationKeysInSources()
+        expect(!usedKeys.isEmpty, "found localization keys in Sources/")
+        for (language, table) in tables {
+            for key in usedKeys {
+                expect(table[key] != nil, "\(language.rawValue) is missing \"\(key)\"")
+            }
+            for (key, value) in table {
+                expect(usedKeys.contains(key), "\(language.rawValue) has unused key \"\(key)\"")
+                expect(tokens(key) == tokens(value), "\(language.rawValue) placeholders differ for \"\(key)\"")
+            }
+        }
+
+        L10n.language = .english
+        expect(L10n.t("翻译") == "Translate", "lookup uses the current language")
+        expect(
+            L10n.f("仅保存在本机，最多 %1$@ 条（当前 %2$@ 条）。关闭后会清除已有记录。", "50", "3")
+                == "Stored only on this Mac, up to 50 (currently 3). Turning this off clears them.",
+            "positional arguments format"
+        )
+        L10n.language = .simplifiedChinese
+        expect(L10n.t("翻译") == "翻译", "Simplified Chinese returns the key")
+        expect(L10n.t("not a key") == "not a key", "unknown keys fall back to themselves")
+    }
+
+    private static func localizationKeysInSources() throws -> Set<String> {
+        let call = try NSRegularExpression(pattern: #"L10n\.[tf]\(\s*"((?:[^"\\]|\\.)*)""#)
+        var keys = Set<String>()
+        for directory in ["Sources/WhyText", "Sources/WhyTextCore"] {
+            guard let files = FileManager.default.enumerator(atPath: directory) else { continue }
+            for case let file as String in files where file.hasSuffix(".swift") {
+                let source = try String(contentsOfFile: "\(directory)/\(file)", encoding: .utf8)
+                for match in call.matches(in: source, range: NSRange(source.startIndex..., in: source)) {
+                    keys.insert((source as NSString).substring(with: match.range(at: 1)))
+                }
+            }
+        }
+        return keys
     }
 
     private static func expect(_ condition: @autoclosure () -> Bool, _ message: String) {

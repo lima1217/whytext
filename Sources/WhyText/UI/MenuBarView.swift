@@ -1,19 +1,28 @@
 import AppKit
 import SwiftUI
+import WhyTextCore
 
 struct MenuBarView: View {
     @EnvironmentObject private var appModel: AppModel
 
     var body: some View {
-        let hotKeyLabel = appModel.settingsStore.hotKeyShortcut?.displayString ?? "未设置"
-        let providerName = appModel.settingsStore.selectedProvider?.name ?? "未配置"
+        let hotKeyLabel = appModel.settingsStore.hotKeyShortcut?.displayString ?? L10n.t("未设置")
+        let providerName = appModel.settingsStore.selectedProvider?.name ?? L10n.t("未配置")
         let accessibilityReady = appModel.accessibilityStatus() == .trusted
 
-        Button("翻译选中文本  \(hotKeyLabel)") {
+        Button(L10n.t("翻译选中文本") + "  \(hotKeyLabel)") {
             appModel.openPanelFromMenu()
         }
 
-        Button("输入文字翻译…") {
+        if appModel.hotKeyIssue != nil || appModel.ocrHotKeyIssue != nil {
+            Button {
+                appModel.openSettingsWindow()
+            } label: {
+                Label(L10n.t("快捷键需要处理，点此查看…"), systemImage: "exclamationmark.triangle")
+            }
+        }
+
+        Button(L10n.t("输入文字翻译…")) {
             appModel.openManualInput()
         }
 
@@ -22,7 +31,7 @@ struct MenuBarView: View {
         }
 
         if !appModel.historyStore.entries.isEmpty {
-            Menu("最近") {
+            Menu(L10n.t("最近")) {
                 ForEach(appModel.historyStore.entries.prefix(Self.recentMenuLimit)) { entry in
                     Button {
                         appModel.showHistoryEntry(entry)
@@ -33,7 +42,7 @@ struct MenuBarView: View {
 
                 Divider()
 
-                Button("清除最近记录") {
+                Button(L10n.t("清除最近记录")) {
                     appModel.clearHistory()
                 }
             }
@@ -41,23 +50,23 @@ struct MenuBarView: View {
 
         Divider()
 
-        Label("服务商：\(providerName)", systemImage: "network")
-        Label(accessibilityReady ? "辅助功能已授权" : "需要辅助功能权限", systemImage: accessibilityReady ? "checkmark.circle" : "exclamationmark.triangle")
+        Label(L10n.f("服务商：%@", providerName), systemImage: "network")
+        Label(accessibilityReady ? L10n.t("辅助功能已授权") : L10n.t("需要辅助功能权限"), systemImage: accessibilityReady ? "checkmark.circle" : "exclamationmark.triangle")
 
         Divider()
 
         if let update = appModel.updateChecker.availableUpdate {
-            Button("有新版本 \(update.version.description)，前往下载…") {
+            Button(L10n.f("有新版本 %@，前往下载…", update.version.description)) {
                 appModel.updateChecker.openDownloadPage()
             }
         }
 
-        Button("设置…") {
+        Button(L10n.t("设置…")) {
             appModel.openSettingsWindow()
         }
         .keyboardShortcut(",", modifiers: .command)
 
-        Button("退出") {
+        Button(L10n.t("退出")) {
             NSApp.terminate(nil)
         }
         .keyboardShortcut("q", modifiers: .command)
@@ -65,9 +74,9 @@ struct MenuBarView: View {
 
     private var ocrMenuTitle: String {
         if let shortcut = appModel.settingsStore.ocrHotKeyShortcut {
-            return "截图翻译…  \(shortcut.displayString)"
+            return L10n.t("截图翻译…") + "  \(shortcut.displayString)"
         }
-        return "截图翻译…"
+        return L10n.t("截图翻译…")
     }
 
     private static let recentMenuLimit = 20

@@ -61,9 +61,46 @@ enum PanelAction: String, Codable, CaseIterable {
     var displayName: String {
         switch self {
         case .translate:
-            "翻译"
+            L10n.t("翻译")
         case .explain:
-            "解释"
+            L10n.t("解释")
+        }
+    }
+
+    // Whole phrases per action: "正在翻译" can't be built from "翻译" in every language.
+
+    var inProgressTitle: String {
+        switch self {
+        case .translate: L10n.t("翻译中")
+        case .explain: L10n.t("解释中")
+        }
+    }
+
+    var inProgressAccessibilityLabel: String {
+        switch self {
+        case .translate: L10n.t("正在翻译")
+        case .explain: L10n.t("正在解释")
+        }
+    }
+
+    var failedTitle: String {
+        switch self {
+        case .translate: L10n.t("翻译失败")
+        case .explain: L10n.t("解释失败")
+        }
+    }
+
+    var resultTitle: String {
+        switch self {
+        case .translate: L10n.t("翻译结果")
+        case .explain: L10n.t("解释结果")
+        }
+    }
+
+    var windowTitle: String {
+        switch self {
+        case .translate: L10n.t("翻译窗口")
+        case .explain: L10n.t("解释窗口")
         }
     }
 

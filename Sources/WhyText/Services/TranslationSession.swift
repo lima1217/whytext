@@ -46,9 +46,9 @@ final class TranslationSession {
             )
 
             if chunking.wasTruncated {
-                await deliver { onNotice("输入过长，已截断到 \(maxInputCharacters) 字符") }
+                await deliver { onNotice(L10n.f("输入过长，已截断到 %@ 字符", String(maxInputCharacters))) }
             } else if selectedText.count > maxInputCharacters && chunking.chunks.count > 1 {
-                await deliver { onNotice("输入过长，已分 \(chunking.chunks.count) 段处理") }
+                await deliver { onNotice(L10n.f("输入过长，已分 %@ 段处理", String(chunking.chunks.count))) }
             }
 
             let output = try await promptRunner.run(

@@ -58,7 +58,7 @@ final class UpdateChecker: ObservableObject {
     func check() async {
         guard status != .checking else { return }
         guard let currentVersion else {
-            status = .failed("开发版本没有版本号，无法比较")
+            status = .failed(L10n.t("开发版本没有版本号，无法比较"))
             return
         }
 
@@ -100,7 +100,7 @@ final class UpdateChecker: ObservableObject {
             throw NSError(
                 domain: "WhyText.UpdateChecker",
                 code: http.statusCode,
-                userInfo: [NSLocalizedDescriptionKey: "GitHub 返回 HTTP \(http.statusCode)"]
+                userInfo: [NSLocalizedDescriptionKey: L10n.f("GitHub 返回 HTTP %@", String(http.statusCode))]
             )
         }
         return try JSONDecoder().decode(Release.self, from: data)

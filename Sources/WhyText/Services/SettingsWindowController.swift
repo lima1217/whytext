@@ -1,9 +1,17 @@
 import AppKit
 import SwiftUI
+import WhyTextCore
 
 @MainActor
 final class SettingsWindowController {
     private var window: NSWindow?
+
+    private static var title: String { L10n.t("WhyText 设置") }
+
+    /// Re-applies the window title after the interface language changes.
+    func refreshTitle() {
+        window?.title = Self.title
+    }
 
     func show<V: View>(@ViewBuilder content: () -> V) {
         let rootView = AnyView(content())
@@ -22,7 +30,7 @@ final class SettingsWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "WhyText 设置"
+        window.title = Self.title
         window.isReleasedWhenClosed = false
         window.center()
         window.contentView = hosting

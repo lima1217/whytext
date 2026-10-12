@@ -7,6 +7,7 @@ WhyText is a macOS menu bar translation utility: select text anywhere and transl
 ## Features
 
 - Lightweight menu bar app
+- Interface in Simplified Chinese, Traditional Chinese, English, Japanese, or Korean, or follow the system
 - Global hotkey trigger (default: `⌥ + Space`)
 - Optional selection bubble with translate and explain actions
 - With nothing selected, a text box opens so you can type or paste
@@ -112,11 +113,14 @@ Sources/WhyText/
   UI/                       # Settings pages and panel views
   Utils/                    # Utility helpers
 Sources/WhyTextCore/        # Testable pure logic (chunking, endpoints, selection helpers)
+Sources/WhyTextCore/Localization/  # Interface strings, keyed by the Simplified Chinese text
 Sources/WhyTextCoreSmokeTests/  # Core smoke tests (CLT-friendly)
 VERSION                     # Short version + build number (read by packaging script)
 scripts/build-app.sh        # Build script for .app bundle
 .github/workflows/ci.yml    # Build + smoke tests
 ```
+
+To add interface text, write `L10n.t("简体中文 text")` (or `L10n.f("…%@…", value)` with arguments) and add the same key to all four tables in `Sources/WhyTextCore/Localization/`. Missing or unused keys make `WhyTextCoreSmokeTests` fail.
 
 ## FAQ
 

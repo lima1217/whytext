@@ -221,7 +221,7 @@ struct FloatingPanelView: View {
 
                 if appModel.panelState.errorSystemSettingsURL != nil {
                     Button(action: { appModel.openErrorSystemSettings() }) {
-                        Label("打开系统设置", systemImage: "gearshape")
+                        Label(L10n.t("打开系统设置"), systemImage: "gearshape")
                             .labelStyle(.titleAndIcon)
                             .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
                     }
@@ -230,7 +230,7 @@ struct FloatingPanelView: View {
 
                 if appModel.panelState.errorNeedsSettings {
                     Button(action: { appModel.openSettingsWindow() }) {
-                        Label("打开设置", systemImage: "gearshape")
+                        Label(L10n.t("打开设置"), systemImage: "gearshape")
                             .labelStyle(.titleAndIcon)
                             .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
                     }
@@ -239,7 +239,7 @@ struct FloatingPanelView: View {
 
                 if canRetry {
                     Button(action: { appModel.retryLastAction() }) {
-                        Label("重试", systemImage: "arrow.clockwise")
+                        Label(L10n.t("重试"), systemImage: "arrow.clockwise")
                             .labelStyle(.titleAndIcon)
                             .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
                     }
@@ -255,7 +255,7 @@ struct FloatingPanelView: View {
         )
         .shadowBorder(cornerRadius: Radius.element)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("出错了")
+        .accessibilityLabel(L10n.t("出错了"))
         .accessibilityValue(message)
         .onAppear {
             guard !MotionPreference.reduceMotion else { return }
@@ -317,17 +317,17 @@ struct FloatingPanelView: View {
     }
 
     private var accessibilityLabel: String {
-        let actionName = appModel.panelState.lastAction?.displayName ?? PanelAction.translate.displayName
+        let action = appModel.panelState.lastAction ?? .translate
         if appModel.panelState.isLoading {
-            return "正在\(actionName)"
+            return action.inProgressAccessibilityLabel
         }
         if let error = appModel.panelState.errorMessage, !error.isEmpty {
-            return "\(actionName)失败"
+            return action.failedTitle
         }
         if hasResult {
-            return "\(actionName)结果"
+            return action.resultTitle
         }
-        return "\(actionName)窗口"
+        return action.windowTitle
     }
 
     private var accessibilityValue: String {
@@ -363,7 +363,7 @@ struct FloatingPanelTitlebarView: View {
             if appModel.panelState.lastAction != nil {
                 PanelModeSwitch()
             } else if appModel.panelState.phase == .input {
-                Text("输入文字")
+                Text(L10n.t("输入文字"))
                     .font(AstryxFont.bodyMedium)
                     .foregroundStyle(AstryxColor.textSecondary)
             }
@@ -400,8 +400,8 @@ struct FloatingPanelTitlebarView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.quietIcon)
-            .help(appModel.isPanelPinned ? "取消固定：点击窗口外会关闭" : "固定：点击窗口外不关闭")
-            .accessibilityLabel(appModel.isPanelPinned ? "取消固定窗口" : "固定窗口")
+            .help(appModel.isPanelPinned ? L10n.t("取消固定：点击窗口外会关闭") : L10n.t("固定：点击窗口外不关闭"))
+            .accessibilityLabel(appModel.isPanelPinned ? L10n.t("取消固定窗口") : L10n.t("固定窗口"))
 
             Button(action: copyResultIfPossible) {
                 ContextualIconSwap(
@@ -417,10 +417,10 @@ struct FloatingPanelTitlebarView: View {
                 .padding(.leading, 4)
                 .padding(.vertical, 6)
                 .contentShape(Rectangle())
-                .accessibilityLabel(didCopy ? "已复制" : "复制结果")
+                .accessibilityLabel(didCopy ? L10n.t("已复制") : L10n.t("复制结果"))
             }
             .buttonStyle(.quietIcon)
-            .background(CopyTooltipAnchor(isPresented: isCopyHovered && hasResult, text: "复制"))
+            .background(CopyTooltipAnchor(isPresented: isCopyHovered && hasResult, text: L10n.t("复制")))
             .onHover { hovering in
                 isCopyHovered = hovering
             }
@@ -428,7 +428,7 @@ struct FloatingPanelTitlebarView: View {
             .opacity(hasResult ? 1 : 0)
             .allowsHitTesting(hasResult)
             .accessibilityHidden(!hasResult)
-            .help(didCopy ? "已复制" : "复制")
+            .help(didCopy ? L10n.t("已复制") : L10n.t("复制"))
         }
         .frame(height: 32)
         .padding(.trailing, PanelTokens.horizontalPadding)
@@ -504,25 +504,25 @@ struct FloatingPanelTitlebarView: View {
     private var activityTitle: String? {
         guard appModel.panelState.isLoading else { return nil }
         switch appModel.panelState.activity {
-        case .thinking: return "思考中"
-        case .searching: return "搜索中"
+        case .thinking: return L10n.t("思考中")
+        case .searching: return L10n.t("搜索中")
         case nil: return nil
         }
     }
 
     private var headerTitle: String {
-        let actionName = appModel.panelState.lastAction?.displayName ?? PanelAction.translate.displayName
+        let action = appModel.panelState.lastAction ?? .translate
         if let error = appModel.panelState.errorMessage, !error.isEmpty {
-            return "\(actionName)失败"
+            return action.failedTitle
         }
         if appModel.panelState.isLoading {
             switch appModel.panelState.activity {
-            case .thinking: return "思考中"
-            case .searching: return "搜索中"
-            case nil: return "\(actionName)中"
+            case .thinking: return L10n.t("思考中")
+            case .searching: return L10n.t("搜索中")
+            case nil: return action.inProgressTitle
             }
         }
-        return actionName
+        return action.displayName
     }
 }
 
@@ -677,7 +677,7 @@ private struct PanelModeSwitch: View {
                 .fill(AstryxColor.overlayHover)
         )
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("模式")
+        .accessibilityLabel(L10n.t("模式"))
     }
 
     private func segment(_ action: PanelAction) -> some View {
@@ -729,8 +729,8 @@ private struct TargetLanguageMenu: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.visible)
         .fixedSize()
-        .help("译文语言")
-        .accessibilityLabel("译文语言：\(current.displayName)")
+        .help(L10n.t("译文语言"))
+        .accessibilityLabel(L10n.f("译文语言：%@", current.displayName))
     }
 }
 
@@ -749,7 +749,7 @@ private struct SourceTextDisclosure: View {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 9, weight: .semibold))
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    Text("原文")
+                    Text(L10n.t("原文"))
                         .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
                     if !isExpanded {
                         Text(preview)
@@ -763,7 +763,7 @@ private struct SourceTextDisclosure: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.quietIcon(isStatic: true))
-            .accessibilityLabel(isExpanded ? "收起原文" : "展开原文")
+            .accessibilityLabel(isExpanded ? L10n.t("收起原文") : L10n.t("展开原文"))
 
             if isExpanded {
                 ScrollView {
@@ -815,7 +815,7 @@ private struct ManualInputView: View {
                     Spacer(minLength: 0)
                     if appModel.panelState.inputNeedsAccessibility {
                         Button(action: { appModel.openAccessibilitySettings() }) {
-                            Text("授权")
+                            Text(L10n.t("授权"))
                                 .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
                         }
                         .buttonStyle(.quiet)
@@ -825,7 +825,7 @@ private struct ManualInputView: View {
 
             ManualInputTextView(
                 text: $text,
-                placeholder: "输入或粘贴要翻译的文字…",
+                placeholder: L10n.t("输入或粘贴要翻译的文字…"),
                 fontSize: CGFloat(appModel.settingsStore.translationFontSize),
                 onSubmit: { submit(.translate) },
                 onEscape: { appModel.closePanel() }
@@ -840,24 +840,24 @@ private struct ManualInputView: View {
 
             HStack(spacing: Spacing.x2) {
                 Button(action: { appModel.startScreenTextCapture() }) {
-                    Label("截图识别", systemImage: "text.viewfinder")
+                    Label(L10n.t("截图识别"), systemImage: "text.viewfinder")
                         .labelStyle(.titleAndIcon)
                         .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
                 }
                 .buttonStyle(.quiet)
-                .help("框选屏幕上的区域，识别其中的文字并翻译")
+                .help(L10n.t("框选屏幕上的区域，识别其中的文字并翻译"))
 
                 Spacer(minLength: 0)
 
                 Button(action: { submit(.explain) }) {
-                    Text("解释")
+                    Text(L10n.t("解释"))
                         .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
                 }
                 .buttonStyle(.quiet)
                 .disabled(isEmpty)
 
                 Button(action: { submit(.translate) }) {
-                    Text("翻译  ⌘↩")
+                    Text(L10n.t("翻译  ⌘↩"))
                         .font(.system(size: PanelTokens.metaFontSize, weight: .semibold))
                 }
                 .buttonStyle(.quiet(tint: Color.accentColor))
@@ -994,11 +994,11 @@ private struct HistoryNoteRow: View {
         HStack(spacing: Spacing.x1_5) {
             Image(systemName: "clock.arrow.circlepath")
                 .font(.system(size: 10))
-            Text("来自最近记录，未重新请求")
+            Text(L10n.t("来自最近记录，未重新请求"))
                 .font(.system(size: PanelTokens.metaFontSize))
             Spacer(minLength: 0)
             Button(action: { appModel.regenerate() }) {
-                Label("重新生成", systemImage: "arrow.clockwise")
+                Label(L10n.t("重新生成"), systemImage: "arrow.clockwise")
                     .labelStyle(.titleAndIcon)
                     .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
             }
@@ -1037,7 +1037,7 @@ private struct FollowUpTurnView: View {
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                     Button(action: { appModel.retryFollowUp(id: turn.id) }) {
-                        Label("重试", systemImage: "arrow.clockwise")
+                        Label(L10n.t("重试"), systemImage: "arrow.clockwise")
                             .labelStyle(.titleAndIcon)
                             .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
                     }
@@ -1047,7 +1047,7 @@ private struct FollowUpTurnView: View {
             } else if turn.answer.isEmpty {
                 ProgressView()
                     .controlSize(.small)
-                    .accessibilityLabel("正在回答")
+                    .accessibilityLabel(L10n.t("正在回答"))
             } else {
                 MarkdownTextView(markdown: turn.answer, fontSize: fontSize)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1067,7 +1067,7 @@ private struct FollowUpInputBar: View {
         HStack(spacing: Spacing.x1_5) {
             FollowUpTextField(
                 text: $question,
-                placeholder: "继续追问…",
+                placeholder: L10n.t("继续追问…"),
                 onSubmit: submit,
                 onEscape: { appModel.closePanel() }
             )
@@ -1080,8 +1080,8 @@ private struct FollowUpInputBar: View {
                         .foregroundStyle(AstryxColor.textSecondary)
                 }
                 .buttonStyle(.quietIcon)
-                .help("停止")
-                .accessibilityLabel("停止")
+                .help(L10n.t("停止"))
+                .accessibilityLabel(L10n.t("停止"))
             } else {
                 Button(action: submit) {
                     Image(systemName: "arrow.up.circle.fill")
@@ -1090,8 +1090,8 @@ private struct FollowUpInputBar: View {
                 }
                 .buttonStyle(.quietIcon)
                 .disabled(!canSend)
-                .help("发送")
-                .accessibilityLabel("发送追问")
+                .help(L10n.t("发送"))
+                .accessibilityLabel(L10n.t("发送追问"))
             }
         }
         .padding(.leading, Spacing.x2_5)

@@ -227,6 +227,10 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     private func prepareHostingView(_ hostingView: NSHostingView<AnyView>) {
         hostingView.wantsLayer = true
         hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+        // The panel is sized by `fitAndPosition`/`refit` from `fittingSize`. A minimum-size
+        // constraint would instead measure wrapping text at its narrowest and force the
+        // window far too tall (seen with two-line Japanese hints).
+        hostingView.sizingOptions = [.intrinsicContentSize]
     }
 
     private func disableFullscreen(_ panel: NSPanel) {

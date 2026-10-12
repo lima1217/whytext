@@ -13,6 +13,33 @@ final class SettingsStore: ObservableObject {
     static let defaultExplainPromptTemplate = """
         我在读下面这段文字，想弄懂它在说什么。请用白话把内容讲清楚。
 
+        解释的对象是内容本身：作者在讲什么事、想表达什么观点、凭什么这么说。不讲语言本身：不逐词释义，不谈原文用词、语法，也不谈怎么翻译或为什么这样译。原文是外文时，直接用{{target}}讲它的内容。
+
+        忠于原文事实与语气；只写原文能支撑的内容。
+
+        1. 先用一句话点出它在讲什么。
+           完成标准：读者不看原文也能抓住主题。
+        2. 再补上读懂它需要的关键点：提到的概念、人物或事件指什么，隐含了什么前提，前后怎么推进。
+           完成标准：每一句都能回溯到原文；说不清的标成不确定，不当成事实。
+        3. 到此为止。
+           完成标准：没有延伸议论、背景科普、或「还可以这样理解」。
+
+        \(UnifiedTranslationRequest.webSearchInstruction)
+
+        用{{target}}写；短句；能短则短。
+
+        <text>
+        {{text}}
+        </text>
+        """
+
+    /// Earlier explain defaults. Saved copies upgrade to the current default once,
+    /// while customized prompts stay put.
+    static let legacyExplainPromptTemplates = [
+        // Fixed Chinese output before {{target}}.
+        """
+        我在读下面这段文字，想弄懂它在说什么。请用白话把内容讲清楚。
+
         解释的对象是内容本身：作者在讲什么事、想表达什么观点、凭什么这么说。不讲语言本身：不逐词释义，不谈原文用词、语法，也不谈怎么翻译或为什么这样译。原文是外文时，直接用中文讲它的内容。
 
         忠于原文事实与语气；只写原文能支撑的内容。
@@ -31,11 +58,7 @@ final class SettingsStore: ObservableObject {
         <text>
         {{text}}
         </text>
-        """
-
-    /// Earlier explain defaults. Saved copies upgrade to the current default once,
-    /// while customized prompts stay put.
-    static let legacyExplainPromptTemplates = [
+        """,
         // Before server-side search.
         """
         用白话讲清下面文字的要义。
@@ -95,6 +118,7 @@ final class SettingsStore: ObservableObject {
     @Published var saveHistory: Bool
     /// Look for a newer GitHub release once a day.
     @Published var autoCheckForUpdates: Bool
+    @Published var interfaceLanguage: InterfaceLanguage
 
     private var cancellables = Set<AnyCancellable>()
     private var persistWorkItem: DispatchWorkItem?
@@ -139,6 +163,7 @@ final class SettingsStore: ObservableObject {
             self.secondaryLanguage = decoded.secondaryLanguage
             self.saveHistory = decoded.saveHistory
             self.autoCheckForUpdates = decoded.autoCheckForUpdates
+            self.interfaceLanguage = decoded.interfaceLanguage
 
             if self.translatePromptTemplate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 self.translatePromptTemplate = Self.defaultTranslatePromptTemplate
@@ -210,6 +235,7 @@ final class SettingsStore: ObservableObject {
             self.secondaryLanguage = .english
             self.saveHistory = true
             self.autoCheckForUpdates = true
+            self.interfaceLanguage = .system
         }
 
         bindAutoSave()
@@ -337,6 +363,11 @@ final class SettingsStore: ObservableObject {
             .dropFirst()
             .sink { [weak self] _ in self?.schedulePersist() }
             .store(in: &cancellables)
+
+        $interfaceLanguage
+            .dropFirst()
+            .sink { [weak self] _ in self?.schedulePersist() }
+            .store(in: &cancellables)
     }
 
     private func schedulePersist() {
@@ -366,7 +397,8 @@ final class SettingsStore: ObservableObject {
             primaryLanguage: primaryLanguage,
             secondaryLanguage: secondaryLanguage,
             saveHistory: saveHistory,
-            autoCheckForUpdates: autoCheckForUpdates
+            autoCheckForUpdates: autoCheckForUpdates,
+            interfaceLanguage: interfaceLanguage
         )
         guard let data = try? JSONEncoder().encode(settings) else { return }
         UserDefaults.standard.set(data, forKey: userDefaultsKey)
@@ -409,6 +441,7 @@ private struct PersistedSettings: Codable {
     var secondaryLanguage: TranslationLanguage
     var saveHistory: Bool
     var autoCheckForUpdates: Bool
+    var interfaceLanguage: InterfaceLanguage
 
     init(
         providers: [LLMProvider],
@@ -425,7 +458,8 @@ private struct PersistedSettings: Codable {
         primaryLanguage: TranslationLanguage,
         secondaryLanguage: TranslationLanguage,
         saveHistory: Bool,
-        autoCheckForUpdates: Bool
+        autoCheckForUpdates: Bool,
+        interfaceLanguage: InterfaceLanguage
     ) {
         self.providers = providers
         self.selectedProviderID = selectedProviderID
@@ -442,6 +476,7 @@ private struct PersistedSettings: Codable {
         self.secondaryLanguage = secondaryLanguage
         self.saveHistory = saveHistory
         self.autoCheckForUpdates = autoCheckForUpdates
+        self.interfaceLanguage = interfaceLanguage
     }
 
     init(from decoder: Decoder) throws {
@@ -463,6 +498,7 @@ private struct PersistedSettings: Codable {
         self.secondaryLanguage = (try? container.decodeIfPresent(TranslationLanguage.self, forKey: .secondaryLanguage)) ?? .english
         self.saveHistory = try container.decodeIfPresent(Bool.self, forKey: .saveHistory) ?? true
         self.autoCheckForUpdates = try container.decodeIfPresent(Bool.self, forKey: .autoCheckForUpdates) ?? true
+        self.interfaceLanguage = (try? container.decodeIfPresent(InterfaceLanguage.self, forKey: .interfaceLanguage)) ?? .system
     }
 }
 

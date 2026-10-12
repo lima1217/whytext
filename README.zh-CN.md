@@ -7,6 +7,7 @@ WhyText 是一个 macOS 菜单栏翻译工具：选中文本后，用快捷键�
 ## 功能
 
 - 菜单栏常驻，轻量使用
+- 界面语言可选：简体中文、繁體中文、English、日本語、한국어，或跟随系统
 - 全局快捷键触发（默认 `⌥ + Space`）
 - 可选「选中文本后显示操作气泡」：翻译或解释
 - 没有选中文字时弹出输入框，可以直接输入或粘贴
@@ -112,11 +113,14 @@ Sources/WhyText/
   UI/                       # 各设置页与浮窗视图
   Utils/                    # 工具函数
 Sources/WhyTextCore/        # 可单测的纯逻辑（分段、端点、选区辅助）
+Sources/WhyTextCore/Localization/  # 界面文字：以简体中文原文为键的各语言对照表
 Sources/WhyTextCoreSmokeTests/  # Core smoke 测试（CLT 友好）
 VERSION                     # 短版本号 + build 号（打包脚本读取）
 scripts/build-app.sh        # 打包 .app 脚本
 .github/workflows/ci.yml    # 构建 + smoke 测试
 ```
+
+新增界面文字时，用 `L10n.t("简体中文原文")`（带参数用 `L10n.f("…%@…", 值)`），并在 `Sources/WhyTextCore/Localization/` 的四个对照表里加上同一个键。漏加或多余的键都会让 `WhyTextCoreSmokeTests` 失败。
 
 ## 常见问题
 

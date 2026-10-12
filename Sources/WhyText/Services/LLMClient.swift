@@ -369,7 +369,7 @@ final class LLMClient {
         case 429:
             return .remoteError(code: .rateLimited, statusCode: statusCode, message: message)
         case 502, 503:
-            return .remoteError(code: .unknown, statusCode: statusCode, message: message ?? "上游服务暂时不可用，请稍后重试。如使用代理，请检查 Base URL 是否正确。")
+            return .remoteError(code: .unknown, statusCode: statusCode, message: message ?? L10n.t("上游服务暂时不可用，请稍后重试。如使用代理，请检查 Base URL 是否正确。"))
         default:
             return .remoteError(code: .unknown, statusCode: statusCode, message: message)
         }
@@ -431,15 +431,15 @@ enum LLMError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidBaseURL:
-            "Provider Base URL 不合法"
+            L10n.t("Provider Base URL 不合法")
         case .invalidResponse:
-            "响应格式不正确，请重试"
+            L10n.t("响应格式不正确，请重试")
         case .emptyOutput:
-            "模型未返回内容，请重试"
+            L10n.t("模型未返回内容，请重试")
         case .remoteError(let code, _, _), .transportError(let code, _):
             Self.localizedMessage(for: code)
         case .streamError(let message):
-            "模型返回错误：\(message)"
+            L10n.f("模型返回错误：%@", message)
         }
     }
 
@@ -478,23 +478,23 @@ enum LLMError: LocalizedError {
     private static func localizedMessage(for code: TranslationErrorCode) -> String {
         switch code {
         case .unauthorized:
-            return "API Key 无效或已过期（401）"
+            return L10n.t("API Key 无效或已过期（401）")
         case .rateLimited:
-            return "请求过于频繁，请稍后重试（429）"
+            return L10n.t("请求过于频繁，请稍后重试（429）")
         case .timeout:
-            return "网络超时，请检查网络后重试"
+            return L10n.t("网络超时，请检查网络后重试")
         case .noPermission:
-            return "无权限访问该模型或接口（403）"
+            return L10n.t("无权限访问该模型或接口（403）")
         case .network:
-            return "网络异常，请检查连接后重试"
+            return L10n.t("网络异常，请检查连接后重试")
         case .emptyResponse:
-            return "模型未返回内容，请重试"
+            return L10n.t("模型未返回内容，请重试")
         case .invalidResponse:
-            return "响应格式不正确，请重试"
+            return L10n.t("响应格式不正确，请重试")
         case .invalidBaseURL:
-            return "Provider Base URL 不合法"
+            return L10n.t("Provider Base URL 不合法")
         case .unknown:
-            return "请求失败，请稍后重试"
+            return L10n.t("请求失败，请稍后重试")
         }
     }
 }

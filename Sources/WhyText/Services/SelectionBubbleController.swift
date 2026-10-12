@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import WhyTextCore
 
 final class SelectionBubbleController: NSObject, NSWindowDelegate {
     var onTranslate: (() -> Void)?
@@ -257,7 +258,7 @@ private struct SelectionBubbleBar: View {
         HStack(spacing: 0) {
             bubbleButton(
                 systemName: "character.textbox",
-                help: "翻译",
+                help: L10n.t("翻译"),
                 action: onTranslate
             )
             Capsule(style: .continuous)
@@ -266,7 +267,7 @@ private struct SelectionBubbleBar: View {
                 .accessibilityHidden(true)
             bubbleButton(
                 systemName: "questionmark",
-                help: "解释",
+                help: L10n.t("解释"),
                 action: onExplain
             )
         }
@@ -297,7 +298,7 @@ private struct SelectionBubbleBar: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("WhyText 操作")
+        .accessibilityLabel(L10n.t("WhyText 操作"))
     }
 
     private var bubbleMaterial: some View {

@@ -715,9 +715,9 @@ enum SelectionError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notTrusted:
-            "WhyText 需要辅助功能权限才能读取选中文本。请在“系统设置 -> 隐私与安全性 -> 辅助功能”中开启（可在设置页点击按钮跳转）。"
+            L10n.t("WhyText 需要辅助功能权限才能读取选中文本。请在“系统设置 -> 隐私与安全性 -> 辅助功能”中开启（可在设置页点击按钮跳转）。")
         case .noSelection:
-            "没有检测到选中文本。"
+            L10n.t("没有检测到选中文本。")
         }
     }
 }

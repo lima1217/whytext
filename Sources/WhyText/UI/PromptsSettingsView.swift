@@ -1,4 +1,5 @@
 import SwiftUI
+import WhyTextCore
 
 private enum PromptUITokens {
     static let editorHeight: CGFloat = 180
@@ -10,8 +11,8 @@ struct PromptsSettingsView: View {
     var body: some View {
         SettingsPage {
             PromptTemplateCard(
-                title: "翻译提示词",
-                subtitle: "决定语气、格式与输出边界。模板必须包含 {{text}}，运行时会替换为你选中的原文；{{target}} 会替换为自动判断的目标语言（如「英文」「简体中文」）。",
+                title: L10n.t("翻译提示词"),
+                subtitle: L10n.t("决定语气、格式与输出边界。模板必须包含 {{text}}，运行时会替换为你选中的原文；{{target}} 会替换为自动判断的目标语言（如「英文」「简体中文」）。"),
                 template: $appModel.settingsStore.translatePromptTemplate,
                 defaultTemplate: SettingsStore.defaultTranslatePromptTemplate,
                 onReset: {
@@ -20,8 +21,8 @@ struct PromptsSettingsView: View {
             )
 
             PromptTemplateCard(
-                title: "解释提示词",
-                subtitle: "选中气泡上的问号会用这份模板解释原文，而不是翻译。模板必须包含 {{text}}。",
+                title: L10n.t("解释提示词"),
+                subtitle: L10n.t("选中气泡上的问号会用这份模板解释原文，而不是翻译。模板必须包含 {{text}}；{{target}} 会替换为你的母语。"),
                 template: $appModel.settingsStore.explainPromptTemplate,
                 defaultTemplate: SettingsStore.defaultExplainPromptTemplate,
                 onReset: {
@@ -44,7 +45,7 @@ private struct PromptTemplateCard: View {
             VStack(alignment: .leading, spacing: SettingsUI.fieldSpacing) {
                 HStack {
                     StatusBadge(
-                        text: hasPlaceholder ? "占位符有效" : "缺少 {{text}}",
+                        text: hasPlaceholder ? L10n.t("占位符有效") : L10n.t("缺少 {{text}}"),
                         tone: hasPlaceholder ? .success : .danger
                     )
 
@@ -54,19 +55,19 @@ private struct PromptTemplateCard: View {
                 editor
 
                 HStack(spacing: Spacing.x2_5) {
-                    Text("\(templateCharacterCount) 字符")
+                    Text(L10n.f("%@ 字符", String(templateCharacterCount)))
                         .font(AstryxFont.captionM)
                         .monospacedDigit()
                         .foregroundStyle(AstryxColor.textSecondary)
 
                     Spacer()
 
-                    Button("插入 {{text}}") {
+                    Button(L10n.t("插入 {{text}}")) {
                         insertTextPlaceholder()
                     }
                     .buttonStyle(.quiet)
 
-                    Button("恢复默认") {
+                    Button(L10n.t("恢复默认")) {
                         onReset()
                     }
                     .buttonStyle(.quiet)

@@ -18,11 +18,11 @@ final class ScreenTextRecognizer {
         var errorDescription: String? {
             switch self {
             case .permissionDenied:
-                "截图识别需要「屏幕录制」权限。请在「系统设置 → 隐私与安全性 → 屏幕与系统录音」中允许 WhyText，然后重启 WhyText。"
+                L10n.t("截图识别需要「屏幕录制」权限。请在「系统设置 → 隐私与安全性 → 屏幕与系统录音」中允许 WhyText，然后重启 WhyText。")
             case .captureFailed:
-                "截图失败，请重试。"
+                L10n.t("截图失败，请重试。")
             case .noText:
-                "截图里没有识别到文字。"
+                L10n.t("截图里没有识别到文字。")
             }
         }
     }
