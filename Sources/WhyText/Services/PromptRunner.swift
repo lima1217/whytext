@@ -22,7 +22,9 @@ final class PromptRunner {
 
         func maybeUpdate(_ text: String, force: Bool = false) async {
             let now = Date()
-            if force || now.timeIntervalSince(lastUpdate) >= 0.05 {
+            // Each update re-parses and re-lays-out the whole Markdown result, so
+            // keep the cadence modest; long outputs otherwise grow quadratically.
+            if force || now.timeIntervalSince(lastUpdate) >= 0.12 {
                 lastUpdate = now
                 await onUpdate(text)
             }

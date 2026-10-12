@@ -72,8 +72,11 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     }
 
     /// Refit the panel to its current content size, keeping the top-left anchored.
-    func refit() {
+    /// Without `force`, a panel already at max height is left alone: streamed text
+    /// only grows, and measuring `fittingSize` lays out the whole result each time.
+    func refit(force: Bool = false) {
         guard let panel, let hostingView = panel.contentView as? NSHostingView<AnyView> else { return }
+        if !force, panel.frame.height >= maxHeight - 1 { return }
 
         let fitting = hostingView.fittingSize
         let w = min(max(fitting.width, minWidth), maxWidth)

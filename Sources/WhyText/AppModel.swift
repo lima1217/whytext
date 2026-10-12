@@ -236,6 +236,10 @@ final class AppModel: ObservableObject {
             template = settingsStore.explainPromptTemplate
         }
 
+        // The first partial of a run may need to shrink a panel left tall by the
+        // previous result; after that, growth-only refits are enough.
+        var didRefitThisRun = false
+
         translationSession.run(
             mode: action.translationMode,
             template: template,
@@ -250,7 +254,8 @@ final class AppModel: ObservableObject {
             },
             onPartialResult: { [weak self] partial in
                 self?.panelState.resultText = partial
-                self?.panelController.refit()
+                self?.panelController.refit(force: !didRefitThisRun)
+                didRefitThisRun = true
             },
             onFinished: { [weak self] result in
                 guard let self else { return }
