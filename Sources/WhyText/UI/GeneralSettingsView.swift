@@ -5,15 +5,20 @@ import WhyTextCore
 struct GeneralSettingsView: View {
     @EnvironmentObject private var appModel: AppModel
     @State private var showPermissionDiagnostics = false
+    @State private var launchAtLoginState = LaunchAtLogin.state
+    @State private var launchAtLoginError: String?
 
     var body: some View {
         SettingsPage {
             overviewCard
             shortcutCard
+            startupCard
             behaviorCard
             languageCard
+            historyCard
             translationWindowCard
             accessibilityCard
+            updatesCard
         }
     }
 
@@ -46,6 +51,58 @@ struct GeneralSettingsView: View {
                 HotKeyRecorderView(shortcut: $appModel.settingsStore.hotKeyShortcut)
             }
         }
+    }
+
+    // MARK: - Startup
+
+    private var startupCard: some View {
+        SettingsCard("启动", subtitle: "登录 Mac 后自动在菜单栏运行，快捷键随时可用。") {
+            VStack(alignment: .leading, spacing: SettingsUI.fieldSpacing) {
+                HStack(alignment: .firstTextBaseline) {
+                    Toggle("登录时自动启动", isOn: launchAtLoginBinding)
+                        .disabled(launchAtLoginState == .unavailable)
+                    Spacer()
+                }
+
+                switch launchAtLoginState {
+                case .requiresApproval:
+                    HStack(spacing: Spacing.x2) {
+                        CaptionText(text: "已在系统设置的「登录项」里被关闭，需要在那里重新允许。")
+                        Button("打开登录项设置") {
+                            LaunchAtLogin.openSystemSettings()
+                        }
+                        .buttonStyle(.quiet)
+                    }
+                case .unavailable:
+                    CaptionText(text: "仅在打包后的 WhyText.app 中可用。")
+                case .enabled, .disabled:
+                    EmptyView()
+                }
+
+                if let launchAtLoginError {
+                    CaptionText(text: launchAtLoginError)
+                }
+            }
+        }
+        // The user can flip it in System Settings while we're open.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            launchAtLoginState = LaunchAtLogin.state
+        }
+    }
+
+    private var launchAtLoginBinding: Binding<Bool> {
+        Binding(
+            get: { launchAtLoginState == .enabled || launchAtLoginState == .requiresApproval },
+            set: { enabled in
+                do {
+                    try LaunchAtLogin.setEnabled(enabled)
+                    launchAtLoginError = nil
+                } catch {
+                    launchAtLoginError = "设置失败：\(error.localizedDescription)"
+                }
+                launchAtLoginState = LaunchAtLogin.state
+            }
+        )
     }
 
     // MARK: - Behavior
@@ -81,6 +138,26 @@ struct GeneralSettingsView: View {
         }
     }
 
+    // MARK: - History
+
+    private var historyCard: some View {
+        SettingsCard("最近记录", subtitle: "在菜单栏「最近」里找回之前的结果；同样的文字再查一次时直接使用记录，不再请求服务商。") {
+            VStack(alignment: .leading, spacing: SettingsUI.fieldSpacing) {
+                HStack(alignment: .firstTextBaseline) {
+                    Toggle("保存最近的翻译和解释", isOn: $appModel.settingsStore.saveHistory)
+                    Spacer()
+                    Button("清除记录") {
+                        appModel.clearHistory()
+                    }
+                    .buttonStyle(.quiet)
+                    .disabled(appModel.historyStore.entries.isEmpty)
+                }
+
+                CaptionText(text: "仅保存在本机，最多 \(HistoryStore.capacity) 条（当前 \(appModel.historyStore.entries.count) 条）。关闭后会清除已有记录。")
+            }
+        }
+    }
+
     // MARK: - Translation Window
 
     private var translationWindowCard: some View {
@@ -103,6 +180,58 @@ struct GeneralSettingsView: View {
                     step: 1
                 )
             }
+        }
+    }
+
+    // MARK: - Updates
+
+    private var updatesCard: some View {
+        let checker = appModel.updateChecker
+
+        return SettingsCard("更新", subtitle: "从 GitHub Releases 查询最新版本；有新版本时菜单栏会提示，下载和安装需要手动完成。") {
+            VStack(alignment: .leading, spacing: SettingsUI.fieldSpacing) {
+                HStack(alignment: .firstTextBaseline) {
+                    Toggle("每天自动检查更新", isOn: $appModel.settingsStore.autoCheckForUpdates)
+                    Spacer()
+                    Text("当前版本 \(checker.currentVersion?.description ?? "开发版")")
+                        .font(AstryxFont.captionM)
+                        .foregroundStyle(AstryxColor.textSecondary)
+                }
+
+                HStack(spacing: Spacing.x2) {
+                    Button(checker.status == .checking ? "检查中…" : "立即检查") {
+                        Task { await checker.check() }
+                    }
+                    .buttonStyle(.quiet)
+                    .disabled(checker.status == .checking)
+
+                    if checker.availableUpdate != nil {
+                        Button("前往下载") {
+                            checker.openDownloadPage()
+                        }
+                        .buttonStyle(.quiet(tint: Color.accentColor))
+                    }
+
+                    if let statusText = updateStatusText(checker) {
+                        CaptionText(text: statusText)
+                    }
+
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private func updateStatusText(_ checker: UpdateChecker) -> String? {
+        switch checker.status {
+        case .idle, .checking:
+            return nil
+        case .upToDate:
+            return "已是最新版本"
+        case .updateAvailable:
+            return checker.availableUpdate.map { "发现新版本 \($0.version.description)" }
+        case .failed(let message):
+            return "检查失败：\(message)"
         }
     }
 

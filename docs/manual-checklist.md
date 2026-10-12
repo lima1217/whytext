@@ -32,6 +32,12 @@ Use this checklist before replacing the local app in `/Applications`.
 - Expand 原文 and confirm the panel grows; collapse it again.
 - Ask a follow-up question (Return sends, Esc closes the panel); confirm the answer uses the earlier result as context and copy includes it.
 - Click outside the panel and confirm it closes; pin it, click outside, and confirm it stays open.
+- Translate the same text twice; the second time shows 来自最近记录 instantly, and 重新生成 requests again.
+- Open 最近 in the menu bar, pick an entry, and confirm the panel shows it and accepts a follow-up. Clear it and confirm the menu disappears.
+- Turn off 保存最近的翻译和解释 and confirm records are cleared and repeated text is requested again.
+- With a small max input length, translate a multi-paragraph text and confirm chunks appear in order.
+- In 通用 → 更新, click 立即检查 and confirm it reports 已是最新版本 (or the newer version with 前往下载 when one exists).
+- In the packaged app, toggle 登录时自动启动 and confirm WhyText appears in System Settings → General → Login Items.
 
 ## Failure Cases
 

@@ -12,6 +12,9 @@ enum WhyTextCoreSmokeTests {
         testSSEEventParser()
         testLLMStreamEventParser()
         testTranslationDirection()
+        testChunkAssembly()
+        testRecentList()
+        testSemanticVersion()
         print("WhyTextCore smoke tests passed")
     }
 
@@ -263,6 +266,56 @@ enum WhyTextCoreSmokeTests {
         expect(target("Bonjour tout le monde, comment allez-vous ?", .english, .french) == .english, "French goes to English primary")
         expect(target("Hello there, how are you doing today?", .english, .japanese) == .japanese, "English primary goes to secondary")
         expect(target("Hello there, how are you doing today?", .english, .english) == .english, "same languages stay primary")
+    }
+
+    private static func testChunkAssembly() {
+        var assembly = ChunkAssembly(count: 3)
+        expect(assembly.visibleText == "", "empty assembly shows nothing")
+
+        assembly.finish("C", at: 2)
+        expect(assembly.visibleText == "", "a later chunk stays hidden until earlier ones finish")
+
+        assembly.setPartial("A1", at: 0)
+        expect(assembly.visibleText == "A1", "first chunk streams")
+
+        assembly.finish("A", at: 0)
+        expect(assembly.visibleText == "A\n\n", "finished chunk opens the next slot")
+
+        assembly.setPartial("B1", at: 1)
+        expect(assembly.visibleText == "A\n\nB1", "second chunk streams after the first")
+        expect(!assembly.isComplete, "not complete while a chunk runs")
+
+        assembly.finish("B", at: 1)
+        expect(assembly.visibleText == "A\n\nB\n\nC", "early-finished chunk appears in order")
+        expect(assembly.isComplete && assembly.fullText == "A\n\nB\n\nC", "complete text joins all chunks")
+    }
+
+    private static func testRecentList() {
+        var list = RecentList<Int>(capacity: 3)
+        for value in [1, 2, 3] {
+            list.insert(value, replacing: { $0 == value })
+        }
+        expect(list.items == [3, 2, 1], "most recent first")
+
+        list.insert(1, replacing: { $0 == 1 })
+        expect(list.items == [1, 3, 2], "re-inserting moves to front without duplicates")
+
+        list.insert(4, replacing: { $0 == 4 })
+        expect(list.items == [4, 1, 3], "capacity drops the oldest")
+
+        let seeded = RecentList(items: [1, 2, 3, 4, 5], capacity: 2)
+        expect(seeded.items == [1, 2], "seeded items are capped")
+    }
+
+    private static func testSemanticVersion() {
+        func v(_ string: String) -> SemanticVersion? { SemanticVersion(string) }
+
+        expect(v("v0.2.3")?.description == "0.2.3", "leading v is dropped")
+        expect(v("0.2.10")! > v("0.2.9")!, "components compare numerically")
+        expect(v("1.0")! == v("1.0.0")!, "missing components count as zero")
+        expect(v("0.3.0")! > v("0.2.99")!, "minor beats patch")
+        expect(!(v("0.2.3")! > v("0.2.3")!), "equal versions are not newer")
+        expect(v("") == nil && v("1.x") == nil && v("1..2") == nil && v("1.0-beta") == nil, "malformed versions are rejected")
     }
 
     private static func expect(_ condition: @autoclosure () -> Bool, _ message: String) {

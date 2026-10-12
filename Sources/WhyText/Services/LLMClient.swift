@@ -19,8 +19,8 @@ enum TranslationErrorCode: String, Codable {
 }
 
 /// One prior turn of a conversation, replayed ahead of a follow-up question.
-struct ConversationMessage: Equatable {
-    enum Role: String {
+struct ConversationMessage: Codable, Equatable {
+    enum Role: String, Codable {
         case user
         case assistant
     }

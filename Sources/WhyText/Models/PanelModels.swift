@@ -23,6 +23,8 @@ struct PanelState: Equatable {
     /// Empty until the first answer completes.
     var conversation: [ConversationMessage] = []
     var followUps: [FollowUpTurn] = []
+    /// The result was restored from history instead of requested.
+    var isFromHistory: Bool = false
 
     var canAskFollowUp: Bool {
         !isLoading && !conversation.isEmpty && (errorMessage?.isEmpty ?? true)

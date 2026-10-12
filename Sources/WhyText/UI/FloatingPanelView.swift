@@ -47,6 +47,11 @@ struct FloatingPanelView: View {
                     }
                     .animation(AstryxMotion.smooth, value: contentStateKey)
 
+                    if showsHistoryNote {
+                        HistoryNoteRow()
+                            .transition(.opacity)
+                    }
+
                     if showsFollowUpField {
                         FollowUpInputBar()
                             .transition(.opacity)
@@ -144,6 +149,10 @@ struct FloatingPanelView: View {
 
     private var fontSize: CGFloat {
         CGFloat(appModel.settingsStore.translationFontSize)
+    }
+
+    private var showsHistoryNote: Bool {
+        appModel.panelState.isFromHistory && !appModel.panelState.isLoading && hasResult
     }
 
     private var showsFollowUpField: Bool {
@@ -765,6 +774,30 @@ private struct SourceTextDisclosure: View {
         isExpanded.toggle()
         // Let SwiftUI lay out the new size before the window measures it.
         DispatchQueue.main.async { appModel.refitPanel() }
+    }
+}
+
+// MARK: - History note
+
+/// Marks a result reused from history, with a way to ask the provider again.
+private struct HistoryNoteRow: View {
+    @EnvironmentObject private var appModel: AppModel
+
+    var body: some View {
+        HStack(spacing: Spacing.x1_5) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 10))
+            Text("来自最近记录，未重新请求")
+                .font(.system(size: PanelTokens.metaFontSize))
+            Spacer(minLength: 0)
+            Button(action: { appModel.regenerate() }) {
+                Label("重新生成", systemImage: "arrow.clockwise")
+                    .labelStyle(.titleAndIcon)
+                    .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
+            }
+            .buttonStyle(.quiet(tint: Color.accentColor))
+        }
+        .foregroundStyle(AstryxColor.textSecondary)
     }
 }
 

@@ -14,6 +14,8 @@ final class AppModel: ObservableObject {
     @Published var isPanelPinned: Bool = false
 
     var settingsStore: SettingsStore
+    let historyStore: HistoryStore
+    let updateChecker = UpdateChecker()
 
     private let selectionService: AccessibilitySelectionService
     private let selectionReader: SelectionReader
@@ -29,6 +31,7 @@ final class AppModel: ObservableObject {
 
     init(
         settingsStore: SettingsStore = SettingsStore(),
+        historyStore: HistoryStore = HistoryStore(),
         selectionService: AccessibilitySelectionService = AccessibilitySelectionService(),
         selectionReader: SelectionReader? = nil,
         llmClient: LLMClient = LLMClient(),
@@ -37,6 +40,7 @@ final class AppModel: ObservableObject {
     ) {
         let resolvedSelectionReader = selectionReader ?? SelectionReader(accessibility: selectionService)
         self.settingsStore = settingsStore
+        self.historyStore = historyStore
         self.selectionService = selectionService
         self.selectionReader = resolvedSelectionReader
         self.panelController = panelController
@@ -60,6 +64,27 @@ final class AppModel: ObservableObject {
 
         settingsStore.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+
+        historyStore.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+
+        updateChecker.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+
+        settingsStore.$autoCheckForUpdates
+            .removeDuplicates()
+            .sink { [weak self] enabled in
+                self?.updateChecker.setAutomaticChecks(enabled: enabled)
+            }
+            .store(in: &cancellables)
+
+        settingsStore.$saveHistory
+            .sink { [weak historyStore] enabled in
+                if !enabled { historyStore?.clear() }
+            }
             .store(in: &cancellables)
 
         // `@Published` sinks emit the current value on subscribe — that installs monitors once.
@@ -249,8 +274,9 @@ final class AppModel: ObservableObject {
         pasteboard.writeObjects([item])
     }
 
-    /// `target` overrides the automatic direction for translations.
-    func run(action: PanelAction, target: TranslationLanguage? = nil) {
+    /// `target` overrides the automatic direction for translations. Identical earlier
+    /// requests are served from history unless `bypassHistory` is set.
+    func run(action: PanelAction, target: TranslationLanguage? = nil, bypassHistory: Bool = false) {
         guard let preflight = preflightForTranslation() else {
             return
         }
@@ -272,6 +298,7 @@ final class AppModel: ObservableObject {
         panelState.targetLanguage = action == .translate ? targetLanguage : nil
         panelState.conversation = []
         panelState.followUps = []
+        panelState.isFromHistory = false
         panelState.lastAction = action
         panelState.lastInputText = preflight.selectedText
         panelState.phase = .result
@@ -287,6 +314,28 @@ final class AppModel: ObservableObject {
             template = settingsStore.translatePromptTemplate
         case .explain:
             template = settingsStore.explainPromptTemplate
+        }
+
+        let historyKey = HistoryCacheKey(
+            action: action,
+            targetLanguage: targetLanguage,
+            providerID: preflight.provider.id,
+            baseURL: preflight.provider.baseURL,
+            model: preflight.provider.model,
+            apiMode: preflight.provider.apiMode,
+            template: template,
+            maxInputCharacters: settingsStore.maxInputCharacters,
+            splitLongInput: settingsStore.splitLongInput
+        )
+
+        if settingsStore.saveHistory, !bypassHistory,
+           let entry = historyStore.lookup(key: historyKey, sourceText: preflight.selectedText) {
+            translationSession.cancel()
+            apply(entry)
+            var refreshed = entry
+            refreshed.date = Date()
+            historyStore.record(refreshed)
+            return
         }
 
         // The first partial of a run may need to shrink a panel left tall by the
@@ -322,6 +371,16 @@ final class AppModel: ObservableObject {
                 switch result {
                 case .success(let conversation):
                     self.panelState.conversation = conversation
+                    // Empty means cancelled; a partial answer isn't worth reusing.
+                    if self.settingsStore.saveHistory, !conversation.isEmpty {
+                        self.historyStore.record(HistoryEntry(
+                            date: Date(),
+                            key: historyKey,
+                            sourceText: preflight.selectedText,
+                            resultText: self.panelState.resultText,
+                            conversation: conversation
+                        ))
+                    }
                 case .failure(let error):
                     self.panelState.errorMessage = TranslationErrorPresenter.userFacingMessage(for: error)
                     self.panelState.errorNeedsSettings = TranslationErrorPresenter.needsSettings(for: error)
@@ -334,6 +393,37 @@ final class AppModel: ObservableObject {
         guard let action = panelState.lastAction, let input = panelState.lastInputText else { return }
         panelState.selectedText = input
         run(action: action, target: panelState.targetLanguage)
+    }
+
+    /// Request a fresh answer for a result restored from history.
+    func regenerate() {
+        guard let action = panelState.lastAction else { return }
+        run(action: action, target: panelState.targetLanguage, bypassHistory: true)
+    }
+
+    func showHistoryEntry(_ entry: HistoryEntry) {
+        presentPanel(selectedText: entry.sourceText)
+        apply(entry)
+    }
+
+    func clearHistory() {
+        historyStore.clear()
+    }
+
+    private func apply(_ entry: HistoryEntry) {
+        panelState.lastAction = entry.key.action
+        panelState.lastInputText = entry.sourceText
+        panelState.targetLanguage = entry.key.action == .translate ? entry.key.targetLanguage : nil
+        panelState.phase = .result
+        panelState.errorMessage = nil
+        panelState.noticeMessage = nil
+        panelState.isLoading = false
+        panelState.activity = nil
+        panelState.resultText = entry.resultText
+        panelState.conversation = entry.conversation
+        panelState.followUps = []
+        panelState.isFromHistory = true
+        panelController.refit(force: true)
     }
 
     /// Switch between translate and explain on the same selection.

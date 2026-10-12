@@ -12,6 +12,9 @@ WhyText 是一个 macOS 菜单栏翻译工具：选中文本后，用快捷键�
 - 自动判断翻译方向：母语译成第二语言，其他语言译成母语（可在设置和结果窗口中修改）
 - 结果窗口内可切换翻译 / 解释、查看原文、继续追问
 - 点击窗口外自动关闭；用图钉固定后保持常驻
+- 最近记录：菜单栏「最近」找回之前的结果，相同请求直接复用，不重复计费
+- 长文本分段并行请求（最多 3 段同时进行），按顺序显示
+- 可设置登录时自动启动
 - 支持流式输出（Provider 支持时）
 - 长文本自动分段或截断
 - 结果一键复制（富文本，含纯文本回退）
@@ -30,9 +33,18 @@ WhyText 是一个 macOS 菜单栏翻译工具：选中文本后，用快捷键�
 xcode-select --install
 ```
 
+## 安装
+
+1. 从 [Releases](https://github.com/lima1217/whytext/releases) 下载最新的 `WhyText-<版本>-mac.zip`，解压后把 `WhyText.app` 拖进「应用程序」。
+2. 首次打开：WhyText 没有经过 Apple 公证，macOS 第一次会拦下它。
+   - macOS 15 及以上：先双击打开一次，看到提示后进入「系统设置 → 隐私与安全性」，在页面下方点「仍要打开」。
+   - macOS 13 / 14：在 Finder 里右键 `WhyText.app` → 打开 → 再点「打开」。
+   - 或者在终端里执行 `xattr -dr com.apple.quarantine /Applications/WhyText.app` 后正常打开。
+3. 更新：有新版本时菜单栏会出现「有新版本…」，点击打开下载页，下载后替换「应用程序」里的旧版即可，设置和 API Key 会保留。如果替换后读不到选中文本，在「系统设置 → 隐私与安全性 → 辅助功能」里把 WhyText 移除后重新添加。
+
 ## 快速开始
 
-1. 构建并启动应用（见下方“运行与构建”）。
+1. 按上方「安装」装好并打开，或自行构建（见下方“运行与构建”）。
 2. 打开菜单栏 `WhyText -> 设置...`。
 3. 在「通用」设置全局快捷键。
 4. 在「辅助功能权限」中给 WhyText 授权（否则无法读取选中文本）。
@@ -81,6 +93,8 @@ open ./dist/WhyText.app
 
 - API Key：存储在 macOS Keychain。
 - 其他设置：保存在 `UserDefaults`。
+- 检查更新：开启「每天自动检查更新」时，WhyText 每天向 GitHub API 请求一次最新版本号，不发送任何其他信息。
+- 最近记录：最多 50 条，保存在 `~/Library/Application Support/<Bundle ID>/recent-results.json`；可在设置中关闭或清除。
 - WhyText 不内置第三方数据上报逻辑。
 
 ## 项目结构
@@ -115,4 +129,4 @@ scripts/build-app.sh        # 打包 .app 脚本
 
 ## License
 
-暂未指定（All rights reserved by default）。如需开源，请补充 `LICENSE` 文件。
+[MIT](LICENSE)

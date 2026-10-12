@@ -12,6 +12,9 @@ WhyText is a macOS menu bar translation utility: select text anywhere and transl
 - Automatic direction: text in your primary language goes to your second language, everything else to your primary language (changeable in Settings and in the result panel)
 - Switch between translate and explain, view the source text, and ask follow-up questions in the result panel
 - The panel closes on an outside click; pin it to keep it open
+- Recent results: reopen them from the menu bar, and identical requests reuse the stored result instead of calling the provider again
+- Long input is split and requested in parallel (up to 3 chunks at once), shown in order
+- Optional launch at login
 - Streaming output when supported by your provider
 - Automatic chunking or truncation for long input
 - One-click copy for results (rich text, with plain-text fallback)
@@ -30,9 +33,18 @@ Install Command Line Tools if needed:
 xcode-select --install
 ```
 
+## Install
+
+1. Download the latest `WhyText-<version>-mac.zip` from [Releases](https://github.com/lima1217/whytext/releases), unzip it, and move `WhyText.app` to Applications.
+2. First launch: WhyText is not notarized by Apple, so macOS blocks it the first time.
+   - macOS 15 and later: open it once, then go to System Settings → Privacy & Security and click "Open Anyway" near the bottom.
+   - macOS 13 / 14: in Finder, right-click `WhyText.app` → Open, then click Open.
+   - Or run `xattr -dr com.apple.quarantine /Applications/WhyText.app` in Terminal and open it normally.
+3. Updates: when a new version is out, the menu bar shows "有新版本…"; it opens the download page. Replace the app in Applications; settings and API keys are kept. If selected text stops being read afterwards, remove WhyText from System Settings → Privacy & Security → Accessibility and add it again.
+
 ## Quick Start
 
-1. Build and launch the app (see "Run and Build" below).
+1. Install and open the app (see "Install" above), or build it yourself (see "Run and Build" below).
 2. Open menu bar `WhyText -> Settings...`.
 3. Set your global hotkey in the General tab.
 4. Grant Accessibility permission to WhyText (required to read selected text).
@@ -81,6 +93,8 @@ The build script signs with a `Developer ID Application` or `Apple Development` 
 
 - API keys: stored in macOS Keychain.
 - Other settings: stored in `UserDefaults`.
+- Update check: with daily update checks on, WhyText asks the GitHub API for the latest version number once a day and sends nothing else.
+- Recent results: up to 50, stored in `~/Library/Application Support/<bundle ID>/recent-results.json`; turn off or clear in Settings.
 - No built-in third-party telemetry.
 
 ## Project Structure
@@ -115,4 +129,4 @@ scripts/build-app.sh        # Build script for .app bundle
 
 ## License
 
-No license file yet (defaults to all rights reserved). Add a `LICENSE` file if you plan to open source it.
+[MIT](LICENSE)

@@ -89,6 +89,10 @@ final class SettingsStore: ObservableObject {
     @Published var primaryLanguage: TranslationLanguage
     /// Translation target for text already in the primary language.
     @Published var secondaryLanguage: TranslationLanguage
+    /// Keep recent results on disk and reuse them for identical requests.
+    @Published var saveHistory: Bool
+    /// Look for a newer GitHub release once a day.
+    @Published var autoCheckForUpdates: Bool
 
     private var cancellables = Set<AnyCancellable>()
     private var persistWorkItem: DispatchWorkItem?
@@ -130,6 +134,8 @@ final class SettingsStore: ObservableObject {
             self.translationFontSize = decoded.translationFontSize
             self.primaryLanguage = decoded.primaryLanguage
             self.secondaryLanguage = decoded.secondaryLanguage
+            self.saveHistory = decoded.saveHistory
+            self.autoCheckForUpdates = decoded.autoCheckForUpdates
 
             if self.translatePromptTemplate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 self.translatePromptTemplate = Self.defaultTranslatePromptTemplate
@@ -198,6 +204,8 @@ final class SettingsStore: ObservableObject {
             self.translationFontSize = 16
             self.primaryLanguage = .simplifiedChinese
             self.secondaryLanguage = .english
+            self.saveHistory = true
+            self.autoCheckForUpdates = true
         }
 
         bindAutoSave()
@@ -310,6 +318,16 @@ final class SettingsStore: ObservableObject {
             .dropFirst()
             .sink { [weak self] _ in self?.schedulePersist() }
             .store(in: &cancellables)
+
+        $saveHistory
+            .dropFirst()
+            .sink { [weak self] _ in self?.schedulePersist() }
+            .store(in: &cancellables)
+
+        $autoCheckForUpdates
+            .dropFirst()
+            .sink { [weak self] _ in self?.schedulePersist() }
+            .store(in: &cancellables)
     }
 
     private func schedulePersist() {
@@ -336,7 +354,9 @@ final class SettingsStore: ObservableObject {
             autoPopupOnSelection: autoPopupOnSelection,
             translationFontSize: translationFontSize,
             primaryLanguage: primaryLanguage,
-            secondaryLanguage: secondaryLanguage
+            secondaryLanguage: secondaryLanguage,
+            saveHistory: saveHistory,
+            autoCheckForUpdates: autoCheckForUpdates
         )
         guard let data = try? JSONEncoder().encode(settings) else { return }
         UserDefaults.standard.set(data, forKey: userDefaultsKey)
@@ -376,6 +396,8 @@ private struct PersistedSettings: Codable {
     var translationFontSize: Double
     var primaryLanguage: TranslationLanguage
     var secondaryLanguage: TranslationLanguage
+    var saveHistory: Bool
+    var autoCheckForUpdates: Bool
 
     init(
         providers: [LLMProvider],
@@ -389,7 +411,9 @@ private struct PersistedSettings: Codable {
         autoPopupOnSelection: Bool,
         translationFontSize: Double,
         primaryLanguage: TranslationLanguage,
-        secondaryLanguage: TranslationLanguage
+        secondaryLanguage: TranslationLanguage,
+        saveHistory: Bool,
+        autoCheckForUpdates: Bool
     ) {
         self.providers = providers
         self.selectedProviderID = selectedProviderID
@@ -403,6 +427,8 @@ private struct PersistedSettings: Codable {
         self.translationFontSize = translationFontSize
         self.primaryLanguage = primaryLanguage
         self.secondaryLanguage = secondaryLanguage
+        self.saveHistory = saveHistory
+        self.autoCheckForUpdates = autoCheckForUpdates
     }
 
     init(from decoder: Decoder) throws {
@@ -421,6 +447,8 @@ private struct PersistedSettings: Codable {
         // Unknown codes (e.g. from a newer build) fall back rather than wiping all settings.
         self.primaryLanguage = (try? container.decodeIfPresent(TranslationLanguage.self, forKey: .primaryLanguage)) ?? .simplifiedChinese
         self.secondaryLanguage = (try? container.decodeIfPresent(TranslationLanguage.self, forKey: .secondaryLanguage)) ?? .english
+        self.saveHistory = try container.decodeIfPresent(Bool.self, forKey: .saveHistory) ?? true
+        self.autoCheckForUpdates = try container.decodeIfPresent(Bool.self, forKey: .autoCheckForUpdates) ?? true
     }
 }
 
