@@ -143,7 +143,9 @@ enum PanelChromeMotion {
     static let presentDuration: TimeInterval = 0.32
     static let dismissDuration: TimeInterval = 0.18
 
-    static func animatePresent(panel: NSPanel, to finalFrame: NSRect) {
+    /// `completion` runs when the frame animation ends; frame changes made before then
+    /// are overwritten by the animation's final frame.
+    static func animatePresent(panel: NSPanel, to finalFrame: NSRect, completion: @escaping () -> Void = {}) {
         if MotionPreference.reduceMotion {
             panel.setFrame(finalFrame, display: false)
             panel.alphaValue = 0
@@ -153,6 +155,7 @@ enum PanelChromeMotion {
                 ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
                 panel.animator().alphaValue = 1
             }
+            completion()
             return
         }
 
@@ -171,12 +174,12 @@ enum PanelChromeMotion {
         panel.orderFrontRegardless()
 
         // Critically damped spring approximation (response ≈ 0.32).
-        NSAnimationContext.runAnimationGroup { ctx in
+        NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = presentDuration
             ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.2, 1.0)
             panel.animator().setFrame(finalFrame, display: true)
             panel.animator().alphaValue = 1
-        }
+        }, completionHandler: completion)
     }
 
     static func animateDismiss(panel: NSPanel, completion: @escaping () -> Void) {

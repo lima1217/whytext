@@ -80,6 +80,8 @@ final class SettingsStore: ObservableObject {
     @Published var translatePromptTemplate: String
     @Published var explainPromptTemplate: String
     @Published var hotKeyShortcut: KeyboardShortcut?
+    /// Optional second shortcut that starts a screenshot-and-translate.
+    @Published var ocrHotKeyShortcut: KeyboardShortcut?
     @Published var enableStreaming: Bool
     @Published var maxInputCharacters: Int
     @Published var splitLongInput: Bool
@@ -127,6 +129,7 @@ final class SettingsStore: ObservableObject {
             self.translatePromptTemplate = decoded.translatePromptTemplate
             self.explainPromptTemplate = decoded.explainPromptTemplate
             self.hotKeyShortcut = decoded.hotKeyShortcut
+            self.ocrHotKeyShortcut = decoded.ocrHotKeyShortcut
             self.enableStreaming = decoded.enableStreaming
             self.maxInputCharacters = decoded.maxInputCharacters
             self.splitLongInput = decoded.splitLongInput
@@ -197,6 +200,7 @@ final class SettingsStore: ObservableObject {
             self.translatePromptTemplate = Self.defaultTranslatePromptTemplate
             self.explainPromptTemplate = Self.defaultExplainPromptTemplate
             self.hotKeyShortcut = KeyboardShortcut.defaultShortcut
+            self.ocrHotKeyShortcut = nil
             self.enableStreaming = true
             self.maxInputCharacters = 4000
             self.splitLongInput = true
@@ -284,6 +288,11 @@ final class SettingsStore: ObservableObject {
             .sink { [weak self] _ in self?.schedulePersist() }
             .store(in: &cancellables)
 
+        $ocrHotKeyShortcut
+            .dropFirst()
+            .sink { [weak self] _ in self?.schedulePersist() }
+            .store(in: &cancellables)
+
         $enableStreaming
             .dropFirst()
             .sink { [weak self] _ in self?.schedulePersist() }
@@ -348,6 +357,7 @@ final class SettingsStore: ObservableObject {
             translatePromptTemplate: translatePromptTemplate,
             explainPromptTemplate: explainPromptTemplate,
             hotKeyShortcut: hotKeyShortcut,
+            ocrHotKeyShortcut: ocrHotKeyShortcut,
             enableStreaming: enableStreaming,
             maxInputCharacters: maxInputCharacters,
             splitLongInput: splitLongInput,
@@ -389,6 +399,7 @@ private struct PersistedSettings: Codable {
     var translatePromptTemplate: String
     var explainPromptTemplate: String
     var hotKeyShortcut: KeyboardShortcut?
+    var ocrHotKeyShortcut: KeyboardShortcut?
     var enableStreaming: Bool
     var maxInputCharacters: Int
     var splitLongInput: Bool
@@ -405,6 +416,7 @@ private struct PersistedSettings: Codable {
         translatePromptTemplate: String,
         explainPromptTemplate: String,
         hotKeyShortcut: KeyboardShortcut?,
+        ocrHotKeyShortcut: KeyboardShortcut?,
         enableStreaming: Bool,
         maxInputCharacters: Int,
         splitLongInput: Bool,
@@ -420,6 +432,7 @@ private struct PersistedSettings: Codable {
         self.translatePromptTemplate = translatePromptTemplate
         self.explainPromptTemplate = explainPromptTemplate
         self.hotKeyShortcut = hotKeyShortcut
+        self.ocrHotKeyShortcut = ocrHotKeyShortcut
         self.enableStreaming = enableStreaming
         self.maxInputCharacters = maxInputCharacters
         self.splitLongInput = splitLongInput
@@ -439,6 +452,7 @@ private struct PersistedSettings: Codable {
         self.explainPromptTemplate = try container.decodeIfPresent(String.self, forKey: .explainPromptTemplate)
             ?? SettingsStore.defaultExplainPromptTemplate
         self.hotKeyShortcut = try container.decodeIfPresent(KeyboardShortcut.self, forKey: .hotKeyShortcut)
+        self.ocrHotKeyShortcut = try container.decodeIfPresent(KeyboardShortcut.self, forKey: .ocrHotKeyShortcut)
         self.enableStreaming = try container.decodeIfPresent(Bool.self, forKey: .enableStreaming) ?? true
         self.maxInputCharacters = try container.decodeIfPresent(Int.self, forKey: .maxInputCharacters) ?? 4000
         self.splitLongInput = try container.decodeIfPresent(Bool.self, forKey: .splitLongInput) ?? true

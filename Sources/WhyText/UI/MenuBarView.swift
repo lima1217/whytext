@@ -13,6 +13,14 @@ struct MenuBarView: View {
             appModel.openPanelFromMenu()
         }
 
+        Button("输入文字翻译…") {
+            appModel.openManualInput()
+        }
+
+        Button(ocrMenuTitle) {
+            appModel.startScreenTextCapture()
+        }
+
         if !appModel.historyStore.entries.isEmpty {
             Menu("最近") {
                 ForEach(appModel.historyStore.entries.prefix(Self.recentMenuLimit)) { entry in
@@ -53,6 +61,13 @@ struct MenuBarView: View {
             NSApp.terminate(nil)
         }
         .keyboardShortcut("q", modifiers: .command)
+    }
+
+    private var ocrMenuTitle: String {
+        if let shortcut = appModel.settingsStore.ocrHotKeyShortcut {
+            return "截图翻译…  \(shortcut.displayString)"
+        }
+        return "截图翻译…"
     }
 
     private static let recentMenuLimit = 20

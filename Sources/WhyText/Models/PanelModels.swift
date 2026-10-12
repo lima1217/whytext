@@ -7,8 +7,17 @@ struct PanelState: Equatable {
     var resultText: String = ""
     var errorMessage: String? {
         // Each new error starts as not-a-settings-problem; callers opt in after.
-        didSet { errorNeedsSettings = false }
+        didSet {
+            errorNeedsSettings = false
+            errorSystemSettingsURL = nil
+        }
     }
+    /// The error is fixed in a System Settings pane (e.g. Screen Recording).
+    var errorSystemSettingsURL: URL?
+    /// Shown above the manual input box, e.g. why the selection couldn't be read.
+    var inputHint: String?
+    /// The manual input box appeared because Accessibility isn't granted.
+    var inputNeedsAccessibility: Bool = false
     /// The error is fixed in Settings (provider, API key, base URL, permissions).
     var errorNeedsSettings: Bool = false
     var noticeMessage: String?
@@ -40,6 +49,8 @@ struct FollowUpTurn: Equatable, Identifiable {
 
 enum PanelPhase: String, Codable, Equatable {
     case choose
+    /// Nothing was selected: the user types or pastes text instead.
+    case input
     case result
 }
 

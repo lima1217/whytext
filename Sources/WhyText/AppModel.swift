@@ -22,6 +22,9 @@ final class AppModel: ObservableObject {
     private let panelController: FloatingPanelController
     private let selectionBubbleController: SelectionBubbleController
     private let hotKeyManager: HotKeyManager
+    private let ocrHotKeyManager = HotKeyManager(id: 2)
+    private let screenTextRecognizer = ScreenTextRecognizer()
+    private var isCapturingScreenText = false
     private let settingsWindowController: SettingsWindowController
     private let connectivityProbe: ProviderConnectivityProbe
     private let translationSession: TranslationSession
@@ -107,6 +110,23 @@ final class AppModel: ObservableObject {
             }
         }
 
+        settingsStore.$ocrHotKeyShortcut
+            .sink { [weak self] shortcut in
+                guard let self else { return }
+                if let shortcut {
+                    try? self.ocrHotKeyManager.register(shortcut: shortcut)
+                } else {
+                    self.ocrHotKeyManager.unregister()
+                }
+            }
+            .store(in: &cancellables)
+
+        ocrHotKeyManager.onPressed = { [weak self] in
+            Task { @MainActor in
+                self?.startScreenTextCapture()
+            }
+        }
+
         selectionBubbleController.onTranslate = { [weak self] in
             Task { @MainActor in
                 self?.openPanelFromSelectionBubble(action: .translate)
@@ -177,30 +197,77 @@ final class AppModel: ObservableObject {
     }
 
     private func openPanelFlow() async {
-        var selectedText: String = ""
-        var selectionError: String?
-        var selectionErrorNeedsSettings = false
-
+        let selectedText: String
         do {
             let selection = try await selectionReader.readSelectedText()
             selectedText = AccessibilitySelectionHelpers.sanitizeSelectedText(selection.text)
+        } catch SelectionError.notTrusted {
+            openManualInput(
+                hint: "未授权辅助功能，读不到选中文本。可以直接输入或粘贴：",
+                needsAccessibility: true
+            )
+            return
         } catch {
-            selectionError = TranslationErrorPresenter.userFacingMessage(for: error)
-            selectionErrorNeedsSettings = TranslationErrorPresenter.needsSettings(for: error)
+            selectedText = ""
         }
 
-        let trimmed = AccessibilitySelectionHelpers.sanitizeSelectedText(selectedText)
-        presentPanel(
-            selectedText: trimmed,
-            errorMessage: selectionError ?? (trimmed.isEmpty ? "未读取到选中文本。请先选中一段文字，并确认已授权辅助功能。" : nil)
-        )
-        panelState.errorNeedsSettings = selectionErrorNeedsSettings
-
-        guard selectionError == nil, !trimmed.isEmpty else {
+        guard !selectedText.isEmpty else {
+            openManualInput()
             return
         }
 
+        presentPanel(selectedText: selectedText)
         run(action: .translate)
+    }
+
+    /// Opens the panel with a text box; used when nothing is selected.
+    func openManualInput(hint: String? = nil, needsAccessibility: Bool = false) {
+        presentPanel()
+        panelState.phase = .input
+        panelState.inputHint = hint
+        panelState.inputNeedsAccessibility = needsAccessibility
+    }
+
+    func submitManualInput(_ text: String, action: PanelAction) {
+        let input = AccessibilitySelectionHelpers.sanitizeSelectedText(text)
+        guard !input.isEmpty else { return }
+        panelState.selectedText = input
+        panelState.inputHint = nil
+        panelState.phase = .result
+        run(action: action)
+        DispatchQueue.main.async { [weak self] in self?.refitPanel() }
+    }
+
+    /// Drag out a screen region, read its text on-device, and translate it.
+    func startScreenTextCapture() {
+        guard !isCapturingScreenText else { return }
+        isCapturingScreenText = true
+
+        // Keep our own windows out of the shot.
+        closePanel()
+        selectionAutoPopup.hideBubble()
+
+        Task { @MainActor in
+            defer { isCapturingScreenText = false }
+            do {
+                let preferred = [settingsStore.primaryLanguage, settingsStore.secondaryLanguage]
+                guard let text = try await screenTextRecognizer.captureAndRecognize(preferred: preferred) else {
+                    return // cancelled
+                }
+                presentPanel(selectedText: text)
+                run(action: .translate)
+            } catch {
+                presentPanel(errorMessage: error.localizedDescription)
+                if case ScreenTextRecognizer.RecognitionError.permissionDenied = error {
+                    panelState.errorSystemSettingsURL = ScreenTextRecognizer.screenRecordingSettingsURL
+                }
+            }
+        }
+    }
+
+    func openErrorSystemSettings() {
+        guard let url = panelState.errorSystemSettingsURL else { return }
+        NSWorkspace.shared.open(url)
     }
 
     private func presentPanel(selectedText: String = "", errorMessage: String? = nil) {

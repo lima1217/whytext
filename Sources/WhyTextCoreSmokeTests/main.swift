@@ -15,6 +15,7 @@ enum WhyTextCoreSmokeTests {
         testChunkAssembly()
         testRecentList()
         testSemanticVersion()
+        testOCRTextLayout()
         print("WhyTextCore smoke tests passed")
     }
 
@@ -316,6 +317,53 @@ enum WhyTextCoreSmokeTests {
         expect(v("0.3.0")! > v("0.2.99")!, "minor beats patch")
         expect(!(v("0.2.3")! > v("0.2.3")!), "equal versions are not newer")
         expect(v("") == nil && v("1.x") == nil && v("1..2") == nil && v("1.0-beta") == nil, "malformed versions are rejected")
+    }
+
+    private static func testOCRTextLayout() {
+        // Rows 0.05 tall; consecutive rows of a paragraph are 0.02 apart.
+        func line(_ text: String, row: Double, minX: Double = 0.05, maxX: Double = 0.95) -> OCRTextLayout.Line {
+            OCRTextLayout.Line(text: text, minX: minX, top: row * 0.07, maxX: maxX, bottom: row * 0.07 + 0.05)
+        }
+
+        expect(OCRTextLayout.join([]) == "", "no lines")
+
+        let wrappedEnglish = OCRTextLayout.join([
+            line("The quick brown fox jumps over", row: 0),
+            line("the lazy dog and keeps run-", row: 1),
+            line("ning into the woods.", row: 2),
+        ])
+        expect(wrappedEnglish == "The quick brown fox jumps over the lazy dog and keeps running into the woods.", "wrapped Latin lines join with spaces and rejoin hyphenated words")
+
+        let wrappedChinese = OCRTextLayout.join([
+            line("今天天气很好，我们一起去", row: 0),
+            line("公园散步吧。", row: 1),
+        ])
+        expect(wrappedChinese == "今天天气很好，我们一起去公园散步吧。", "wrapped CJK lines join without spaces")
+
+        let paragraphs = OCRTextLayout.join([
+            line("First paragraph line one", row: 0),
+            line("continues here.", row: 1),
+            line("Second paragraph.", row: 3),
+        ])
+        expect(paragraphs == "First paragraph line one continues here.\n\nSecond paragraph.", "a blank-line gap starts a new paragraph")
+
+        let heading = OCRTextLayout.join([
+            line("Title", row: 0, maxX: 0.2),
+            line("Body text that fills the whole width of the column", row: 1),
+        ])
+        expect(heading == "Title\nBody text that fills the whole width of the column", "a short line stays on its own line")
+
+        let sameRow = OCRTextLayout.join([
+            line("Value", row: 0, minX: 0.6, maxX: 0.9),
+            line("Label:", row: 0, minX: 0.05, maxX: 0.3),
+        ])
+        expect(sameRow == "Label: Value", "pieces on one row join left to right")
+
+        let unsorted = OCRTextLayout.join([
+            line("second line of the same paragraph", row: 1),
+            line("This is the first line, and", row: 0),
+        ])
+        expect(unsorted == "This is the first line, and second line of the same paragraph", "lines are ordered top to bottom")
     }
 
     private static func expect(_ condition: @autoclosure () -> Bool, _ message: String) {

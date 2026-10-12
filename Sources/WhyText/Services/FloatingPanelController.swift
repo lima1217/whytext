@@ -14,6 +14,9 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     private var mouseOrigin: NSPoint = .zero
     private var isClosingProgrammatically = false
     private var outsideClickMonitor: Any?
+    /// While the present animation runs, refits are deferred to its end.
+    private var isPresenting = false
+    private var needsRefitAfterPresent = false
 
     /// Cap the reading column near ~60–75 Latin / ~30–35 CJK glyphs at default body size.
     private let maxWidth: CGFloat = 560
@@ -73,7 +76,16 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
 
         // Symmetric present path: scale from center + fade (mirrored on dismiss).
         let finalFrame = panel.frame
-        PanelChromeMotion.animatePresent(panel: panel, to: finalFrame)
+        isPresenting = true
+        needsRefitAfterPresent = false
+        PanelChromeMotion.animatePresent(panel: panel, to: finalFrame) { [weak self] in
+            guard let self else { return }
+            self.isPresenting = false
+            if self.needsRefitAfterPresent {
+                self.needsRefitAfterPresent = false
+                self.refit(force: true)
+            }
+        }
         NSApp.activate(ignoringOtherApps: true)
         installOutsideClickMonitor()
     }
@@ -102,6 +114,12 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     /// only grows, and measuring `fittingSize` lays out the whole result each time.
     func refit(force: Bool = false) {
         guard let panel, let hostingView = panel.contentView as? NSHostingView<AnyView> else { return }
+        // Content that grows during the open animation (a restored result, the input
+        // box, early streamed text) would otherwise be clipped to the starting size.
+        if isPresenting {
+            needsRefitAfterPresent = true
+            return
+        }
         if !force, panel.frame.height >= maxHeight - 1 { return }
 
         let fitting = hostingView.fittingSize

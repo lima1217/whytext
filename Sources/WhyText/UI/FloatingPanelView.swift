@@ -102,6 +102,9 @@ struct FloatingPanelView: View {
         if let error = appModel.panelState.errorMessage, !error.isEmpty {
             errorView(error)
                 .transition(panelContentTransition)
+        } else if appModel.panelState.phase == .input {
+            ManualInputView()
+                .transition(panelContentTransition)
         } else if appModel.panelState.isLoading && !hasResult {
             loadingView
                 .transition(panelContentTransition)
@@ -216,6 +219,15 @@ struct FloatingPanelView: View {
             HStack(spacing: Spacing.x2) {
                 Spacer(minLength: 0)
 
+                if appModel.panelState.errorSystemSettingsURL != nil {
+                    Button(action: { appModel.openErrorSystemSettings() }) {
+                        Label("打开系统设置", systemImage: "gearshape")
+                            .labelStyle(.titleAndIcon)
+                            .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
+                    }
+                    .buttonStyle(.quiet)
+                }
+
                 if appModel.panelState.errorNeedsSettings {
                     Button(action: { appModel.openSettingsWindow() }) {
                         Label("打开设置", systemImage: "gearshape")
@@ -275,6 +287,9 @@ struct FloatingPanelView: View {
     private var contentStateKey: String {
         if let error = appModel.panelState.errorMessage, !error.isEmpty {
             return "error"
+        }
+        if appModel.panelState.phase == .input {
+            return "input"
         }
         if appModel.panelState.isLoading && !hasResult {
             return "loading"
@@ -347,6 +362,10 @@ struct FloatingPanelTitlebarView: View {
         HStack(spacing: Spacing.x2) {
             if appModel.panelState.lastAction != nil {
                 PanelModeSwitch()
+            } else if appModel.panelState.phase == .input {
+                Text("输入文字")
+                    .font(AstryxFont.bodyMedium)
+                    .foregroundStyle(AstryxColor.textSecondary)
             }
 
             if let target = appModel.panelState.targetLanguage, appModel.panelState.lastAction == .translate {
@@ -774,6 +793,194 @@ private struct SourceTextDisclosure: View {
         isExpanded.toggle()
         // Let SwiftUI lay out the new size before the window measures it.
         DispatchQueue.main.async { appModel.refitPanel() }
+    }
+}
+
+// MARK: - Manual input
+
+/// Shown when nothing was selected: type or paste, then translate or explain.
+/// ⌘↩ translates, Esc closes; plain Return inserts a newline.
+private struct ManualInputView: View {
+    @EnvironmentObject private var appModel: AppModel
+    @State private var text = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.x2) {
+            if let hint = appModel.panelState.inputHint {
+                HStack(spacing: Spacing.x2) {
+                    Text(hint)
+                        .font(.system(size: PanelTokens.metaFontSize))
+                        .foregroundStyle(AstryxColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    if appModel.panelState.inputNeedsAccessibility {
+                        Button(action: { appModel.openAccessibilitySettings() }) {
+                            Text("授权")
+                                .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
+                        }
+                        .buttonStyle(.quiet)
+                    }
+                }
+            }
+
+            ManualInputTextView(
+                text: $text,
+                placeholder: "输入或粘贴要翻译的文字…",
+                fontSize: CGFloat(appModel.settingsStore.translationFontSize),
+                onSubmit: { submit(.translate) },
+                onEscape: { appModel.closePanel() }
+            )
+            .frame(minWidth: PanelTokens.minWidth, idealWidth: PanelTokens.idealWidth, minHeight: 96, maxHeight: 160)
+            .padding(Spacing.x2)
+            .background(
+                RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
+                    .fill(AstryxColor.overlayHover)
+            )
+            .shadowBorder(cornerRadius: Radius.element)
+
+            HStack(spacing: Spacing.x2) {
+                Button(action: { appModel.startScreenTextCapture() }) {
+                    Label("截图识别", systemImage: "text.viewfinder")
+                        .labelStyle(.titleAndIcon)
+                        .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
+                }
+                .buttonStyle(.quiet)
+                .help("框选屏幕上的区域，识别其中的文字并翻译")
+
+                Spacer(minLength: 0)
+
+                Button(action: { submit(.explain) }) {
+                    Text("解释")
+                        .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
+                }
+                .buttonStyle(.quiet)
+                .disabled(isEmpty)
+
+                Button(action: { submit(.translate) }) {
+                    Text("翻译  ⌘↩")
+                        .font(.system(size: PanelTokens.metaFontSize, weight: .semibold))
+                }
+                .buttonStyle(.quiet(tint: Color.accentColor))
+                .disabled(isEmpty)
+            }
+        }
+        // The panel was sized for empty content; grow it once the box is in the tree.
+        .onAppear {
+            DispatchQueue.main.async { appModel.refitPanel() }
+        }
+    }
+
+    private var isEmpty: Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func submit(_ action: PanelAction) {
+        guard !isEmpty else { return }
+        appModel.submitManualInput(text, action: action)
+    }
+}
+
+/// Multi-line AppKit text view: SwiftUI's TextEditor has no placeholder, no
+/// ⌘↩ hook, and lets Esc fall into the text system.
+private struct ManualInputTextView: NSViewRepresentable {
+    @Binding var text: String
+    var placeholder: String
+    var fontSize: CGFloat
+    var onSubmit: () -> Void
+    var onEscape: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let textView = InputTextView()
+        textView.coordinator = context.coordinator
+        textView.delegate = context.coordinator
+        textView.drawsBackground = false
+        textView.isRichText = false
+        textView.importsGraphics = false
+        textView.allowsUndo = true
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.font = .systemFont(ofSize: fontSize)
+        textView.textColor = .labelColor
+        textView.textContainerInset = .zero
+        textView.textContainer?.lineFragmentPadding = 0
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.widthTracksTextView = true
+        textView.placeholder = placeholder
+
+        let scrollView = NSScrollView()
+        scrollView.drawsBackground = false
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .noBorder
+        scrollView.documentView = textView
+
+        // Typing should work as soon as the panel appears.
+        DispatchQueue.main.async {
+            textView.window?.makeFirstResponder(textView)
+        }
+        return scrollView
+    }
+
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        context.coordinator.parent = self
+        guard let textView = scrollView.documentView as? InputTextView else { return }
+        if textView.string != text {
+            textView.string = text
+        }
+        textView.font = .systemFont(ofSize: fontSize)
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: ManualInputTextView
+
+        init(_ parent: ManualInputTextView) {
+            self.parent = parent
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            parent.text = textView.string
+            textView.needsDisplay = true // placeholder visibility
+        }
+
+        func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+            guard selector == #selector(NSResponder.cancelOperation(_:)), !textView.hasMarkedText() else {
+                return false
+            }
+            parent.onEscape()
+            return true
+        }
+    }
+
+    final class InputTextView: NSTextView {
+        weak var coordinator: Coordinator?
+        var placeholder = ""
+
+        override func performKeyEquivalent(with event: NSEvent) -> Bool {
+            let isReturn = event.keyCode == 36 || event.keyCode == 76
+            if isReturn, event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command, !hasMarkedText() {
+                coordinator?.parent.text = string
+                coordinator?.parent.onSubmit()
+                return true
+            }
+            return super.performKeyEquivalent(with: event)
+        }
+
+        override func draw(_ dirtyRect: NSRect) {
+            super.draw(dirtyRect)
+            guard string.isEmpty, !placeholder.isEmpty else { return }
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: font ?? .systemFont(ofSize: NSFont.systemFontSize),
+                .foregroundColor: NSColor.placeholderTextColor,
+            ]
+            (placeholder as NSString).draw(at: NSPoint(x: textContainerInset.width, y: textContainerInset.height), withAttributes: attributes)
+        }
     }
 }
 

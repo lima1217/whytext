@@ -46,9 +46,16 @@ struct GeneralSettingsView: View {
     // MARK: - Shortcut
 
     private var shortcutCard: some View {
-        SettingsCard("快捷键", subtitle: "键盘触发是主入口，适合翻译网页、PDF、聊天窗口里的选中文本。") {
+        SettingsCard("快捷键", subtitle: "键盘触发是主入口，适合翻译网页、PDF、聊天窗口里的选中文本；没有选中文字时会弹出输入框。") {
             VStack(alignment: .leading, spacing: SettingsUI.fieldSpacing) {
                 HotKeyRecorderView(shortcut: $appModel.settingsStore.hotKeyShortcut)
+
+                Divider()
+
+                Text("截图翻译")
+                    .font(AstryxFont.bodyMedium)
+                HotKeyRecorderView(shortcut: $appModel.settingsStore.ocrHotKeyShortcut)
+                CaptionText(text: "框选屏幕区域，在本机识别其中的文字后翻译，适合图片、视频字幕和无法选中的界面。首次使用需要授予「屏幕录制」权限。")
             }
         }
     }

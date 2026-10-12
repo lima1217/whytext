@@ -5,9 +5,14 @@ import Foundation
 final class HotKeyManager {
     var onPressed: (() -> Void)?
 
-    private let hotKeyID = EventHotKeyID(signature: 0x57485458, id: 1) // "WHTX"
+    private let hotKeyID: EventHotKeyID
     private var hotKeyRef: EventHotKeyRef?
     private var handlerRef: EventHandlerRef?
+
+    /// Each manager owns one shortcut; give each a distinct `id`.
+    init(id: UInt32 = 1) {
+        hotKeyID = EventHotKeyID(signature: 0x57485458, id: id) // "WHTX"
+    }
 
     func register(shortcut: KeyboardShortcut) throws {
         unregister()
@@ -32,10 +37,12 @@ final class HotKeyManager {
                     &hotKeyID
                 )
 
-                if hotKeyID.signature == manager.hotKeyID.signature, hotKeyID.id == manager.hotKeyID.id {
-                    DispatchQueue.main.async {
-                        manager.onPressed?()
-                    }
+                guard hotKeyID.signature == manager.hotKeyID.signature, hotKeyID.id == manager.hotKeyID.id else {
+                    // Another manager's shortcut: let the event reach its handler.
+                    return OSStatus(eventNotHandledErr)
+                }
+                DispatchQueue.main.async {
+                    manager.onPressed?()
                 }
                 return noErr
             },
