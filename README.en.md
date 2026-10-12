@@ -9,10 +9,13 @@ WhyText is a macOS menu bar translation utility: select text anywhere and transl
 - Lightweight menu bar app
 - Global hotkey trigger (default: `⌥ + Space`)
 - Optional selection bubble with translate and explain actions
+- Automatic direction: text in your primary language goes to your second language, everything else to your primary language (changeable in Settings and in the result panel)
+- Switch between translate and explain, view the source text, and ask follow-up questions in the result panel
+- The panel closes on an outside click; pin it to keep it open
 - Streaming output when supported by your provider
 - Automatic chunking or truncation for long input
 - One-click copy for results (rich text, with plain-text fallback)
-- Custom translate / explain prompt templates with `{{text}}` placeholder
+- Custom translate / explain prompt templates with `{{text}}` (source) and `{{target}}` (target language) placeholders
 - Multiple provider profiles (Base URL / Model / API Mode)
 - API keys stored in macOS Keychain
 

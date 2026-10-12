@@ -11,6 +11,7 @@ enum WhyTextCoreSmokeTests {
         testSelectionAutoPopupPolicy()
         testSSEEventParser()
         testLLMStreamEventParser()
+        testTranslationDirection()
         print("WhyTextCore smoke tests passed")
     }
 
@@ -246,6 +247,22 @@ enum WhyTextCoreSmokeTests {
             responsesError(#"{"type":"response.failed","response":{"error":{"message":"server overloaded"}}}"#) == "server overloaded",
             "responses failed event"
         )
+    }
+
+    private static func testTranslationDirection() {
+        func target(_ text: String, _ primary: TranslationLanguage = .simplifiedChinese, _ secondary: TranslationLanguage = .english) -> TranslationLanguage {
+            TranslationDirection.target(for: text, primary: primary, secondary: secondary)
+        }
+
+        expect(target("The quick brown fox jumps over the lazy dog.") == .simplifiedChinese, "English goes to primary")
+        expect(target("今天天气很好，我们一起去公园散步吧。") == .english, "Chinese goes to secondary")
+        expect(target("這是一段繁體中文的句子，用來測試。") == .english, "Traditional Chinese counts as primary Chinese")
+        expect(target("这个 API 的返回值需要处理一下错误情况。") == .english, "Chinese with Latin terms stays Chinese")
+        expect(target("今日はとても良い天気ですね。") == .simplifiedChinese, "Japanese goes to primary")
+        expect(target("12345 !!!") == .simplifiedChinese, "no letters falls back to primary")
+        expect(target("Bonjour tout le monde, comment allez-vous ?", .english, .french) == .english, "French goes to English primary")
+        expect(target("Hello there, how are you doing today?", .english, .japanese) == .japanese, "English primary goes to secondary")
+        expect(target("Hello there, how are you doing today?", .english, .english) == .english, "same languages stay primary")
     }
 
     private static func expect(_ condition: @autoclosure () -> Bool, _ message: String) {

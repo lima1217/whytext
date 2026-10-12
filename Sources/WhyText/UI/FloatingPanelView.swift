@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import WhyTextCore
 
 private enum PanelTokens {
     static let horizontalPadding: CGFloat = Spacing.x4   // 16
@@ -11,6 +12,7 @@ private enum PanelTokens {
     static let idealWidth: CGFloat = 520
     static let minContentHeight: CGFloat = 72
     static let maxHeight: CGFloat = 420
+    static let sourceMaxHeight: CGFloat = 120
 }
 
 struct FloatingPanelView: View {
@@ -35,10 +37,22 @@ struct FloatingPanelView: View {
             .allowsHitTesting(false)
 
             VStack(spacing: 0) {
-                Group {
-                    content
+                VStack(alignment: .leading, spacing: Spacing.x2) {
+                    if !appModel.panelState.selectedText.isEmpty {
+                        SourceTextDisclosure(text: appModel.panelState.selectedText)
+                    }
+
+                    Group {
+                        content
+                    }
+                    .animation(AstryxMotion.smooth, value: contentStateKey)
+
+                    if showsFollowUpField {
+                        FollowUpInputBar()
+                            .transition(.opacity)
+                    }
                 }
-                .animation(AstryxMotion.smooth, value: contentStateKey)
+                .animation(AstryxMotion.smooth, value: showsFollowUpField)
                 .padding(.top, Spacing.x3)
                 .padding(.horizontal, PanelTokens.horizontalPadding)
                 .padding(.bottom, PanelTokens.bottomPadding)
@@ -103,12 +117,39 @@ struct FloatingPanelView: View {
     }
 
     private var resultView: some View {
-        ScrollView {
-            MarkdownTextView(markdown: displayText, fontSize: CGFloat(appModel.settingsStore.translationFontSize))
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.x4) {
+                    MarkdownTextView(markdown: displayText, fontSize: fontSize)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    ForEach(appModel.panelState.followUps) { turn in
+                        FollowUpTurnView(turn: turn, fontSize: fontSize)
+                    }
+
+                    Color.clear
+                        .frame(height: 1)
+                        .id(Self.scrollBottomID)
+                }
+            }
+            .onChange(of: appModel.panelState.followUps) { _ in
+                proxy.scrollTo(Self.scrollBottomID, anchor: .bottom)
+            }
         }
         .frame(minWidth: PanelTokens.minWidth, idealWidth: PanelTokens.idealWidth, maxHeight: PanelTokens.maxHeight)
+    }
+
+    private static let scrollBottomID = "result-bottom"
+
+    private var fontSize: CGFloat {
+        CGFloat(appModel.settingsStore.translationFontSize)
+    }
+
+    private var showsFollowUpField: Bool {
+        hasResult
+            && appModel.panelState.lastAction != nil
+            && (appModel.panelState.errorMessage?.isEmpty ?? true)
     }
 
     private var loadingView: some View {
@@ -295,20 +336,44 @@ struct FloatingPanelTitlebarView: View {
 
     var body: some View {
         HStack(spacing: Spacing.x2) {
+            if appModel.panelState.lastAction != nil {
+                PanelModeSwitch()
+            }
+
+            if let target = appModel.panelState.targetLanguage, appModel.panelState.lastAction == .translate {
+                TargetLanguageMenu(current: target)
+            }
+
             if shouldShowStatus {
-                HStack(spacing: Spacing.x2) {
+                HStack(spacing: Spacing.x1_5) {
                     statusIcon
 
-                    Text(headerTitle)
-                        .font(AstryxFont.bodyMedium)
-                        .foregroundStyle(AstryxColor.textSecondary)
+                    if let activityTitle {
+                        Text(activityTitle)
+                            .font(.system(size: PanelTokens.metaFontSize))
+                            .foregroundStyle(AstryxColor.textSecondary)
+                            .lineLimit(1)
+                    }
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(headerTitle)
                 .transition(.opacity.combined(with: .offset(y: 4)))
             }
 
-            Spacer(minLength: Spacing.x4)
+            Spacer(minLength: Spacing.x2)
+
+            Button(action: { appModel.togglePanelPinned() }) {
+                Image(systemName: appModel.isPanelPinned ? "pin.fill" : "pin")
+                    .font(.system(size: 13, weight: .medium))
+                    .rotationEffect(.degrees(45))
+                    .foregroundStyle(appModel.isPanelPinned ? Color.accentColor : AstryxColor.textSecondary)
+                    .frame(width: 28, height: 28)
+                    .quietButtonHover()
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.quietIcon)
+            .help(appModel.isPanelPinned ? "取消固定：点击窗口外会关闭" : "固定：点击窗口外不关闭")
+            .accessibilityLabel(appModel.isPanelPinned ? "取消固定窗口" : "固定窗口")
 
             Button(action: copyResultIfPossible) {
                 ContextualIconSwap(
@@ -321,7 +386,7 @@ struct FloatingPanelTitlebarView: View {
                 .frame(width: 28, height: 28)
                 .background(copyButtonBackground)
                 // Grow hit target left/vertical so the glyph stays flush with content trailing.
-                .padding(.leading, 12)
+                .padding(.leading, 4)
                 .padding(.vertical, 6)
                 .contentShape(Rectangle())
                 .accessibilityLabel(didCopy ? "已复制" : "复制结果")
@@ -405,6 +470,16 @@ struct FloatingPanelTitlebarView: View {
 
     private var shouldShowStatus: Bool {
         appModel.panelState.isLoading || (appModel.panelState.errorMessage?.isEmpty == false)
+    }
+
+    /// Only thinking/searching get words; the mode switch already names the action.
+    private var activityTitle: String? {
+        guard appModel.panelState.isLoading else { return nil }
+        switch appModel.panelState.activity {
+        case .thinking: return "思考中"
+        case .searching: return "搜索中"
+        case nil: return nil
+        }
     }
 
     private var headerTitle: String {
@@ -553,5 +628,316 @@ private struct SkeletonShimmerModifier: ViewModifier, Animatable {
                     offset = 1.6
                 }
             }
+    }
+}
+
+// MARK: - Mode switch
+
+/// Translate / explain toggle; switching reruns the same selection.
+private struct PanelModeSwitch: View {
+    @EnvironmentObject private var appModel: AppModel
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(PanelAction.allCases, id: \.self) { action in
+                segment(action)
+            }
+        }
+        .padding(2)
+        .background(
+            RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
+                .fill(AstryxColor.overlayHover)
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("模式")
+    }
+
+    private func segment(_ action: PanelAction) -> some View {
+        let isSelected = appModel.panelState.lastAction == action
+        return Button(action: { appModel.switchAction(to: action) }) {
+            Text(action.displayName)
+                .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                .foregroundStyle(isSelected ? AstryxColor.textPrimary : AstryxColor.textSecondary)
+                .padding(.horizontal, Spacing.x2)
+                .padding(.vertical, 3)
+                .background(
+                    RoundedRectangle(cornerRadius: Radius.element - 2, style: .continuous)
+                        .fill(isSelected ? Color(nsColor: .controlBackgroundColor).opacity(0.9) : Color.clear)
+                        .shadow(color: isSelected ? AstryxColor.shadow : .clear, radius: 1, y: 0.5)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.quietIcon)
+        .animation(AstryxMotion.quick, value: isSelected)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+// MARK: - Target language
+
+/// Shows where the translation is going; picking another language retranslates.
+private struct TargetLanguageMenu: View {
+    @EnvironmentObject private var appModel: AppModel
+    var current: TranslationLanguage
+
+    var body: some View {
+        Menu {
+            ForEach(TranslationLanguage.allCases) { language in
+                Button {
+                    appModel.retranslate(to: language)
+                } label: {
+                    if language == current {
+                        Label(language.displayName, systemImage: "checkmark")
+                    } else {
+                        Text(language.displayName)
+                    }
+                }
+            }
+        } label: {
+            Text("→ \(current.displayName)")
+                .font(.system(size: 12))
+                .foregroundStyle(AstryxColor.textSecondary)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.visible)
+        .fixedSize()
+        .help("译文语言")
+        .accessibilityLabel("译文语言：\(current.displayName)")
+    }
+}
+
+// MARK: - Source text
+
+/// Collapsed: a one-line preview of the selection. Expanded: the full text, selectable.
+private struct SourceTextDisclosure: View {
+    @EnvironmentObject private var appModel: AppModel
+    var text: String
+    @State private var isExpanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.x1_5) {
+            Button(action: toggle) {
+                HStack(spacing: Spacing.x1_5) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    Text("原文")
+                        .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
+                    if !isExpanded {
+                        Text(preview)
+                            .font(.system(size: PanelTokens.metaFontSize))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(AstryxColor.textSecondary)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.quietIcon(isStatic: true))
+            .accessibilityLabel(isExpanded ? "收起原文" : "展开原文")
+
+            if isExpanded {
+                ScrollView {
+                    Text(text)
+                        .font(.system(size: PanelTokens.bodyFontSize))
+                        .foregroundStyle(AstryxColor.textSecondary)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: PanelTokens.sourceMaxHeight)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(Spacing.x2)
+                .background(
+                    RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
+                        .fill(AstryxColor.overlayHover)
+                )
+            }
+        }
+    }
+
+    private var preview: String {
+        text.split(whereSeparator: \.isNewline).joined(separator: " ")
+    }
+
+    private func toggle() {
+        isExpanded.toggle()
+        // Let SwiftUI lay out the new size before the window measures it.
+        DispatchQueue.main.async { appModel.refitPanel() }
+    }
+}
+
+// MARK: - Follow-ups
+
+private struct FollowUpTurnView: View {
+    @EnvironmentObject private var appModel: AppModel
+    var turn: FollowUpTurn
+    var fontSize: CGFloat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.x2) {
+            Divider()
+
+            Text(turn.question)
+                .font(.system(size: PanelTokens.bodyFontSize, weight: .medium))
+                .foregroundStyle(AstryxColor.textSecondary)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let error = turn.errorMessage {
+                HStack(alignment: .top, spacing: Spacing.x2) {
+                    StatusDot(tone: .danger)
+                        .padding(.top, 5)
+                        .accessibilityHidden(true)
+                    Text(error)
+                        .font(.system(size: PanelTokens.bodyFontSize))
+                        .foregroundStyle(AstryxColor.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Button(action: { appModel.retryFollowUp(id: turn.id) }) {
+                        Label("重试", systemImage: "arrow.clockwise")
+                            .labelStyle(.titleAndIcon)
+                            .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
+                    }
+                    .buttonStyle(.quiet(tint: Color.accentColor))
+                    .disabled(appModel.panelState.isLoading)
+                }
+            } else if turn.answer.isEmpty {
+                ProgressView()
+                    .controlSize(.small)
+                    .accessibilityLabel("正在回答")
+            } else {
+                MarkdownTextView(markdown: turn.answer, fontSize: fontSize)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+}
+
+/// Single-line question field. Return sends, Esc closes the panel; while a request
+/// runs, the trailing button stops it.
+private struct FollowUpInputBar: View {
+    @EnvironmentObject private var appModel: AppModel
+    @State private var question = ""
+
+    var body: some View {
+        HStack(spacing: Spacing.x1_5) {
+            FollowUpTextField(
+                text: $question,
+                placeholder: "继续追问…",
+                onSubmit: submit,
+                onEscape: { appModel.closePanel() }
+            )
+            .frame(maxWidth: .infinity)
+
+            if appModel.panelState.isLoading {
+                Button(action: { appModel.cancelCurrentRequest() }) {
+                    Image(systemName: "stop.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(AstryxColor.textSecondary)
+                }
+                .buttonStyle(.quietIcon)
+                .help("停止")
+                .accessibilityLabel("停止")
+            } else {
+                Button(action: submit) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(canSend ? Color.accentColor : AstryxColor.textDisabled)
+                }
+                .buttonStyle(.quietIcon)
+                .disabled(!canSend)
+                .help("发送")
+                .accessibilityLabel("发送追问")
+            }
+        }
+        .padding(.leading, Spacing.x2_5)
+        .padding(.trailing, Spacing.x1)
+        .padding(.vertical, Spacing.x1)
+        .background(
+            RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
+                .fill(AstryxColor.overlayHover)
+        )
+        .shadowBorder(cornerRadius: Radius.element)
+    }
+
+    private var canSend: Bool {
+        appModel.panelState.canAskFollowUp
+            && !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func submit() {
+        guard canSend else { return }
+        appModel.askFollowUp(question)
+        question = ""
+    }
+}
+
+/// AppKit field so Return/Esc are handled explicitly: SwiftUI's TextField would let
+/// Esc fall into the text system, and Return must not fire mid-IME composition.
+private struct FollowUpTextField: NSViewRepresentable {
+    @Binding var text: String
+    var placeholder: String
+    var onSubmit: () -> Void
+    var onEscape: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeNSView(context: Context) -> NSTextField {
+        let field = NSTextField()
+        field.isBordered = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.font = .systemFont(ofSize: PanelTokens.bodyFontSize)
+        field.placeholderString = placeholder
+        field.lineBreakMode = .byTruncatingHead
+        field.cell?.isScrollable = true
+        field.cell?.wraps = false
+        field.delegate = context.coordinator
+        field.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return field
+    }
+
+    func updateNSView(_ field: NSTextField, context: Context) {
+        context.coordinator.parent = self
+        if field.stringValue != text {
+            field.stringValue = text
+        }
+    }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: FollowUpTextField
+
+        init(_ parent: FollowUpTextField) {
+            self.parent = parent
+        }
+
+        func controlTextDidChange(_ notification: Notification) {
+            guard let field = notification.object as? NSTextField else { return }
+            parent.text = field.stringValue
+        }
+
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+            if textView.hasMarkedText() {
+                return false
+            }
+            switch selector {
+            case #selector(NSResponder.insertNewline(_:)):
+                parent.text = textView.string
+                parent.onSubmit()
+                return true
+            case #selector(NSResponder.cancelOperation(_:)):
+                parent.onEscape()
+                return true
+            default:
+                return false
+            }
+        }
     }
 }

@@ -18,10 +18,14 @@ final class TranslationSession {
         runningTask?.cancel()
     }
 
+    /// Runs a translate/explain prompt over the selection. On success, `onFinished`
+    /// receives the transcript (prompt + answer) that follow-up questions replay;
+    /// a cancelled run finishes with an empty transcript.
     func run(
         mode: TranslationMode,
         template: String,
         selectedText: String,
+        targetLanguage: TranslationLanguage,
         provider: LLMProvider,
         apiKey: String,
         maxInputCharacters: Int,
@@ -30,7 +34,84 @@ final class TranslationSession {
         onNotice: @escaping (String?) -> Void,
         onActivity: @escaping (LLMActivity) -> Void,
         onPartialResult: @escaping (String) -> Void,
-        onFinished: @escaping (Result<Void, Error>) -> Void
+        onFinished: @escaping (Result<[ConversationMessage], Error>) -> Void
+    ) {
+        launch(onFinished: onFinished, cancelledValue: []) { [promptRunner] deliver in
+            // Explanations summarize the whole passage; per-chunk runs would
+            // repeat the "one-line gist" step once per chunk, so truncate instead.
+            let chunking = TextChunker.chunk(
+                text: selectedText,
+                maxCharacters: maxInputCharacters,
+                splitLongInput: splitLongInput && mode == .translate
+            )
+
+            if chunking.wasTruncated {
+                await deliver { onNotice("输入过长，已截断到 \(maxInputCharacters) 字符") }
+            } else if selectedText.count > maxInputCharacters && chunking.chunks.count > 1 {
+                await deliver { onNotice("输入过长，已分 \(chunking.chunks.count) 段处理") }
+            }
+
+            let output = try await promptRunner.run(
+                template: template,
+                chunks: chunking.chunks,
+                provider: provider,
+                apiKey: apiKey,
+                enableStreaming: enableStreaming,
+                mode: mode,
+                targetLanguage: targetLanguage.promptName,
+                onActivity: { activity in await deliver { onActivity(activity) } },
+                onUpdate: { partial in await deliver { onPartialResult(partial) } }
+            )
+
+            let prompt = promptRunner.transcriptPrompt(
+                template: template,
+                text: chunking.chunks.joined(separator: "\n\n"),
+                mode: mode,
+                targetLanguage: targetLanguage.promptName
+            )
+            return [
+                ConversationMessage(role: .user, content: prompt),
+                ConversationMessage(role: .assistant, content: output),
+            ]
+        }
+    }
+
+    /// Asks `question` on top of `history`. On success, `onFinished` receives the answer;
+    /// a cancelled run finishes with an empty string.
+    func runFollowUp(
+        question: String,
+        history: [ConversationMessage],
+        mode: TranslationMode,
+        provider: LLMProvider,
+        apiKey: String,
+        enableStreaming: Bool,
+        onActivity: @escaping (LLMActivity) -> Void,
+        onPartialResult: @escaping (String) -> Void,
+        onFinished: @escaping (Result<String, Error>) -> Void
+    ) {
+        launch(onFinished: onFinished, cancelledValue: "") { [promptRunner] deliver in
+            try await promptRunner.run(
+                template: "{{text}}",
+                chunks: [question],
+                provider: provider,
+                apiKey: apiKey,
+                enableStreaming: enableStreaming,
+                mode: mode,
+                history: history,
+                onActivity: { activity in await deliver { onActivity(activity) } },
+                onUpdate: { partial in await deliver { onPartialResult(partial) } }
+            )
+        }
+    }
+
+    typealias Deliver = (@MainActor () -> Void) async -> Void
+
+    /// Starts `body` as the only running request. Callbacks from a superseded
+    /// request are dropped, so a stale stream never writes into the new run's UI.
+    private func launch<Value>(
+        onFinished: @escaping (Result<Value, Error>) -> Void,
+        cancelledValue: Value,
+        _ body: @escaping (_ deliver: @escaping Deliver) async throws -> Value
     ) {
         runGeneration += 1
         let generation = runGeneration
@@ -44,60 +125,22 @@ final class TranslationSession {
                 }
             }
 
+            let deliver: Deliver = { update in
+                await self.deliver(generation: generation, update)
+            }
+
             do {
-                // Explanations summarize the whole passage; per-chunk runs would
-                // repeat the "one-line gist" step once per chunk, so truncate instead.
-                let chunking = TextChunker.chunk(
-                    text: selectedText,
-                    maxCharacters: maxInputCharacters,
-                    splitLongInput: splitLongInput && mode == .translate
-                )
-
-                if chunking.wasTruncated {
-                    await deliver(generation: generation) {
-                        onNotice("输入过长，已截断到 \(maxInputCharacters) 字符")
-                    }
-                } else if selectedText.count > maxInputCharacters && chunking.chunks.count > 1 {
-                    await deliver(generation: generation) {
-                        onNotice("输入过长，已分 \(chunking.chunks.count) 段处理")
-                    }
-                }
-
-                _ = try await promptRunner.run(
-                    template: template,
-                    chunks: chunking.chunks,
-                    provider: provider,
-                    apiKey: apiKey,
-                    enableStreaming: enableStreaming,
-                    mode: mode,
-                    onActivity: { activity in
-                        await self.deliver(generation: generation) {
-                            onActivity(activity)
-                        }
-                    },
-                    onUpdate: { partial in
-                        await self.deliver(generation: generation) {
-                            onPartialResult(partial)
-                        }
-                    }
-                )
-
-                await deliver(generation: generation) {
-                    onFinished(.success(()))
-                }
+                let value = try await body(deliver)
+                await deliver { onFinished(.success(value)) }
             } catch is CancellationError {
-                await deliver(generation: generation) {
-                    onFinished(.success(()))
-                }
+                await deliver { onFinished(.success(cancelledValue)) }
             } catch {
-                await deliver(generation: generation) {
-                    onFinished(.failure(error))
-                }
+                await deliver { onFinished(.failure(error)) }
             }
         }
     }
 
-    private func deliver(generation: Int, _ body: () -> Void) async {
+    private func deliver(generation: Int, _ body: @MainActor () -> Void) async {
         await MainActor.run {
             guard runGeneration == generation else { return }
             body()

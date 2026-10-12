@@ -3,7 +3,13 @@ import Foundation
 import WhyTextCore
 
 final class SettingsStore: ObservableObject {
-    static let defaultTranslatePromptTemplate = "把下面的英文翻译成简体中文。只输出译文。\n\n{{text}}"
+    static let defaultTranslatePromptTemplate = "把下面的文字翻译成{{target}}。只输出译文。\n\n{{text}}"
+
+    /// Earlier translate defaults, upgraded the same way as the explain ones.
+    static let legacyTranslatePromptTemplates = [
+        // Before automatic direction: always English → Simplified Chinese.
+        "把下面的英文翻译成简体中文。只输出译文。\n\n{{text}}",
+    ]
     static let defaultExplainPromptTemplate = """
         我在读下面这段文字，想弄懂它在说什么。请用白话把内容讲清楚。
 
@@ -79,6 +85,10 @@ final class SettingsStore: ObservableObject {
     @Published var splitLongInput: Bool
     @Published var autoPopupOnSelection: Bool
     @Published var translationFontSize: Double
+    /// Translation target for text in any other language.
+    @Published var primaryLanguage: TranslationLanguage
+    /// Translation target for text already in the primary language.
+    @Published var secondaryLanguage: TranslationLanguage
 
     private var cancellables = Set<AnyCancellable>()
     private var persistWorkItem: DispatchWorkItem?
@@ -118,6 +128,8 @@ final class SettingsStore: ObservableObject {
             self.splitLongInput = decoded.splitLongInput
             self.autoPopupOnSelection = decoded.autoPopupOnSelection
             self.translationFontSize = decoded.translationFontSize
+            self.primaryLanguage = decoded.primaryLanguage
+            self.secondaryLanguage = decoded.secondaryLanguage
 
             if self.translatePromptTemplate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 self.translatePromptTemplate = Self.defaultTranslatePromptTemplate
@@ -125,6 +137,14 @@ final class SettingsStore: ObservableObject {
 
             if self.explainPromptTemplate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 self.explainPromptTemplate = Self.defaultExplainPromptTemplate
+            }
+
+            let translate = self.translatePromptTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
+            if Self.legacyTranslatePromptTemplates.contains(where: {
+                $0.trimmingCharacters(in: .whitespacesAndNewlines) == translate
+            }) {
+                self.translatePromptTemplate = Self.defaultTranslatePromptTemplate
+                schedulePersist()
             }
 
             let explain = self.explainPromptTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -176,6 +196,8 @@ final class SettingsStore: ObservableObject {
             self.splitLongInput = true
             self.autoPopupOnSelection = true
             self.translationFontSize = 16
+            self.primaryLanguage = .simplifiedChinese
+            self.secondaryLanguage = .english
         }
 
         bindAutoSave()
@@ -278,6 +300,16 @@ final class SettingsStore: ObservableObject {
             .dropFirst()
             .sink { [weak self] _ in self?.schedulePersist() }
             .store(in: &cancellables)
+
+        $primaryLanguage
+            .dropFirst()
+            .sink { [weak self] _ in self?.schedulePersist() }
+            .store(in: &cancellables)
+
+        $secondaryLanguage
+            .dropFirst()
+            .sink { [weak self] _ in self?.schedulePersist() }
+            .store(in: &cancellables)
     }
 
     private func schedulePersist() {
@@ -302,7 +334,9 @@ final class SettingsStore: ObservableObject {
             maxInputCharacters: maxInputCharacters,
             splitLongInput: splitLongInput,
             autoPopupOnSelection: autoPopupOnSelection,
-            translationFontSize: translationFontSize
+            translationFontSize: translationFontSize,
+            primaryLanguage: primaryLanguage,
+            secondaryLanguage: secondaryLanguage
         )
         guard let data = try? JSONEncoder().encode(settings) else { return }
         UserDefaults.standard.set(data, forKey: userDefaultsKey)
@@ -340,6 +374,8 @@ private struct PersistedSettings: Codable {
     var splitLongInput: Bool
     var autoPopupOnSelection: Bool
     var translationFontSize: Double
+    var primaryLanguage: TranslationLanguage
+    var secondaryLanguage: TranslationLanguage
 
     init(
         providers: [LLMProvider],
@@ -351,7 +387,9 @@ private struct PersistedSettings: Codable {
         maxInputCharacters: Int,
         splitLongInput: Bool,
         autoPopupOnSelection: Bool,
-        translationFontSize: Double
+        translationFontSize: Double,
+        primaryLanguage: TranslationLanguage,
+        secondaryLanguage: TranslationLanguage
     ) {
         self.providers = providers
         self.selectedProviderID = selectedProviderID
@@ -363,6 +401,8 @@ private struct PersistedSettings: Codable {
         self.splitLongInput = splitLongInput
         self.autoPopupOnSelection = autoPopupOnSelection
         self.translationFontSize = translationFontSize
+        self.primaryLanguage = primaryLanguage
+        self.secondaryLanguage = secondaryLanguage
     }
 
     init(from decoder: Decoder) throws {
@@ -378,6 +418,9 @@ private struct PersistedSettings: Codable {
         self.splitLongInput = try container.decodeIfPresent(Bool.self, forKey: .splitLongInput) ?? true
         self.autoPopupOnSelection = try container.decodeIfPresent(Bool.self, forKey: .autoPopupOnSelection) ?? true
         self.translationFontSize = try container.decodeIfPresent(Double.self, forKey: .translationFontSize) ?? 16
+        // Unknown codes (e.g. from a newer build) fall back rather than wiping all settings.
+        self.primaryLanguage = (try? container.decodeIfPresent(TranslationLanguage.self, forKey: .primaryLanguage)) ?? .simplifiedChinese
+        self.secondaryLanguage = (try? container.decodeIfPresent(TranslationLanguage.self, forKey: .secondaryLanguage)) ?? .english
     }
 }
 

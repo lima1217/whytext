@@ -26,6 +26,12 @@ Use this checklist before replacing the local app in `/Applications`.
 - Confirm the bubble appears near the selection when the app provides selection bounds, and still appears near the mouse as fallback.
 - Confirm the result panel has rounded lower corners.
 - Confirm the copy button copies rich text (bold/headings/lists) into Notes/Pages, with plain-text fallback.
+- Translate English text and confirm the title shows → 简体中文; translate Chinese text and confirm → English.
+- Pick another language from the → menu and confirm it retranslates; change 母语 / 第二语言 in 通用 and confirm the direction follows.
+- Switch 翻译 / 解释 in the panel and confirm it reruns on the same selection.
+- Expand 原文 and confirm the panel grows; collapse it again.
+- Ask a follow-up question (Return sends, Esc closes the panel); confirm the answer uses the earlier result as context and copy includes it.
+- Click outside the panel and confirm it closes; pin it, click outside, and confirm it stays open.
 
 ## Failure Cases
 

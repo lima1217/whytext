@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import WhyTextCore
 
 struct GeneralSettingsView: View {
     @EnvironmentObject private var appModel: AppModel
@@ -10,6 +11,7 @@ struct GeneralSettingsView: View {
             overviewCard
             shortcutCard
             behaviorCard
+            languageCard
             translationWindowCard
             accessibilityCard
         }
@@ -53,6 +55,28 @@ struct GeneralSettingsView: View {
             HStack(alignment: .firstTextBaseline) {
                 Toggle("选中文本后显示操作气泡", isOn: $appModel.settingsStore.autoPopupOnSelection)
                 Spacer()
+            }
+        }
+    }
+
+    // MARK: - Language
+
+    private var languageCard: some View {
+        SettingsCard("翻译方向", subtitle: "自动判断原文语言：已是母语的译成第二语言，其他语言一律译成母语。结果窗口里也可以临时改选。") {
+            VStack(alignment: .leading, spacing: SettingsUI.fieldSpacing) {
+                Picker("母语", selection: $appModel.settingsStore.primaryLanguage) {
+                    ForEach(TranslationLanguage.allCases) { language in
+                        Text(language.displayName).tag(language)
+                    }
+                }
+
+                Picker("第二语言", selection: $appModel.settingsStore.secondaryLanguage) {
+                    ForEach(TranslationLanguage.allCases) { language in
+                        Text(language.displayName).tag(language)
+                    }
+                }
+
+                CaptionText(text: "翻译提示词里的 {{target}} 会替换成本次的目标语言。")
             }
         }
     }

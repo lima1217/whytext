@@ -10,6 +10,8 @@ final class AppModel: ObservableObject {
     @Published var selectionDiagnosticsTextPreview: String = ""
     @Published var selectionDiagnosticsUpdatedAt: Date?
     @Published var selectionDiagnosticsPending: Bool = false
+    /// Pinned panels ignore clicks outside them; persists across panel openings.
+    @Published var isPanelPinned: Bool = false
 
     var settingsStore: SettingsStore
 
@@ -89,6 +91,16 @@ final class AppModel: ObservableObject {
         selectionBubbleController.onExplain = { [weak self] in
             Task { @MainActor in
                 self?.openPanelFromSelectionBubble(action: .explain)
+            }
+        }
+
+        panelController.shouldCloseOnOutsideClick = { [weak self] in
+            self?.isPanelPinned == false
+        }
+
+        panelController.onOutsideClick = { [weak self] in
+            Task { @MainActor in
+                self?.closePanel()
             }
         }
 
@@ -192,12 +204,31 @@ final class AppModel: ObservableObject {
         panelController.close()
     }
 
+    func togglePanelPinned() {
+        isPanelPinned.toggle()
+    }
+
+    /// Re-measure the panel after content changes size outside of streaming.
+    func refitPanel() {
+        panelController.refit(force: true)
+    }
+
+    /// The result plus any follow-up exchanges, as Markdown.
+    private var transcriptMarkdown: String {
+        var parts = [panelState.resultText.trimmingCharacters(in: .whitespacesAndNewlines)]
+        for turn in panelState.followUps where !turn.answer.isEmpty {
+            parts.append("**问：\(turn.question)**")
+            parts.append(turn.answer.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        return parts.joined(separator: "\n\n")
+    }
+
     func copyResultRichTextToPasteboard() {
         guard !panelState.resultText.isEmpty else { return }
 
         let fontSize = CGFloat(settingsStore.translationFontSize)
         let attributed = MarkdownRenderer.pasteboardAttributedString(
-            panelState.resultText,
+            transcriptMarkdown,
             fontSize: fontSize
         )
         let range = NSRange(location: 0, length: attributed.length)
@@ -218,11 +249,29 @@ final class AppModel: ObservableObject {
         pasteboard.writeObjects([item])
     }
 
-    func run(action: PanelAction) {
+    /// `target` overrides the automatic direction for translations.
+    func run(action: PanelAction, target: TranslationLanguage? = nil) {
         guard let preflight = preflightForTranslation() else {
             return
         }
 
+        let targetLanguage: TranslationLanguage
+        switch action {
+        case .translate:
+            targetLanguage = target ?? TranslationDirection.target(
+                for: preflight.selectedText,
+                primary: settingsStore.primaryLanguage,
+                secondary: settingsStore.secondaryLanguage
+            )
+        case .explain:
+            // Explanations are for the reader, so a {{target}} in the explain prompt
+            // always means their primary language.
+            targetLanguage = settingsStore.primaryLanguage
+        }
+
+        panelState.targetLanguage = action == .translate ? targetLanguage : nil
+        panelState.conversation = []
+        panelState.followUps = []
         panelState.lastAction = action
         panelState.lastInputText = preflight.selectedText
         panelState.phase = .result
@@ -248,6 +297,7 @@ final class AppModel: ObservableObject {
             mode: action.translationMode,
             template: template,
             selectedText: preflight.selectedText,
+            targetLanguage: targetLanguage,
             provider: preflight.provider,
             apiKey: preflight.apiKey,
             maxInputCharacters: settingsStore.maxInputCharacters,
@@ -269,7 +319,10 @@ final class AppModel: ObservableObject {
                 guard let self else { return }
                 self.panelState.isLoading = false
                 self.panelState.activity = nil
-                if case .failure(let error) = result {
+                switch result {
+                case .success(let conversation):
+                    self.panelState.conversation = conversation
+                case .failure(let error):
                     self.panelState.errorMessage = TranslationErrorPresenter.userFacingMessage(for: error)
                     self.panelState.errorNeedsSettings = TranslationErrorPresenter.needsSettings(for: error)
                 }
@@ -280,7 +333,83 @@ final class AppModel: ObservableObject {
     func retryLastAction() {
         guard let action = panelState.lastAction, let input = panelState.lastInputText else { return }
         panelState.selectedText = input
+        run(action: action, target: panelState.targetLanguage)
+    }
+
+    /// Switch between translate and explain on the same selection.
+    func switchAction(to action: PanelAction) {
+        guard action != panelState.lastAction || panelState.errorMessage != nil else { return }
         run(action: action)
+    }
+
+    func retranslate(to target: TranslationLanguage) {
+        guard target != panelState.targetLanguage else { return }
+        run(action: .translate, target: target)
+    }
+
+    func askFollowUp(_ rawQuestion: String) {
+        let question = rawQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !question.isEmpty, panelState.canAskFollowUp,
+              let action = panelState.lastAction else { return }
+
+        guard let provider = settingsStore.selectedProvider else { return }
+        let apiKey = settingsStore.apiKey(for: provider.id).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !apiKey.isEmpty else { return }
+
+        let history = panelState.conversation
+        let turn = FollowUpTurn(question: question)
+        let turnID = turn.id
+        panelState.followUps.append(turn)
+        panelState.isLoading = true
+        panelState.activity = nil
+        refitPanel()
+
+        func update(_ body: (inout FollowUpTurn) -> Void) {
+            guard let index = panelState.followUps.firstIndex(where: { $0.id == turnID }) else { return }
+            body(&panelState.followUps[index])
+        }
+
+        translationSession.runFollowUp(
+            question: question,
+            history: history,
+            mode: action.translationMode,
+            provider: provider,
+            apiKey: apiKey,
+            enableStreaming: settingsStore.enableStreaming,
+            onActivity: { [weak self] activity in
+                self?.panelState.activity = activity
+            },
+            onPartialResult: { [weak self] partial in
+                guard let self else { return }
+                self.panelState.activity = nil
+                update { $0.answer = partial }
+                self.panelController.refit()
+            },
+            onFinished: { [weak self] result in
+                guard let self else { return }
+                self.panelState.isLoading = false
+                self.panelState.activity = nil
+                switch result {
+                case .success(let answer):
+                    // A cancelled question leaves no answer and stays out of the context.
+                    guard !answer.isEmpty else { return }
+                    update { $0.answer = answer }
+                    self.panelState.conversation = history + [
+                        ConversationMessage(role: .user, content: question),
+                        ConversationMessage(role: .assistant, content: answer),
+                    ]
+                case .failure(let error):
+                    update { $0.errorMessage = TranslationErrorPresenter.userFacingMessage(for: error) }
+                }
+                self.panelController.refit()
+            }
+        )
+    }
+
+    func retryFollowUp(id: FollowUpTurn.ID) {
+        guard let index = panelState.followUps.firstIndex(where: { $0.id == id }) else { return }
+        let question = panelState.followUps.remove(at: index).question
+        askFollowUp(question)
     }
 
     func cancelCurrentRequest() {

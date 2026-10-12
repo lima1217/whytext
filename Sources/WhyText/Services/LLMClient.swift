@@ -18,6 +18,17 @@ enum TranslationErrorCode: String, Codable {
     case unknown
 }
 
+/// One prior turn of a conversation, replayed ahead of a follow-up question.
+struct ConversationMessage: Equatable {
+    enum Role: String {
+        case user
+        case assistant
+    }
+
+    var role: Role
+    var content: String
+}
+
 struct UnifiedTranslationRequest {
     var model: String
     var sourceText: String
@@ -29,6 +40,8 @@ struct UnifiedTranslationRequest {
     var includeStructureHint: Bool = true
     /// Ask the provider to run server-side web search when it supports it.
     var enableWebSearch: Bool = false
+    /// Earlier turns sent before this request's prompt (follow-up questions).
+    var history: [ConversationMessage] = []
 
     /// The default explain prompt's search sentence. Providers without
     /// server-side search get it stripped so the model never pretends to search.
@@ -37,10 +50,13 @@ struct UnifiedTranslationRequest {
     func renderedPrompt(supportsWebSearch: Bool) -> String {
         let basePrompt: String
 
-        if promptTemplate.contains("{{text}}") {
-            basePrompt = promptTemplate.replacingOccurrences(of: "{{text}}", with: sourceText)
+        // Substitute {{target}} first so a literal "{{target}}" in the source text survives.
+        let template = promptTemplate.replacingOccurrences(of: "{{target}}", with: targetLanguage)
+
+        if template.contains("{{text}}") {
+            basePrompt = template.replacingOccurrences(of: "{{text}}", with: sourceText)
         } else {
-            let trimmed = promptTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmed = template.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty {
                 basePrompt = sourceText
             } else {
@@ -520,14 +536,14 @@ private enum ProviderAdapter {
             case .chatCompletions:
                 let body = ChatCompletionsRequest(
                     model: request.model,
-                    messages: [ChatMessage(role: "user", content: request.renderedPrompt(supportsWebSearch: false))],
+                    messages: Self.chatMessages(for: request),
                     stream: stream
                 )
                 return try JSONEncoder().encode(body)
             case .responses:
                 let body = ResponsesRequest(
                     model: request.model,
-                    input: request.renderedPrompt(supportsWebSearch: false),
+                    input: Self.responsesInput(for: request, supportsWebSearch: false),
                     stream: stream
                 )
                 return try JSONEncoder().encode(body)
@@ -547,7 +563,7 @@ private enum ProviderAdapter {
             }
             let body = ChatCompletionsRequest(
                 model: request.model,
-                messages: [ChatMessage(role: "user", content: request.renderedPrompt(supportsWebSearch: false))],
+                messages: Self.chatMessages(for: request),
                 temperature: 0.2,
                 stream: stream,
                 thinking: thinking
@@ -559,13 +575,29 @@ private enum ProviderAdapter {
             let effort = request.mode == .explain ? "high" : "none"
             let body = ResponsesRequest(
                 model: request.model,
-                input: request.renderedPrompt(supportsWebSearch: true),
+                input: Self.responsesInput(for: request, supportsWebSearch: true),
                 stream: stream,
                 reasoning: ReasoningConfig(effort: effort),
                 tools: request.enableWebSearch ? [ResponsesTool(type: "web_search")] : nil
             )
             return try JSONEncoder().encode(body)
         }
+    }
+
+    private static func chatMessages(for request: UnifiedTranslationRequest) -> [ChatMessage] {
+        request.history.map { ChatMessage(role: $0.role.rawValue, content: $0.content) }
+            + [ChatMessage(role: "user", content: request.renderedPrompt(supportsWebSearch: false))]
+    }
+
+    private static func responsesInput(for request: UnifiedTranslationRequest, supportsWebSearch: Bool) -> ResponsesInput {
+        let prompt = request.renderedPrompt(supportsWebSearch: supportsWebSearch)
+        guard !request.history.isEmpty else {
+            return .text(prompt)
+        }
+        return .messages(
+            request.history.map { ChatMessage(role: $0.role.rawValue, content: $0.content) }
+                + [ChatMessage(role: "user", content: prompt)]
+        )
     }
 
     private static func supportsThinkingToggle(baseURL: String) -> Bool {
@@ -662,9 +694,25 @@ private struct ChatCompletionsResponse: Decodable {
     var choices: [Choice]
 }
 
+/// Responses API `input`: a bare prompt, or role-tagged messages for multi-turn.
+private enum ResponsesInput: Encodable {
+    case text(String)
+    case messages([ChatMessage])
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .text(let text):
+            try container.encode(text)
+        case .messages(let messages):
+            try container.encode(messages)
+        }
+    }
+}
+
 private struct ResponsesRequest: Encodable {
     var model: String
-    var input: String
+    var input: ResponsesInput
     var stream: Bool?
     var reasoning: ReasoningConfig?
     var tools: [ResponsesTool]?

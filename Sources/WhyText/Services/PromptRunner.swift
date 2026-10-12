@@ -15,6 +15,8 @@ final class PromptRunner {
         apiKey: String,
         enableStreaming: Bool,
         mode: TranslationMode = .translate,
+        targetLanguage: String = "auto",
+        history: [ConversationMessage] = [],
         onActivity: @escaping (LLMActivity) async -> Void = { _ in },
         onUpdate: @escaping (String) async -> Void
     ) async throws -> String {
@@ -40,7 +42,9 @@ final class PromptRunner {
                 text: chunk,
                 model: provider.model,
                 stream: enableStreaming,
-                mode: mode
+                mode: mode,
+                targetLanguage: targetLanguage,
+                history: history
             )
 
             if idx > 0 {
@@ -105,23 +109,47 @@ final class PromptRunner {
         return trimmed
     }
 
+    /// The user turn a follow-up conversation replays: the whole input in one prompt,
+    /// even when the original run was split into chunks.
+    func transcriptPrompt(
+        template: String,
+        text: String,
+        mode: TranslationMode,
+        targetLanguage: String
+    ) -> String {
+        buildRequest(
+            template: template,
+            text: text,
+            model: "",
+            stream: false,
+            mode: mode,
+            targetLanguage: targetLanguage,
+            history: []
+        )
+        .renderedPrompt(supportsWebSearch: false)
+    }
+
     private func buildRequest(
         template: String,
         text: String,
         model: String,
         stream: Bool,
-        mode: TranslationMode
+        mode: TranslationMode,
+        targetLanguage: String,
+        history: [ConversationMessage]
     ) -> UnifiedTranslationRequest {
         UnifiedTranslationRequest(
             model: model,
             sourceText: text,
             sourceLanguage: "auto",
-            targetLanguage: "auto",
+            targetLanguage: targetLanguage,
             mode: mode,
             promptTemplate: template,
             stream: stream,
-            includeStructureHint: mode == .translate,
-            enableWebSearch: mode == .explain
+            // The paragraph hint is for translating source text, not answering questions.
+            includeStructureHint: mode == .translate && history.isEmpty,
+            enableWebSearch: mode == .explain,
+            history: history
         )
     }
 }

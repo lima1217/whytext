@@ -3,17 +3,22 @@ import SwiftUI
 
 final class FloatingPanelController: NSObject, NSWindowDelegate {
     var onDidClose: (() -> Void)?
+    /// Called for a mouse-down in another app while the panel is open.
+    var onOutsideClick: (() -> Void)?
+    /// Checked before `onOutsideClick`; returning false keeps the panel open (pinned).
+    var shouldCloseOnOutsideClick: () -> Bool = { true }
 
     private var panel: NSPanel?
     private var titlebarAccessory: NSTitlebarAccessoryViewController?
     private var titlebarHostingView: NSHostingView<AnyView>?
     private var mouseOrigin: NSPoint = .zero
     private var isClosingProgrammatically = false
+    private var outsideClickMonitor: Any?
 
     /// Cap the reading column near ~60–75 Latin / ~30–35 CJK glyphs at default body size.
     private let maxWidth: CGFloat = 560
     private let minWidth: CGFloat = 280
-    private let maxHeight: CGFloat = 480
+    private let maxHeight: CGFloat = 560
     private let minHeight: CGFloat = 60
 
     func show<Content: View, Titlebar: View>(
@@ -34,6 +39,7 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
             updateTitlebarAccessory(panel: panel, rootView: titlebarView)
             panel.orderFrontRegardless()
             NSApp.activate(ignoringOtherApps: true)
+            installOutsideClickMonitor()
             return
         }
 
@@ -69,6 +75,26 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         let finalFrame = panel.frame
         PanelChromeMotion.animatePresent(panel: panel, to: finalFrame)
         NSApp.activate(ignoringOtherApps: true)
+        installOutsideClickMonitor()
+    }
+
+    /// A global monitor only sees events bound for other apps, so clicks on the panel,
+    /// the selection bubble, or Settings never close it.
+    private func installOutsideClickMonitor() {
+        guard outsideClickMonitor == nil else { return }
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { [weak self] _ in
+            guard let self, self.isVisible, self.shouldCloseOnOutsideClick() else { return }
+            self.onOutsideClick?()
+        }
+    }
+
+    private func removeOutsideClickMonitor() {
+        if let outsideClickMonitor {
+            NSEvent.removeMonitor(outsideClickMonitor)
+        }
+        outsideClickMonitor = nil
     }
 
     /// Refit the panel to its current content size, keeping the top-left anchored.
@@ -94,6 +120,7 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
 
     func close() {
         let wasVisible = panel != nil
+        removeOutsideClickMonitor()
 
         if let panel {
             isClosingProgrammatically = true
@@ -115,6 +142,7 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        removeOutsideClickMonitor()
         panel = nil
         if !isClosingProgrammatically {
             onDidClose?()

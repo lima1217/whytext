@@ -11,7 +11,7 @@ struct PromptsSettingsView: View {
         SettingsPage {
             PromptTemplateCard(
                 title: "翻译提示词",
-                subtitle: "决定语气、格式与输出边界。模板必须包含 {{text}}，运行时会替换为你选中的原文。",
+                subtitle: "决定语气、格式与输出边界。模板必须包含 {{text}}，运行时会替换为你选中的原文；{{target}} 会替换为自动判断的目标语言（如「英文」「简体中文」）。",
                 template: $appModel.settingsStore.translatePromptTemplate,
                 defaultTemplate: SettingsStore.defaultTranslatePromptTemplate,
                 onReset: {
