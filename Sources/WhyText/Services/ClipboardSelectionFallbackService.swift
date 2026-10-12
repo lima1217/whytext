@@ -6,7 +6,14 @@ import Foundation
 final class ClipboardSelectionFallbackService {
     private struct PasteboardSnapshot {
         var typeData: [NSPasteboard.PasteboardType: Data]
+        /// Multiple copied files (e.g. a Finder selection) live in separate items;
+        /// the flattened `typeData` only keeps the first one.
+        var fileURLs: [URL]
     }
+
+    /// nspasteboard.org convention: clipboard managers skip transient writes,
+    /// so restoring the user's clipboard does not add a duplicate history entry.
+    private static let transientType = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
 
     @MainActor
     func readSelectedTextViaCopy(timeout: TimeInterval = 0.35) async -> String? {
@@ -22,7 +29,10 @@ final class ClipboardSelectionFallbackService {
         guard triggered else { return nil }
 
         defer {
-            restorePasteboardSnapshot(snapshot, to: pasteboard)
+            // Untouched clipboard: rewriting it would only spam clipboard managers.
+            if pasteboard.changeCount != initialChangeCount {
+                restorePasteboardSnapshot(snapshot, to: pasteboard)
+            }
         }
 
         let deadline = Date().addingTimeInterval(timeout)
@@ -167,7 +177,13 @@ final class ClipboardSelectionFallbackService {
             }
         }
 
-        return PasteboardSnapshot(typeData: typeData)
+        // Read before triggering Copy, while nothing else is mutating the pasteboard.
+        let fileURLs = pasteboard.readObjects(
+            forClasses: [NSURL.self],
+            options: [.urlReadingFileURLsOnly: true]
+        ) as? [URL] ?? []
+
+        return PasteboardSnapshot(typeData: typeData, fileURLs: fileURLs)
     }
 
     private func restorePasteboardSnapshot(_ snapshot: PasteboardSnapshot, to pasteboard: NSPasteboard) {
@@ -177,10 +193,22 @@ final class ClipboardSelectionFallbackService {
             return
         }
 
+        if snapshot.fileURLs.count > 1 {
+            let items = snapshot.fileURLs.map { url -> NSPasteboardItem in
+                let item = NSPasteboardItem()
+                item.setString(url.absoluteString, forType: .fileURL)
+                item.setData(Data(), forType: Self.transientType)
+                return item
+            }
+            pasteboard.writeObjects(items)
+            return
+        }
+
         let item = NSPasteboardItem()
         for (type, data) in snapshot.typeData {
             item.setData(data, forType: type)
         }
+        item.setData(Data(), forType: Self.transientType)
 
         pasteboard.writeObjects([item])
     }
