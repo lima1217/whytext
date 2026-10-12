@@ -6,6 +6,8 @@ struct PanelState: Equatable {
     var resultText: String = ""
     var errorMessage: String?
     var noticeMessage: String?
+    /// Thinking / searching before visible text arrives; cleared once text streams.
+    var activity: LLMActivity?
     var lastAction: PanelAction?
     var lastInputText: String?
     var phase: PanelPhase = .choose

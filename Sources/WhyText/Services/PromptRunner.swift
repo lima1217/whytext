@@ -15,9 +15,11 @@ final class PromptRunner {
         apiKey: String,
         enableStreaming: Bool,
         mode: TranslationMode = .translate,
+        onActivity: @escaping (LLMActivity) async -> Void = { _ in },
         onUpdate: @escaping (String) async -> Void
     ) async throws -> String {
         var output = ""
+        var lastActivity: LLMActivity?
         var lastUpdate = Date.distantPast
 
         func maybeUpdate(_ text: String, force: Bool = false) async {
@@ -49,14 +51,22 @@ final class PromptRunner {
             if enableStreaming {
                 var current = ""
                 do {
-                    for try await delta in llmClient.stream(
+                    for try await event in llmClient.stream(
                         request: request,
                         provider: provider,
                         apiKey: apiKey
                     ) {
                         try Task.checkCancellation()
-                        current.append(delta)
-                        await maybeUpdate(output + current)
+                        switch event {
+                        case .text(let delta):
+                            current.append(delta)
+                            lastActivity = nil
+                            await maybeUpdate(output + current)
+                        case .activity(let activity):
+                            guard activity != lastActivity else { continue }
+                            lastActivity = activity
+                            await onActivity(activity)
+                        }
                     }
                     output += current
                 } catch is CancellationError {

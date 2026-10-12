@@ -226,6 +226,7 @@ final class AppModel: ObservableObject {
         panelState.errorMessage = nil
         panelState.noticeMessage = nil
         panelState.isLoading = true
+        panelState.activity = nil
         panelState.resultText = ""
 
         let template: String
@@ -252,7 +253,11 @@ final class AppModel: ObservableObject {
             onNotice: { [weak self] notice in
                 self?.panelState.noticeMessage = notice
             },
+            onActivity: { [weak self] activity in
+                self?.panelState.activity = activity
+            },
             onPartialResult: { [weak self] partial in
+                self?.panelState.activity = nil
                 self?.panelState.resultText = partial
                 self?.panelController.refit(force: !didRefitThisRun)
                 didRefitThisRun = true
@@ -260,6 +265,7 @@ final class AppModel: ObservableObject {
             onFinished: { [weak self] result in
                 guard let self else { return }
                 self.panelState.isLoading = false
+                self.panelState.activity = nil
                 if case .failure(let error) = result {
                     self.panelState.errorMessage = TranslationErrorPresenter.userFacingMessage(for: error)
                 }

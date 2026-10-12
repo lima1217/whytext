@@ -64,6 +64,17 @@ struct UnifiedTranslationRequest {
     private static let structureHint = "保持原文段落结构：原文分几段，译文也分几段；不要合并段落。"
 }
 
+/// What the model is doing before (or between) visible text.
+enum LLMActivity: Equatable {
+    case thinking
+    case searching
+}
+
+enum LLMStreamEvent: Equatable {
+    case text(String)
+    case activity(LLMActivity)
+}
+
 struct UnifiedTranslationResponse {
     var model: String
     var sourceText: String
@@ -170,7 +181,7 @@ final class LLMClient {
         }
     }
 
-    func stream(prompt: String, provider: LLMProvider, apiKey: String) -> AsyncThrowingStream<String, Error> {
+    func stream(prompt: String, provider: LLMProvider, apiKey: String) -> AsyncThrowingStream<LLMStreamEvent, Error> {
         let request = UnifiedTranslationRequest(
             model: provider.model,
             sourceText: prompt,
@@ -185,7 +196,7 @@ final class LLMClient {
         return stream(request: request, provider: provider, apiKey: apiKey)
     }
 
-    func stream(request: UnifiedTranslationRequest, provider: LLMProvider, apiKey: String) -> AsyncThrowingStream<String, Error> {
+    func stream(request: UnifiedTranslationRequest, provider: LLMProvider, apiKey: String) -> AsyncThrowingStream<LLMStreamEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
@@ -240,8 +251,8 @@ final class LLMClient {
                             }
 
                             guard let jsonData = event.data.data(using: .utf8) else { continue }
-                            if let delta = adapter.parseStreamDelta(from: jsonData), !delta.isEmpty {
-                                continuation.yield(delta)
+                            if let streamEvent = try adapter.parseStreamEvent(from: jsonData) {
+                                continuation.yield(streamEvent)
                             }
                         }
                     }
@@ -253,8 +264,8 @@ final class LLMClient {
                             }
 
                             guard let jsonData = event.data.data(using: .utf8) else { continue }
-                            if let delta = adapter.parseStreamDelta(from: jsonData), !delta.isEmpty {
-                                continuation.yield(delta)
+                            if let streamEvent = try adapter.parseStreamEvent(from: jsonData) {
+                                continuation.yield(streamEvent)
                             }
                         }
                     }
@@ -378,6 +389,8 @@ enum LLMError: LocalizedError {
     case emptyOutput
     case remoteError(code: TranslationErrorCode, statusCode: Int, message: String?)
     case transportError(code: TranslationErrorCode, message: String?)
+    /// The provider reported a failure inside an otherwise successful stream.
+    case streamError(message: String)
 
     var errorCode: TranslationErrorCode {
         switch self {
@@ -391,6 +404,8 @@ enum LLMError: LocalizedError {
             code
         case .transportError(let code, _):
             code
+        case .streamError:
+            .unknown
         }
     }
 
@@ -404,6 +419,8 @@ enum LLMError: LocalizedError {
             "模型未返回内容，请重试"
         case .remoteError(let code, _, _), .transportError(let code, _):
             Self.localizedMessage(for: code)
+        case .streamError(let message):
+            "模型返回错误：\(message)"
         }
     }
 
@@ -434,7 +451,7 @@ enum LLMError: LocalizedError {
             case .invalidBaseURL, .network, .emptyResponse, .invalidResponse, .unknown:
                 return [400, 404, 415, 422].contains(statusCode)
             }
-        case .invalidBaseURL, .transportError:
+        case .invalidBaseURL, .transportError, .streamError:
             return false
         }
     }
@@ -577,15 +594,17 @@ private enum ProviderAdapter {
         }
     }
 
-    func parseStreamDelta(from data: Data) -> String? {
+    /// Throws `LLMError.streamError` when the provider reports a failure in-band.
+    func parseStreamEvent(from data: Data) throws -> LLMStreamEvent? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+
         switch self {
         case .chatCompletions:
-            guard let chunk = try? JSONDecoder().decode(ChatCompletionsStreamChunk.self, from: data) else {
-                return nil
-            }
-            return chunk.choices.first?.delta.content
+            return try parseChatCompletionsStreamEvent(json)
         case .responses:
-            return parseResponsesDelta(from: data)
+            return try parseResponsesStreamEvent(json)
         }
     }
 }
@@ -646,18 +665,6 @@ private struct ResponsesRequest: Encodable {
 
 private struct ResponsesTool: Encodable {
     var type: String
-}
-
-private struct ChatCompletionsStreamChunk: Decodable {
-    struct Choice: Decodable {
-        struct Delta: Decodable {
-            var content: String?
-        }
-
-        var delta: Delta
-    }
-
-    var choices: [Choice]
 }
 
 private struct SSEEvent {
@@ -779,18 +786,65 @@ private struct SSEEventParser {
     }
 }
 
-private func parseResponsesDelta(from data: Data) -> String? {
-    guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+private func parseChatCompletionsStreamEvent(_ json: [String: Any]) throws -> LLMStreamEvent? {
+    if let error = json["error"], !(error is NSNull) {
+        throw LLMError.streamError(message: streamErrorMessage(error))
+    }
+
+    guard let choices = json["choices"] as? [[String: Any]],
+          let delta = choices.first?["delta"] as? [String: Any] else {
         return nil
     }
 
-    if let type = json["type"] as? String,
-       type.contains("output_text"),
-       let delta = json["delta"] as? String {
-        return delta
+    if let content = delta["content"] as? String, !content.isEmpty {
+        return .text(content)
+    }
+    // DeepSeek and other reasoning models stream their thinking separately.
+    if let reasoning = delta["reasoning_content"] as? String, !reasoning.isEmpty {
+        return .activity(.thinking)
+    }
+    return nil
+}
+
+private func parseResponsesStreamEvent(_ json: [String: Any]) throws -> LLMStreamEvent? {
+    guard let type = json["type"] as? String else { return nil }
+
+    switch type {
+    case "error":
+        throw LLMError.streamError(message: streamErrorMessage(json["error"] ?? json["message"] ?? json))
+    case "response.failed":
+        let response = json["response"] as? [String: Any]
+        let detail = response?["error"] ?? response?["incomplete_details"] ?? type
+        throw LLMError.streamError(message: streamErrorMessage(detail))
+    case "response.output_item.added":
+        let itemType = (json["item"] as? [String: Any])?["type"] as? String
+        if itemType == "reasoning" { return .activity(.thinking) }
+        if itemType == "web_search_call" { return .activity(.searching) }
+        return nil
+    default:
+        break
     }
 
+    if type.contains("output_text"), let delta = json["delta"] as? String, !delta.isEmpty {
+        return .text(delta)
+    }
+    if type.hasPrefix("response.web_search_call") {
+        return .activity(.searching)
+    }
+    if type.hasPrefix("response.reasoning") {
+        return .activity(.thinking)
+    }
     return nil
+}
+
+private func streamErrorMessage(_ value: Any) -> String {
+    if let dict = value as? [String: Any] {
+        if let message = dict["message"] as? String { return message }
+        if let reason = dict["reason"] as? String { return reason }
+        if let code = dict["code"] as? String { return code }
+    }
+    if let string = value as? String { return string }
+    return String(describing: value)
 }
 
 private func readAll(bytes: URLSession.AsyncBytes, upTo limit: Int) async throws -> Data {

@@ -28,6 +28,7 @@ final class TranslationSession {
         splitLongInput: Bool,
         enableStreaming: Bool,
         onNotice: @escaping (String?) -> Void,
+        onActivity: @escaping (LLMActivity) -> Void,
         onPartialResult: @escaping (String) -> Void,
         onFinished: @escaping (Result<Void, Error>) -> Void
     ) {
@@ -69,6 +70,11 @@ final class TranslationSession {
                     apiKey: apiKey,
                     enableStreaming: enableStreaming,
                     mode: mode,
+                    onActivity: { activity in
+                        await self.deliver(generation: generation) {
+                            onActivity(activity)
+                        }
+                    },
                     onUpdate: { partial in
                         await self.deliver(generation: generation) {
                             onPartialResult(partial)

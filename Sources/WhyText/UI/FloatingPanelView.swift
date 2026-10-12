@@ -417,7 +417,11 @@ struct FloatingPanelTitlebarView: View {
             return "\(actionName)失败"
         }
         if appModel.panelState.isLoading {
-            return "\(actionName)中"
+            switch appModel.panelState.activity {
+            case .thinking: return "思考中"
+            case .searching: return "搜索中"
+            case nil: return "\(actionName)中"
+            }
         }
         return actionName
     }
