@@ -166,7 +166,7 @@ struct FloatingPanelView: View {
             HStack(spacing: Spacing.x2) {
                 Spacer(minLength: 0)
 
-                if isConfigurationError(message) {
+                if appModel.panelState.errorNeedsSettings {
                     Button(action: { appModel.openSettingsWindow() }) {
                         Label("打开设置", systemImage: "gearshape")
                             .labelStyle(.titleAndIcon)
@@ -284,10 +284,6 @@ struct FloatingPanelView: View {
 
     private var canRetry: Bool {
         appModel.panelState.lastAction != nil && appModel.panelState.lastInputText != nil
-    }
-
-    private func isConfigurationError(_ message: String) -> Bool {
-        message.contains("设置") || message.contains("API Key") || message.contains("服务商")
     }
 }
 

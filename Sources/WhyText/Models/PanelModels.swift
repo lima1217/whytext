@@ -5,7 +5,12 @@ struct PanelState: Equatable {
     var selectedText: String = ""
     var isLoading: Bool = false
     var resultText: String = ""
-    var errorMessage: String?
+    var errorMessage: String? {
+        // Each new error starts as not-a-settings-problem; callers opt in after.
+        didSet { errorNeedsSettings = false }
+    }
+    /// The error is fixed in Settings (provider, API key, base URL, permissions).
+    var errorNeedsSettings: Bool = false
     var noticeMessage: String?
     /// Thinking / searching before visible text arrives; cleared once text streams.
     var activity: LLMActivity?

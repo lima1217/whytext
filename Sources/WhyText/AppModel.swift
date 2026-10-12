@@ -142,12 +142,14 @@ final class AppModel: ObservableObject {
     private func openPanelFlow() async {
         var selectedText: String = ""
         var selectionError: String?
+        var selectionErrorNeedsSettings = false
 
         do {
             let selection = try await selectionReader.readSelectedText()
             selectedText = AccessibilitySelectionHelpers.sanitizeSelectedText(selection.text)
         } catch {
             selectionError = TranslationErrorPresenter.userFacingMessage(for: error)
+            selectionErrorNeedsSettings = TranslationErrorPresenter.needsSettings(for: error)
         }
 
         let trimmed = AccessibilitySelectionHelpers.sanitizeSelectedText(selectedText)
@@ -155,6 +157,7 @@ final class AppModel: ObservableObject {
             selectedText: trimmed,
             errorMessage: selectionError ?? (trimmed.isEmpty ? "未读取到选中文本。请先选中一段文字，并确认已授权辅助功能。" : nil)
         )
+        panelState.errorNeedsSettings = selectionErrorNeedsSettings
 
         guard selectionError == nil, !trimmed.isEmpty else {
             return
@@ -268,6 +271,7 @@ final class AppModel: ObservableObject {
                 self.panelState.activity = nil
                 if case .failure(let error) = result {
                     self.panelState.errorMessage = TranslationErrorPresenter.userFacingMessage(for: error)
+                    self.panelState.errorNeedsSettings = TranslationErrorPresenter.needsSettings(for: error)
                 }
             }
         )
@@ -290,12 +294,14 @@ final class AppModel: ObservableObject {
     private func preflightForTranslation() -> TranslationPreflight? {
         guard let provider = settingsStore.selectedProvider else {
             panelState.errorMessage = "请先在设置中添加服务商"
+            panelState.errorNeedsSettings = true
             return nil
         }
 
         let apiKey = settingsStore.apiKey(for: provider.id).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !apiKey.isEmpty else {
             panelState.errorMessage = "请先在设置中填写 API Key"
+            panelState.errorNeedsSettings = true
             return nil
         }
 

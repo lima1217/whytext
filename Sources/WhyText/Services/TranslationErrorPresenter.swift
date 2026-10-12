@@ -1,6 +1,18 @@
 import Foundation
 
 enum TranslationErrorPresenter {
+    /// Errors the user resolves by editing the provider in Settings.
+    static func needsSettings(for error: Error) -> Bool {
+        if case SelectionError.notTrusted = error { return true }
+        guard let llmError = error as? LLMError else { return false }
+        switch llmError.errorCode {
+        case .unauthorized, .noPermission, .invalidBaseURL:
+            return true
+        case .rateLimited, .timeout, .network, .emptyResponse, .invalidResponse, .unknown:
+            return false
+        }
+    }
+
     static func userFacingMessage(for error: Error) -> String {
         if let llmError = error as? LLMError {
             return llmError.localizedDescription
