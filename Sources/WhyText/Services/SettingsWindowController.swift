@@ -33,8 +33,11 @@ final class SettingsWindowController {
             object: window,
             queue: .main
         ) { [weak self] _ in
+            // Bind to a `let` first: older compilers reject capturing the weak
+            // `self` var in the concurrently-executing Task closure.
+            guard let self else { return }
             Task { @MainActor in
-                self?.window = nil
+                self.window = nil
             }
         }
 
