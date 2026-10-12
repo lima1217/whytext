@@ -5,13 +5,15 @@ import WhyTextCore
 final class SettingsStore: ObservableObject {
     static let defaultTranslatePromptTemplate = "把下面的英文翻译成简体中文。只输出译文。\n\n{{text}}"
     static let defaultExplainPromptTemplate = """
-        用白话讲清下面文字的要义。
+        我在读下面这段文字，想弄懂它在说什么。请用白话把内容讲清楚。
 
-        要义：作者实际想表达的意思。忠于原文事实与语气；只写原文能支撑的内容。
+        解释的对象是内容本身：作者在讲什么事、想表达什么观点、凭什么这么说。不讲语言本身：不逐词释义，不谈原文用词、语法，也不谈怎么翻译或为什么这样译。原文是外文时，直接用中文讲它的内容。
+
+        忠于原文事实与语气；只写原文能支撑的内容。
 
         1. 先用一句话点出它在讲什么。
            完成标准：读者不看原文也能抓住主题。
-        2. 再用通俗话补上理解所需的关键点（难词、专名、隐含前提、句子关系）。
+        2. 再补上读懂它需要的关键点：提到的概念、人物或事件指什么，隐含了什么前提，前后怎么推进。
            完成标准：每一句都能回溯到原文；说不清的标成不确定，不当成事实。
         3. 到此为止。
            完成标准：没有延伸议论、背景科普、或「还可以这样理解」。
@@ -20,12 +22,16 @@ final class SettingsStore: ObservableObject {
 
         简体中文；短句；能短则短。
 
+        <text>
         {{text}}
+        </text>
         """
 
-    /// The explain default before server-side search was enabled. Saved copies of
-    /// it upgrade to the current default once, while customized prompts stay put.
-    static let legacyExplainPromptTemplate = """
+    /// Earlier explain defaults. Saved copies upgrade to the current default once,
+    /// while customized prompts stay put.
+    static let legacyExplainPromptTemplates = [
+        // Before server-side search.
+        """
         用白话讲清下面文字的要义。
 
         要义：作者实际想表达的意思。忠于原文事实与语气；只写原文能支撑的内容。
@@ -40,7 +46,28 @@ final class SettingsStore: ObservableObject {
         简体中文；短句；能短则短。
 
         {{text}}
+        """,
+        // With search, but "难词" steered foreign-language input into word
+        // glosses and translation notes instead of explaining the content.
         """
+        用白话讲清下面文字的要义。
+
+        要义：作者实际想表达的意思。忠于原文事实与语气；只写原文能支撑的内容。
+
+        1. 先用一句话点出它在讲什么。
+           完成标准：读者不看原文也能抓住主题。
+        2. 再用通俗话补上理解所需的关键点（难词、专名、隐含前提、句子关系）。
+           完成标准：每一句都能回溯到原文；说不清的标成不确定，不当成事实。
+        3. 到此为止。
+           完成标准：没有延伸议论、背景科普、或「还可以这样理解」。
+
+        拿不准的专名、术语或背景，先搜索，拿到更精确的上下文再解释；搜完仍存疑的，照旧标成不确定。
+
+        简体中文；短句；能短则短。
+
+        {{text}}
+        """,
+    ]
 
     @Published var providers: [LLMProvider]
     @Published var selectedProviderID: UUID?
@@ -100,9 +127,10 @@ final class SettingsStore: ObservableObject {
                 self.explainPromptTemplate = Self.defaultExplainPromptTemplate
             }
 
-            let explain = self.explainPromptTemplate
-            if explain.trimmingCharacters(in: .whitespacesAndNewlines)
-                    == Self.legacyExplainPromptTemplate.trimmingCharacters(in: .whitespacesAndNewlines) {
+            let explain = self.explainPromptTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
+            if Self.legacyExplainPromptTemplates.contains(where: {
+                $0.trimmingCharacters(in: .whitespacesAndNewlines) == explain
+            }) {
                 self.explainPromptTemplate = Self.defaultExplainPromptTemplate
                 schedulePersist()
             }
