@@ -27,8 +27,14 @@ struct UnifiedTranslationRequest {
     var promptTemplate: String
     var stream: Bool
     var includeStructureHint: Bool = true
+    /// Ask the provider to run server-side web search when it supports it.
+    var enableWebSearch: Bool = false
 
-    var renderedPrompt: String {
+    /// The default explain prompt's search sentence. Providers without
+    /// server-side search get it stripped so the model never pretends to search.
+    static let webSearchInstruction = "拿不准的专名、术语或背景，先搜索，拿到更精确的上下文再解释；搜完仍存疑的，照旧标成不确定。"
+
+    func renderedPrompt(supportsWebSearch: Bool) -> String {
         let basePrompt: String
 
         if promptTemplate.contains("{{text}}") {
@@ -42,11 +48,17 @@ struct UnifiedTranslationRequest {
             }
         }
 
+        let prompt = supportsWebSearch && enableWebSearch
+            ? basePrompt
+            : basePrompt
+                .replacingOccurrences(of: Self.webSearchInstruction + "\n\n", with: "")
+                .replacingOccurrences(of: Self.webSearchInstruction, with: "")
+
         guard includeStructureHint else {
-            return basePrompt
+            return prompt
         }
 
-        return "\(Self.structureHint)\n\n\(basePrompt)"
+        return "\(Self.structureHint)\n\n\(prompt)"
     }
 
     private static let structureHint = "保持原文段落结构：原文分几段，译文也分几段；不要合并段落。"
@@ -441,7 +453,7 @@ private enum ProviderAdapter {
             }
             let body = ChatCompletionsRequest(
                 model: request.model,
-                messages: [ChatMessage(role: "user", content: request.renderedPrompt)],
+                messages: [ChatMessage(role: "user", content: request.renderedPrompt(supportsWebSearch: false))],
                 temperature: 0.2,
                 stream: stream,
                 thinking: thinking
@@ -453,9 +465,10 @@ private enum ProviderAdapter {
             let effort = request.mode == .explain ? "high" : "none"
             let body = ResponsesRequest(
                 model: request.model,
-                input: request.renderedPrompt,
+                input: request.renderedPrompt(supportsWebSearch: true),
                 stream: stream,
-                reasoning: ReasoningConfig(effort: effort)
+                reasoning: ReasoningConfig(effort: effort),
+                tools: request.enableWebSearch ? [ResponsesTool(type: "web_search")] : nil
             )
             return try JSONEncoder().encode(body)
         }
@@ -554,6 +567,11 @@ private struct ResponsesRequest: Encodable {
     var input: String
     var stream: Bool?
     var reasoning: ReasoningConfig?
+    var tools: [ResponsesTool]?
+}
+
+private struct ResponsesTool: Encodable {
+    var type: String
 }
 
 private struct ChatCompletionsStreamChunk: Decodable {

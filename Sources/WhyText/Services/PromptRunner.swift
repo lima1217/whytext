@@ -108,7 +108,8 @@ final class PromptRunner {
             mode: mode,
             promptTemplate: template,
             stream: stream,
-            includeStructureHint: mode == .translate
+            includeStructureHint: mode == .translate,
+            enableWebSearch: mode == .explain
         )
     }
 }

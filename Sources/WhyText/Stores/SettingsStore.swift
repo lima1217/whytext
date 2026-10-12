@@ -16,7 +16,7 @@ final class SettingsStore: ObservableObject {
         3. 到此为止。
            完成标准：没有延伸议论、背景科普、或「还可以这样理解」。
 
-        拿不准的专名、术语或背景，先搜索，拿到更精确的上下文再解释；搜完仍存疑的，照旧标成不确定。
+        \(UnifiedTranslationRequest.webSearchInstruction)
 
         简体中文；短句；能短则短。
 
