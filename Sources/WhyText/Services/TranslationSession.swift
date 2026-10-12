@@ -44,10 +44,12 @@ final class TranslationSession {
             }
 
             do {
+                // Explanations summarize the whole passage; per-chunk runs would
+                // repeat the "one-line gist" step once per chunk, so truncate instead.
                 let chunking = TextChunker.chunk(
                     text: selectedText,
                     maxCharacters: maxInputCharacters,
-                    splitLongInput: splitLongInput
+                    splitLongInput: splitLongInput && mode == .translate
                 )
 
                 if chunking.wasTruncated {
