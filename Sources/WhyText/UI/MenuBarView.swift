@@ -56,9 +56,7 @@ struct MenuBarView: View {
         Divider()
 
         if let update = appModel.updateChecker.availableUpdate {
-            Button(L10n.f("有新版本 %@，前往下载…", update.version.description)) {
-                appModel.updateChecker.openDownloadPage()
-            }
+            updateMenuItem(update)
         }
 
         Button(L10n.t("设置…")) {
@@ -70,6 +68,33 @@ struct MenuBarView: View {
             NSApp.terminate(nil)
         }
         .keyboardShortcut("q", modifiers: .command)
+    }
+
+    @ViewBuilder
+    private func updateMenuItem(_ update: UpdateChecker.AvailableUpdate) -> some View {
+        let checker = appModel.updateChecker
+        switch checker.installState {
+        case .downloading(let fraction):
+            Button(L10n.f("正在下载更新（%@）…", "\(Int(fraction * 100))%")) {}
+                .disabled(true)
+        case .installing:
+            Button(L10n.t("正在安装更新…")) {}
+                .disabled(true)
+        case .failed:
+            Button(L10n.t("更新失败，前往下载页…")) {
+                checker.openDownloadPage()
+            }
+        case .idle:
+            if checker.canInstallUpdate {
+                Button(L10n.f("更新到 %@…", update.version.description)) {
+                    checker.installUpdate()
+                }
+            } else {
+                Button(L10n.f("有新版本 %@，前往下载…", update.version.description)) {
+                    checker.openDownloadPage()
+                }
+            }
+        }
     }
 
     private var ocrMenuTitle: String {

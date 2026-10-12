@@ -232,7 +232,7 @@ struct GeneralSettingsView: View {
     private var updatesCard: some View {
         let checker = appModel.updateChecker
 
-        return SettingsCard(L10n.t("更新"), subtitle: L10n.t("从 GitHub Releases 查询最新版本；有新版本时菜单栏会提示，下载和安装需要手动完成。")) {
+        return SettingsCard(L10n.t("更新"), subtitle: L10n.t("从 GitHub Releases 查询最新版本。点「立即更新」会下载新版本、确认签名与当前 App 一致后替换并自动重启。")) {
             VStack(alignment: .leading, spacing: SettingsUI.fieldSpacing) {
                 HStack(alignment: .firstTextBaseline) {
                     Toggle(L10n.t("每天自动检查更新"), isOn: $appModel.settingsStore.autoCheckForUpdates)
@@ -250,10 +250,18 @@ struct GeneralSettingsView: View {
                     .disabled(checker.status == .checking)
 
                     if checker.availableUpdate != nil {
-                        Button(L10n.t("前往下载")) {
+                        if checker.canInstallUpdate {
+                            Button(L10n.t("立即更新")) {
+                                checker.installUpdate()
+                            }
+                            .buttonStyle(.quiet(tint: Color.accentColor))
+                            .disabled(checker.isInstalling)
+                        }
+
+                        Button(checker.canInstallUpdate ? L10n.t("查看更新内容") : L10n.t("前往下载")) {
                             checker.openDownloadPage()
                         }
-                        .buttonStyle(.quiet(tint: Color.accentColor))
+                        .buttonStyle(checker.canInstallUpdate ? .quiet : .quiet(tint: Color.accentColor))
                     }
 
                     if let statusText = updateStatusText(checker) {
@@ -267,6 +275,17 @@ struct GeneralSettingsView: View {
     }
 
     private func updateStatusText(_ checker: UpdateChecker) -> String? {
+        switch checker.installState {
+        case .downloading(let fraction):
+            return L10n.f("正在下载更新（%@）…", "\(Int(fraction * 100))%")
+        case .installing:
+            return L10n.t("正在安装更新…")
+        case .failed(let message):
+            return L10n.f("更新失败：%@", message)
+        case .idle:
+            break
+        }
+
         switch checker.status {
         case .idle, .checking:
             return nil

@@ -2,14 +2,22 @@ import AppKit
 import Foundation
 import WhyTextCore
 
-/// Compares the running version with the latest GitHub release. It only tells the
-/// user; downloading and installing stay manual (the app isn't notarized, so a
-/// silent self-update would trip Gatekeeper anyway).
+/// Compares the running version with the latest GitHub release and, on request,
+/// installs it in place (see `UpdateInstaller`). Nothing is installed without a click.
 @MainActor
 final class UpdateChecker: ObservableObject {
     struct AvailableUpdate: Equatable {
         var version: SemanticVersion
         var pageURL: URL
+        /// The release's `WhyText-<version>-mac.zip`, if it has one.
+        var downloadURL: URL?
+    }
+
+    enum InstallState: Equatable {
+        case idle
+        case downloading(Double)
+        case installing
+        case failed(String)
     }
 
     enum Status: Equatable {
@@ -27,12 +35,14 @@ final class UpdateChecker: ObservableObject {
     @Published private(set) var availableUpdate: AvailableUpdate?
     @Published private(set) var status: Status = .idle
     @Published private(set) var lastCheckedAt: Date?
+    @Published private(set) var installState: InstallState = .idle
 
     /// Nil for unbundled development builds, which never check automatically.
     let currentVersion: SemanticVersion? = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String)
         .flatMap(SemanticVersion.init)
 
     private let session: URLSession
+    private let installer = UpdateInstaller()
     private var timer: Timer?
 
     init(session: URLSession = .shared) {
@@ -67,7 +77,12 @@ final class UpdateChecker: ObservableObject {
             let release = try await fetchLatestRelease()
             lastCheckedAt = Date()
             if let latest = SemanticVersion(release.tag_name), latest > currentVersion {
-                availableUpdate = AvailableUpdate(version: latest, pageURL: release.html_url)
+                let asset = release.assets.first { $0.name.hasPrefix("WhyText-") && $0.name.hasSuffix("-mac.zip") }
+                availableUpdate = AvailableUpdate(
+                    version: latest,
+                    pageURL: release.html_url,
+                    downloadURL: asset?.browser_download_url
+                )
                 status = .updateAvailable
             } else {
                 availableUpdate = nil
@@ -82,9 +97,53 @@ final class UpdateChecker: ObservableObject {
         NSWorkspace.shared.open(availableUpdate?.pageURL ?? Self.releasesPageURL)
     }
 
+    /// Whether the available update can be installed with one click; otherwise the
+    /// UI offers the download page.
+    var canInstallUpdate: Bool {
+        availableUpdate?.downloadURL != nil && installer.canInstallInPlace
+    }
+
+    var isInstalling: Bool {
+        switch installState {
+        case .downloading, .installing: true
+        case .idle, .failed: false
+        }
+    }
+
+    /// Downloads, verifies, and installs the available update, then relaunches.
+    func installUpdate() {
+        guard !isInstalling, let update = availableUpdate else { return }
+        guard let downloadURL = update.downloadURL, installer.canInstallInPlace else {
+            openDownloadPage()
+            return
+        }
+
+        installState = .downloading(0)
+        Task {
+            do {
+                try await installer.install(version: update.version, from: downloadURL) { fraction in
+                    Task { @MainActor [weak self] in
+                        guard let self, case .downloading = self.installState else { return }
+                        self.installState = fraction >= 1 ? .installing : .downloading(fraction)
+                    }
+                }
+                installState = .installing
+                installer.relaunch()
+            } catch {
+                installState = .failed(error.localizedDescription)
+            }
+        }
+    }
+
     private struct Release: Decodable {
+        struct Asset: Decodable {
+            var name: String
+            var browser_download_url: URL
+        }
+
         var tag_name: String
         var html_url: URL
+        var assets: [Asset]
     }
 
     private func fetchLatestRelease() async throws -> Release {

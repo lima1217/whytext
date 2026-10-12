@@ -43,7 +43,7 @@ xcode-select --install
    - macOS 15 and later: open it once, then go to System Settings → Privacy & Security and click "Open Anyway" near the bottom.
    - macOS 13 / 14: in Finder, right-click `WhyText.app` → Open, then click Open.
    - Or run `xattr -dr com.apple.quarantine /Applications/WhyText.app` in Terminal and open it normally.
-3. Updates: when a new version is out, the menu bar shows "有新版本…"; it opens the download page. Replace the app in Applications; settings and API keys are kept. If selected text stops being read afterwards, remove WhyText from System Settings → Privacy & Security → Accessibility and add it again.
+3. Updates: from 0.4.1 on, when a new version is out the menu bar shows "Update to x.x.x…". One click downloads it, verifies it, and relaunches into the new version; settings and API keys are kept. WhyText only installs builds signed with the same certificate as the running app. If it can't update in place (for example, the app isn't in a writable folder), it opens the download page instead and you replace the app in Applications yourself. Versions 0.4.0 and earlier need one manual update. If selected text stops being read afterwards, remove WhyText from System Settings → Privacy & Security → Accessibility and add it again.
 
 ## Quick Start
 
@@ -97,7 +97,7 @@ The build script signs with a `Developer ID Application` or `Apple Development` 
 - API keys: stored in macOS Keychain.
 - Other settings: stored in `UserDefaults`.
 - Screenshot translation: needs Screen Recording permission. The screenshot is only used for on-device text recognition and deleted right after; only the recognized text is sent to your provider.
-- Update check: with daily update checks on, WhyText asks the GitHub API for the latest version number once a day and sends nothing else.
+- Update check: with daily update checks on, WhyText asks the GitHub API for the latest version number once a day and sends nothing else. It downloads an update from GitHub only when you click to install it.
 - Recent results: up to 50, stored in `~/Library/Application Support/<bundle ID>/recent-results.json`; turn off or clear in Settings.
 - No built-in third-party telemetry.
 

@@ -41,6 +41,7 @@ Use this checklist before replacing the local app in `/Applications`.
 - Use 截图翻译… from the menu bar (and the shortcut, if set): the first time, the Screen Recording prompt appears and the panel offers 打开系统设置. After granting and relaunching, drag a region with text and confirm it's recognized and translated; Esc cancels without opening the panel.
 - In 通用 → 界面语言, switch through 繁體中文 / English / 日本語 / 한국어 with Settings open: every tab, the window title, the menu bar menu, and the panel follow immediately. 跟随系统 matches the macOS language (English if unsupported).
 - Set a shortcut to ⌘Space: a yellow note says macOS uses it. Set 截图翻译 to the same combination as the main shortcut: a red note says they're the same, and the menu bar shows 快捷键需要处理.
+- One-click update (needs an older installed version and a newer release): 更新到 x.x.x… in the menu bar (or 立即更新 in Settings) shows download progress, then WhyText quits and reopens as the new version from the same location. A copy run from a read-only folder or Downloads (translocated) offers the download page instead.
 - In 通用 → 更新, click 立即检查 and confirm it reports 已是最新版本 (or the newer version with 前往下载 when one exists).
 - In the packaged app, toggle 登录时自动启动 and confirm WhyText appears in System Settings → General → Login Items.
 
