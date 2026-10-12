@@ -265,9 +265,13 @@ final class LLMClient {
 
     private static func makeURLSession() -> URLSession {
         let configuration = URLSessionConfiguration.default
-        configuration.waitsForConnectivity = true
-        configuration.timeoutIntervalForRequest = 60
-        configuration.timeoutIntervalForResource = 120
+        // Fail fast when offline instead of silently waiting out the resource timeout.
+        configuration.waitsForConnectivity = false
+        // Per-packet idle limit; reasoning or search can stall the stream for a while.
+        configuration.timeoutIntervalForRequest = 90
+        // Whole-response cap, streaming included. Explain runs high-effort
+        // reasoning plus web search and can legitimately take several minutes.
+        configuration.timeoutIntervalForResource = 300
         configuration.httpMaximumConnectionsPerHost = 4
         return URLSession(configuration: configuration)
     }
