@@ -208,13 +208,25 @@ final class LLMClient {
                     var (bytes, response) = try await session.bytes(for: makeHTTPRequest(startMinimal))
                     try Task.checkCancellation()
 
+                    var usedMinimal = startMinimal
                     if !startMinimal, (response as? HTTPURLResponse)?.statusCode == 400 {
                         bytes.task.cancel()
+                        usedMinimal = true
                         (bytes, response) = try await session.bytes(for: makeHTTPRequest(true))
                         try Task.checkCancellation()
                         if let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
                             markUsesMinimalParameters(key)
                         }
+                    }
+
+                    // Same one-shot gateway retry as the non-streaming path.
+                    if allowsTransientRetry,
+                       let status = (response as? HTTPURLResponse)?.statusCode,
+                       Self.transientStatusCodes.contains(status) {
+                        bytes.task.cancel()
+                        try await Task.sleep(nanoseconds: 250_000_000)
+                        (bytes, response) = try await session.bytes(for: makeHTTPRequest(usedMinimal))
+                        try Task.checkCancellation()
                     }
 
                     guard let http = response as? HTTPURLResponse else {
@@ -275,6 +287,8 @@ final class LLMClient {
         }
     }
 
+    private static let transientStatusCodes: Set<Int> = [502, 503, 504]
+
     private func parameterCompatibilityKey(_ provider: LLMProvider) -> String {
         "\(provider.apiMode)|\(provider.baseURL)|\(provider.model)"
     }
@@ -305,7 +319,7 @@ final class LLMClient {
 
         guard allowsTransientRetry,
               let http = response as? HTTPURLResponse,
-              [502, 503, 504].contains(http.statusCode) else {
+              Self.transientStatusCodes.contains(http.statusCode) else {
             return (data, response)
         }
 
