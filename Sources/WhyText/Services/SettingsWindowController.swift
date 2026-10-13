@@ -25,16 +25,20 @@ final class SettingsWindowController {
 
         let hosting = NSHostingView(rootView: rootView)
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 760, height: 520),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            contentRect: NSRect(x: 0, y: 0, width: 820, height: 600),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = Self.title
+        // The sidebar runs to the top edge; each page draws its own title.
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.contentMinSize = NSSize(width: 760, height: 520)
         window.isReleasedWhenClosed = false
         window.center()
         window.contentView = hosting
-        window.setFrameAutosaveName("WhyText.SettingsWindow")
+        window.setFrameAutosaveName("WhyText.SettingsWindow.v2")
 
         NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification,

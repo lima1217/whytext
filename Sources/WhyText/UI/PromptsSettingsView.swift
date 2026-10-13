@@ -9,7 +9,7 @@ struct PromptsSettingsView: View {
     @EnvironmentObject private var appModel: AppModel
 
     var body: some View {
-        SettingsPage {
+        SettingsPage(.prompts) {
             PromptTemplateCard(
                 title: L10n.t("翻译提示词"),
                 subtitle: L10n.t("决定语气、格式与输出边界。模板必须包含 {{text}}，运行时会替换为你选中的原文；{{target}} 会替换为自动判断的目标语言（如「英文」「简体中文」）。"),
@@ -41,58 +41,45 @@ private struct PromptTemplateCard: View {
     let onReset: () -> Void
 
     var body: some View {
-        SettingsCard(title, subtitle: subtitle) {
-            VStack(alignment: .leading, spacing: SettingsUI.fieldSpacing) {
-                HStack {
-                    StatusBadge(
-                        text: hasPlaceholder ? L10n.t("占位符有效") : L10n.t("缺少 {{text}}"),
-                        tone: hasPlaceholder ? .success : .danger
-                    )
+        Section {
+            editor
 
-                    Spacer()
+            HStack(spacing: Spacing.x2) {
+                StatusBadge(
+                    text: hasPlaceholder ? L10n.t("占位符有效") : L10n.t("缺少 {{text}}"),
+                    tone: hasPlaceholder ? .success : .danger
+                )
+
+                Text(L10n.f("%@ 字符", String(templateCharacterCount)))
+                    .font(AstryxFont.captionM)
+                    .monospacedDigit()
+                    .foregroundStyle(AstryxColor.textSecondary)
+
+                Spacer()
+
+                Button(L10n.t("插入 {{text}}")) {
+                    insertTextPlaceholder()
                 }
+                .disabled(hasPlaceholder)
 
-                editor
-
-                HStack(spacing: Spacing.x2_5) {
-                    Text(L10n.f("%@ 字符", String(templateCharacterCount)))
-                        .font(AstryxFont.captionM)
-                        .monospacedDigit()
-                        .foregroundStyle(AstryxColor.textSecondary)
-
-                    Spacer()
-
-                    Button(L10n.t("插入 {{text}}")) {
-                        insertTextPlaceholder()
-                    }
-                    .buttonStyle(.quiet)
-
-                    Button(L10n.t("恢复默认")) {
-                        onReset()
-                    }
-                    .buttonStyle(.quiet)
-                    .disabled(isDefaultTemplate)
+                Button(L10n.t("恢复默认")) {
+                    onReset()
                 }
+                .disabled(isDefaultTemplate)
             }
+        } header: {
+            Text(title)
+        } footer: {
+            SettingsFooter(subtitle)
         }
     }
 
     private var editor: some View {
         TextEditor(text: $template)
             .font(AstryxFont.bodyMono)
+            .scrollContentBackground(.hidden)
             .frame(height: PromptUITokens.editorHeight)
-            .padding(Spacing.x2_5)
-            .background(
-                RoundedRectangle(
-                    cornerRadius: Radius.concentric(outer: SettingsUI.cornerRadius, padding: Spacing.x4),
-                    style: .continuous
-                )
-                .fill(SettingsUI.fieldBackground)
-            )
-            .hairlineBorder(
-                cornerRadius: Radius.concentric(outer: SettingsUI.cornerRadius, padding: Spacing.x4),
-                lineWidth: 1
-            )
+            .settingsWell(padding: Spacing.x2)
     }
 
     private var templateCharacterCount: Int {

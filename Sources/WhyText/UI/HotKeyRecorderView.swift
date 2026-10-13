@@ -7,37 +7,43 @@ struct HotKeyRecorderView: View {
     @State private var isRecording = false
 
     var body: some View {
-        HStack(spacing: Spacing.x2_5) {
-            Text(shortcut?.displayString ?? L10n.t("未设置"))
+        HStack(spacing: Spacing.x2) {
+            Text(isRecording ? L10n.t("按键中…") : (shortcut?.displayString ?? L10n.t("未设置")))
                 .font(AstryxFont.bodyMono)
-                .foregroundStyle(shortcut == nil ? AstryxColor.textSecondary : AstryxColor.textPrimary)
+                .foregroundStyle(shortcut == nil || isRecording ? AstryxColor.textSecondary : AstryxColor.textPrimary)
                 .padding(.horizontal, Spacing.x2_5)
-                .padding(.vertical, Spacing.x1_5)
-                .frame(minWidth: 142, alignment: .leading)
+                .padding(.vertical, Spacing.x1)
+                .frame(minWidth: 120)
                 .background(
-                    RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
+                    RoundedRectangle(cornerRadius: Radius.element - 2, style: .continuous)
                         .fill(SettingsUI.fieldBackground)
                 )
-                .shadowBorder(cornerRadius: Radius.element)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Radius.element - 2, style: .continuous)
+                        .strokeBorder(isRecording ? Color.accentColor : AstryxColor.border, lineWidth: isRecording ? 1.5 : 0.5)
+                )
+                .animation(.easeOut(duration: 0.15), value: isRecording)
                 .accessibilityLabel(L10n.t("当前快捷键"))
                 .accessibilityValue(shortcut?.displayString ?? L10n.t("未设置"))
 
             Button {
                 isRecording.toggle()
             } label: {
-                Label(isRecording ? L10n.t("按键中…") : L10n.t("录制"), systemImage: isRecording ? "keyboard.badge.ellipsis" : "keyboard")
+                Label(L10n.t("录制"), systemImage: isRecording ? "keyboard.badge.ellipsis" : "keyboard")
             }
-            .buttonStyle(.quiet)
             .accessibilityLabel(isRecording ? L10n.t("正在录制快捷键，请按下组合键，按 Esc 取消") : L10n.t("录制快捷键"))
 
             Button {
                 shortcut = nil
                 isRecording = false
             } label: {
-                Label(L10n.t("清除"), systemImage: "xmark")
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(AstryxColor.textSecondary)
             }
-            .buttonStyle(.quiet)
+            .buttonStyle(.plain)
+            .help(L10n.t("清除"))
             .disabled(shortcut == nil)
+            .opacity(shortcut == nil ? 0.4 : 1)
             .accessibilityLabel(L10n.t("清除快捷键"))
 
             if isRecording {

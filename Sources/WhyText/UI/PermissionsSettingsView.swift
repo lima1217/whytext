@@ -1,0 +1,118 @@
+import AppKit
+import SwiftUI
+import WhyTextCore
+
+struct PermissionsSettingsView: View {
+    @EnvironmentObject private var appModel: AppModel
+
+    var body: some View {
+        SettingsPage(.permissions) {
+            Section {
+                // Poll: macOS doesn't notify us when the user flips the switch.
+                TimelineView(.periodic(from: .now, by: 1.5)) { _ in
+                    let trusted = appModel.accessibilityStatus() == .trusted
+                    VStack(alignment: .leading, spacing: Spacing.x2) {
+                        LabeledContent(L10n.t("辅助功能权限")) {
+                            StatusBadge(
+                                text: trusted ? L10n.t("已授权") : L10n.t("未授权"),
+                                tone: trusted ? .success : .warning
+                            )
+                        }
+                        if !trusted {
+                            CaptionText(text: L10n.t("授权后如果仍读取不到选中文本，先重启 WhyText，再使用诊断查看当前 App 是否暴露选区。"))
+                        }
+                    }
+                }
+
+                HStack(spacing: Spacing.x2) {
+                    Spacer()
+                    Button(L10n.t("请求授权")) {
+                        appModel.requestAccessibilityPermissionPrompt()
+                    }
+                    Button(L10n.t("打开系统设置")) {
+                        appModel.openAccessibilitySettings()
+                    }
+                }
+            } footer: {
+                SettingsFooter(L10n.t("macOS 需要授权后，应用才能读取其他 App 中的选中文本。"))
+            }
+
+            diagnosticsSection
+        }
+    }
+
+    private var diagnosticsSection: some View {
+        Section {
+            LabeledContent("Bundle ID") {
+                Text(Bundle.main.bundleIdentifier ?? "(unknown)")
+                    .textSelection(.enabled)
+            }
+
+            LabeledContent(L10n.t("路径")) {
+                Text(Bundle.main.bundleURL.path)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
+
+            HStack(spacing: Spacing.x2) {
+                Button(L10n.t("立即诊断")) {
+                    appModel.runSelectionDiagnostics()
+                }
+
+                Button(appModel.selectionDiagnosticsPending ? L10n.t("2秒后诊断（进行中）") : L10n.t("2秒后诊断")) {
+                    appModel.runSelectionDiagnosticsWithDelay(seconds: 2.0)
+                }
+                .disabled(appModel.selectionDiagnosticsPending)
+
+                if !appModel.selectionDiagnosticsReport.isEmpty {
+                    Button(L10n.t("复制诊断结果")) {
+                        let pasteboard = NSPasteboard.general
+                        pasteboard.clearContents()
+                        pasteboard.setString(appModel.selectionDiagnosticsReport, forType: .string)
+                    }
+                }
+
+                Spacer()
+
+                Button(L10n.t("重启 WhyText")) {
+                    appModel.relaunchApp()
+                }
+            }
+
+            if hasDiagnosticsOutput {
+                VStack(alignment: .leading, spacing: Spacing.x2) {
+                    if let updatedAt = appModel.selectionDiagnosticsUpdatedAt {
+                        CaptionText(text: L10n.f("最近诊断：%@", updatedAt.formatted(date: .abbreviated, time: .standard)))
+                    }
+
+                    if !appModel.selectionDiagnosticsTextPreview.isEmpty {
+                        Text(L10n.f("选中文本预览：%@", appModel.selectionDiagnosticsTextPreview))
+                            .font(AstryxFont.captionM)
+                            .lineLimit(2)
+                            .textSelection(.enabled)
+                    }
+
+                    if !appModel.selectionDiagnosticsReport.isEmpty {
+                        ScrollView {
+                            Text(appModel.selectionDiagnosticsReport)
+                                .font(.system(size: 11, design: .monospaced))
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(maxHeight: 200)
+                        .settingsWell(padding: Spacing.x2)
+                    }
+                }
+            }
+        } header: {
+            Text(L10n.t("诊断"))
+        }
+    }
+
+    private var hasDiagnosticsOutput: Bool {
+        appModel.selectionDiagnosticsUpdatedAt != nil
+            || !appModel.selectionDiagnosticsTextPreview.isEmpty
+            || !appModel.selectionDiagnosticsReport.isEmpty
+    }
+}

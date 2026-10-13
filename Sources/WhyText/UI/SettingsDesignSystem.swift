@@ -1,72 +1,156 @@
 import SwiftUI
+import WhyTextCore
 
-/// Shared layout constants for the settings windows.
-/// Thin wrappers over the project-wide design tokens (`Spacing`, `Radius`, `AstryxFont`).
+/// Shared layout constants for the settings window.
 enum SettingsUI {
-    static let contentWidth: CGFloat = 640
-    static let pagePadding: CGFloat = Spacing.x6        // 24
-    static let sectionSpacing: CGFloat = Spacing.x3_5    // 14
-    static let fieldSpacing: CGFloat = Spacing.x3        // 12
-    static let cornerRadius: CGFloat = Radius.card       // 24 — concentric with 16pt padding + 8pt inner
-    static let labelWidth: CGFloat = 92
-    static let captionSize: CGFloat = 12                 // kept for monospaced numeric sizing
-
-    static let cardBackground = Color(nsColor: .controlBackgroundColor)
+    static let sidebarWidth: CGFloat = 212
+    static let headerHeight: CGFloat = 52
+    static let fieldRadius: CGFloat = Radius.element
     static let fieldBackground = AstryxColor.overlayHover
 }
 
+// MARK: - Panes
+
+enum SettingsPane: String, CaseIterable, Identifiable {
+    case general
+    case shortcuts
+    case translation
+    case providers
+    case prompts
+    case permissions
+    case updates
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .general: L10n.t("通用")
+        case .shortcuts: L10n.t("快捷键")
+        case .translation: L10n.t("翻译方向")
+        case .providers: L10n.t("服务商")
+        case .prompts: L10n.t("提示词")
+        case .permissions: L10n.t("权限")
+        case .updates: L10n.t("更新")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .general: "gearshape.fill"
+        case .shortcuts: "command"
+        case .translation: "character.bubble.fill"
+        case .providers: "server.rack"
+        case .prompts: "text.quote"
+        case .permissions: "hand.raised.fill"
+        case .updates: "arrow.down.circle.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .general: Color(nsColor: .systemGray)
+        case .shortcuts: Color(nsColor: .systemBlue)
+        case .translation: Color(nsColor: .systemGreen)
+        case .providers: Color(nsColor: .systemPurple)
+        case .prompts: Color(nsColor: .systemOrange)
+        case .permissions: Color(nsColor: .systemIndigo)
+        case .updates: Color(nsColor: .systemPink)
+        }
+    }
+}
+
+/// Rounded-square glyph tile in the style of System Settings.
+struct PaneIcon: View {
+    var pane: SettingsPane
+    var size: CGFloat = 22
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: size * 0.27, style: .continuous)
+            .fill(pane.tint.gradient)
+            .frame(width: size, height: size)
+            .overlay(
+                Image(systemName: pane.symbol)
+                    .font(.system(size: size * 0.5, weight: .semibold))
+                    .foregroundStyle(.white)
+            )
+            .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Page scaffolding
+
+/// A settings page: a title bar aligned with the window's traffic lights over a grouped form.
 struct SettingsPage<Content: View>: View {
+    var pane: SettingsPane
     let content: Content
 
-    init(@ViewBuilder content: () -> Content) {
+    init(_ pane: SettingsPane, @ViewBuilder content: () -> Content) {
+        self.pane = pane
         self.content = content()
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: SettingsUI.sectionSpacing) {
+        VStack(spacing: 0) {
+            HStack(spacing: Spacing.x2_5) {
+                Text(pane.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AstryxColor.textPrimary)
+                Spacer()
+            }
+            .padding(.horizontal, Spacing.x6)
+            .frame(height: SettingsUI.headerHeight)
+
+            Form {
                 content
             }
-            .frame(maxWidth: SettingsUI.contentWidth, alignment: .leading)
-            .padding(SettingsUI.pagePadding)
-            .frame(maxWidth: .infinity)
+            .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
         }
         .background(Color(nsColor: .windowBackgroundColor))
     }
 }
 
-struct SettingsCard<Content: View>: View {
+/// Row label with an optional secondary line, for use as a `LabeledContent` / `Toggle` label.
+struct SettingsRowLabel: View {
     var title: String
     var subtitle: String?
-    let content: Content
 
-    init(_ title: String, subtitle: String? = nil, @ViewBuilder content: () -> Content) {
+    init(_ title: String, subtitle: String? = nil) {
         self.title = title
         self.subtitle = subtitle
-        self.content = content()
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.x4) {
-            VStack(alignment: .leading, spacing: Spacing.half) {
-                Text(title)
-                    .font(AstryxFont.bodySemibold)
-                    .foregroundStyle(AstryxColor.textPrimary)
-                if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(AstryxFont.captionM)
-                        .foregroundStyle(AstryxColor.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+        VStack(alignment: .leading, spacing: Spacing.half) {
+            Text(title)
+            if let subtitle, !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(AstryxFont.captionM)
+                    .foregroundStyle(AstryxColor.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-
-            content
         }
-        .padding(Spacing.x4)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .cardSurface(radius: SettingsUI.cornerRadius, fill: SettingsUI.cardBackground)
     }
 }
+
+/// Section footer text, matching System Settings' explanatory captions.
+struct SettingsFooter: View {
+    var text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        Text(text)
+            .font(AstryxFont.captionM)
+            .foregroundStyle(AstryxColor.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - Shared pieces
 
 struct StatusBadge: View {
     var text: String
@@ -77,12 +161,13 @@ struct StatusBadge: View {
             .font(.system(size: 11, weight: .medium))
             .labelStyle(.titleAndIcon)
             .foregroundStyle(tone.color)
-            .padding(.horizontal, Spacing.x2_5)
-            .padding(.vertical, Spacing.x1)
+            .padding(.horizontal, Spacing.x2)
+            .padding(.vertical, 3)
             .background(
                 Capsule(style: .continuous)
                     .fill(tone.mutedFill)
             )
+            .fixedSize()
     }
 }
 
@@ -97,23 +182,15 @@ struct CaptionText: View {
     }
 }
 
-struct LabeledSettingsField<Field: View>: View {
-    var title: String
-    let field: Field
-
-    init(_ title: String, @ViewBuilder field: () -> Field) {
-        self.title = title
-        self.field = field()
-    }
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: SettingsUI.fieldSpacing) {
-            Text(title)
-                .font(AstryxFont.body)
-                .foregroundStyle(AstryxColor.textSecondary)
-                .frame(width: SettingsUI.labelWidth, alignment: .leading)
-
-            field
-        }
+/// Inset well used for monospaced reports and editors inside a form row.
+extension View {
+    func settingsWell(padding: CGFloat = Spacing.x2_5) -> some View {
+        self
+            .padding(padding)
+            .background(
+                RoundedRectangle(cornerRadius: SettingsUI.fieldRadius, style: .continuous)
+                    .fill(SettingsUI.fieldBackground)
+            )
+            .hairlineBorder(cornerRadius: SettingsUI.fieldRadius)
     }
 }
