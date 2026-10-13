@@ -11,14 +11,10 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
     private var autoDismissTask: Task<Void, Never>?
     private var isHoverPaused = false
 
-    /// Sized for two ≥40×40 hit targets plus divider and chrome padding.
-    private static let bubbleSize = NSSize(width: 92, height: 40)
-
     func show(at mouseLocation: NSPoint, anchorRect: CGRect? = nil) {
         autoDismissTask?.cancel()
         isHoverPaused = false
 
-        let size = Self.bubbleSize
         let hostingView = NSHostingView(rootView: SelectionBubbleBar(
             onTranslate: { [weak self] in
                 self?.handleAction(self?.onTranslate)
@@ -31,8 +27,11 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
             }
         ))
         Self.prepareHostingView(hostingView)
+        // Labels are localized, so the bubble takes the width its content needs.
+        let size = hostingView.fittingSize
 
         if let panel {
+            panel.setContentSize(size)
             panel.contentView = hostingView
             positionBubble(panel: panel, at: mouseLocation, anchorRect: anchorRect, size: size)
             panel.alphaValue = 1
@@ -238,55 +237,47 @@ private extension NSRect {
 
 // MARK: - Bubble View
 
-/// Compact dual-action pill near the selected text: translate + explain.
-/// Translucent material chrome (Apple materials) — not a solid accent fill —
-/// so it reads as floating UI that doesn't steal focus from the selection.
+/// Compact dual-action bar near the selected text: translate + explain.
+/// Translucent material chrome with the same tinted glyph tiles as the Settings
+/// sidebar, so it reads as WhyText without stealing focus from the selection.
 private struct SelectionBubbleBar: View {
     var onTranslate: () -> Void
     var onExplain: () -> Void
     var onHoverChange: (Bool) -> Void
 
-    @State private var isBarHovering = false
     @State private var appeared = false
     @Environment(\.colorScheme) private var colorScheme
 
-    private static let outerPaddingH: CGFloat = 4
-    private static let outerPaddingV: CGFloat = 4
-    private static let dividerHeight: CGFloat = 16
-
     var body: some View {
-        HStack(spacing: 0) {
-            bubbleButton(
-                systemName: "character.textbox",
-                help: L10n.t("翻译"),
+        HStack(spacing: Metrics.spacing) {
+            BubbleActionButton(
+                title: L10n.t("翻译"),
+                systemName: "character.bubble.fill",
+                tint: Color(nsColor: .systemGreen),
                 action: onTranslate
             )
-            Capsule(style: .continuous)
-                .fill(AstryxColor.borderEmphasized.opacity(isBarHovering ? 0.9 : 0.55))
-                .frame(width: 1, height: Self.dividerHeight)
+            Rectangle()
+                .fill(AstryxColor.border)
+                .frame(width: 1, height: Metrics.dividerHeight)
                 .accessibilityHidden(true)
-            bubbleButton(
+            BubbleActionButton(
+                title: L10n.t("解释"),
                 systemName: "questionmark",
-                help: L10n.t("解释"),
+                tint: Color(nsColor: .systemOrange),
                 action: onExplain
             )
         }
-        .padding(.horizontal, Self.outerPaddingH)
-        .padding(.vertical, Self.outerPaddingV)
+        .padding(Metrics.padding)
         .background(bubbleMaterial)
         .overlay(
-            Capsule(style: .continuous)
+            RoundedRectangle(cornerRadius: Metrics.radius, style: .continuous)
                 .strokeBorder(materialEdgeHighlight, lineWidth: 0.5)
         )
         // No SwiftUI drop shadow — the panel uses `hasShadow` so the silhouette
-        // follows the capsule alpha instead of the rectangular window bounds.
+        // follows the rounded alpha instead of the rectangular window bounds.
         .scaleEffect(appeared || MotionPreference.reduceMotion ? 1.0 : 0.94)
         .opacity(appeared || MotionPreference.reduceMotion ? 1 : 0)
-        .animation(AstryxMotion.quick, value: isBarHovering)
-        .onHover { hovering in
-            isBarHovering = hovering
-            onHoverChange(hovering)
-        }
+        .onHover { onHoverChange($0) }
         .onAppear {
             guard !MotionPreference.reduceMotion else {
                 appeared = true
@@ -297,6 +288,7 @@ private struct SelectionBubbleBar: View {
                 appeared = true
             }
         }
+        .fixedSize()
         .accessibilityElement(children: .contain)
         .accessibilityLabel(L10n.t("WhyText 操作"))
     }
@@ -304,64 +296,80 @@ private struct SelectionBubbleBar: View {
     private var bubbleMaterial: some View {
         ZStack {
             if MotionPreference.reduceTransparency {
-                Color(nsColor: .controlBackgroundColor)
+                Color(nsColor: .windowBackgroundColor)
             } else {
                 // cornerStyle masks at CALayer — SwiftUI clipShape alone does not clip materials.
                 VisualEffectView(
-                    material: .hudWindow,
+                    material: .popover,
                     blendingMode: .behindWindow,
                     state: .active,
-                    cornerStyle: .capsule
+                    cornerStyle: .continuous(Metrics.radius)
                 )
-                // Light fill keeps vibrancy text legible without stacking translucent layers.
-                Color(nsColor: .controlBackgroundColor).opacity(colorScheme == .dark ? 0.28 : 0.55)
+                Color(nsColor: .windowBackgroundColor).opacity(colorScheme == .dark ? 0.2 : 0.45)
             }
         }
-        .clipShape(Capsule(style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: Metrics.radius, style: .continuous))
     }
 
-    /// Bright top-edge catch light — materials read as thicker when lit at the rim.
+    /// Bright rim — materials read as thicker when lit at the edge.
     private var materialEdgeHighlight: Color {
         colorScheme == .dark
-            ? Color.white.opacity(0.18)
-            : Color.white.opacity(0.55)
-    }
-
-    private func bubbleButton(systemName: String, help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            BubbleButtonLabel(systemName: systemName)
-        }
-        .buttonStyle(BubblePressButtonStyle())
-        .help(help)
-        .accessibilityLabel(help)
+            ? Color.white.opacity(0.16)
+            : Color.black.opacity(0.08)
     }
 }
 
-/// Icon label with its own hover fill so each slot reads as a separate hit target.
-private struct BubbleButtonLabel: View {
+private enum Metrics {
+    /// Concentric with the button hover fill: radius = inner radius + padding.
+    static let radius: CGFloat = 11
+    static let padding: CGFloat = 4
+    static let buttonRadius: CGFloat = 7
+    static let spacing: CGFloat = 2
+    static let dividerHeight: CGFloat = 16
+    static let tileSize: CGFloat = 18
+}
+
+/// Tinted glyph tile + label, with its own hover fill so each action reads as a
+/// separate target. Height stays ≥28pt and the whole slot is clickable.
+private struct BubbleActionButton: View {
+    let title: String
     let systemName: String
+    let tint: Color
+    let action: () -> Void
+
     @State private var isHovering = false
 
     var body: some View {
-        Image(systemName: systemName)
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(AstryxColor.textPrimary)
-            // Optical: SF Symbol questionmark sits slightly high; nudge down.
-            .offset(y: systemName == "questionmark" ? 0.5 : 0)
-            .frame(width: SelectionBubbleBarMetrics.buttonWidth, height: SelectionBubbleBarMetrics.buttonHeight)
+        Button(action: action) {
+            HStack(spacing: Spacing.x1_5) {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(tint.gradient)
+                    .frame(width: Metrics.tileSize, height: Metrics.tileSize)
+                    .overlay(
+                        Image(systemName: systemName)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.white)
+                    )
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AstryxColor.textPrimary)
+                    .lineLimit(1)
+            }
+            .padding(.leading, Spacing.x1_5)
+            .padding(.trailing, Spacing.x2_5)
+            .padding(.vertical, 5)
             .background(
-                Capsule(style: .continuous)
-                    .fill(AstryxColor.overlayHover.opacity(isHovering ? 1 : 0))
+                RoundedRectangle(cornerRadius: Metrics.buttonRadius, style: .continuous)
+                    .fill(AstryxColor.overlayHover.opacity(isHovering ? 1.6 : 0))
             )
-            .contentShape(Capsule())
-            .animation(AstryxMotion.quick, value: isHovering)
-            .onHover { isHovering = $0 }
+            .contentShape(RoundedRectangle(cornerRadius: Metrics.buttonRadius, style: .continuous))
+        }
+        .buttonStyle(BubblePressButtonStyle())
+        .animation(AstryxMotion.quick, value: isHovering)
+        .onHover { isHovering = $0 }
+        .accessibilityLabel(title)
     }
-}
-
-private enum SelectionBubbleBarMetrics {
-    static let buttonWidth: CGFloat = 40
-    static let buttonHeight: CGFloat = 32
 }
 
 /// Scale-on-press — feedback on pointer-down, interruptible.
