@@ -10,9 +10,11 @@ struct WhyTextApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra("WhyText", systemImage: "character.textbox") {
+        MenuBarExtra {
             MenuBarView()
                 .environmentObject(appModel)
+        } label: {
+            Image(nsImage: MenuBarIcon.image)
         }
         .menuBarExtraStyle(.menu)
 
