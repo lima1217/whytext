@@ -13,6 +13,24 @@ private enum PanelTokens {
     static let minContentHeight: CGFloat = 72
     static let maxHeight: CGFloat = 420
     static let sourceMaxHeight: CGFloat = 120
+    /// Matches the grouped-form sections in Settings.
+    static let cardRadius: CGFloat = 10
+    static let cardPadding: CGFloat = Spacing.x3
+    static let cardFill = Color.dynamic(light: "#FFFFFFA6", dark: "#FFFFFF0F")
+}
+
+private extension View {
+    /// Content card in the style of a Settings form section.
+    func panelCard(padding: CGFloat = PanelTokens.cardPadding) -> some View {
+        self
+            .padding(padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: PanelTokens.cardRadius, style: .continuous)
+                    .fill(PanelTokens.cardFill)
+            )
+            .hairlineBorder(cornerRadius: PanelTokens.cardRadius)
+    }
 }
 
 struct FloatingPanelView: View {
@@ -63,17 +81,17 @@ struct FloatingPanelView: View {
                 .padding(.bottom, PanelTokens.bottomPadding)
 
                 if let noticeText, !noticeText.isEmpty {
-                    Text(noticeText)
-                        .font(.system(size: PanelTokens.metaFontSize))
-                        .foregroundStyle(AstryxColor.textSecondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, Spacing.x2)
-                        .padding(.vertical, Spacing.x1_5)
-                        .background(
-                            RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
-                                .fill(AstryxColor.overlayHover)
-                        )
-                        .padding(.horizontal, PanelTokens.horizontalPadding)
+                    Label {
+                        Text(noticeText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } icon: {
+                        Image(systemName: "info.circle")
+                    }
+                    .font(.system(size: PanelTokens.metaFontSize))
+                    .foregroundStyle(AstryxColor.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, PanelTokens.horizontalPadding + Spacing.x1)
+                    .padding(.top, -Spacing.x2)
                         .padding(.bottom, PanelTokens.bottomPadding)
                         .accessibilityAddTraits(.updatesFrequently)
                         .transition(
@@ -127,7 +145,7 @@ struct FloatingPanelView: View {
     private var resultView: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.x4) {
+                VStack(alignment: .leading, spacing: Spacing.x3) {
                     MarkdownTextView(markdown: displayText, fontSize: fontSize)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -140,7 +158,14 @@ struct FloatingPanelView: View {
                         .frame(height: 1)
                         .id(Self.scrollBottomID)
                 }
+                .padding(PanelTokens.cardPadding)
             }
+            .background(
+                RoundedRectangle(cornerRadius: PanelTokens.cardRadius, style: .continuous)
+                    .fill(PanelTokens.cardFill)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: PanelTokens.cardRadius, style: .continuous))
+            .hairlineBorder(cornerRadius: PanelTokens.cardRadius)
             .onChange(of: appModel.panelState.followUps) { _ in
                 proxy.scrollTo(Self.scrollBottomID, anchor: .bottom)
             }
@@ -165,17 +190,18 @@ struct FloatingPanelView: View {
     }
 
     private var loadingView: some View {
-        VStack(alignment: .leading, spacing: Spacing.x2) {
+        VStack(alignment: .leading, spacing: Spacing.x2_5) {
             skeletonBar(widthRatio: 1.0)
             skeletonBar(widthRatio: 0.82)
             skeletonBar(widthRatio: 0.6)
         }
         .frame(
-            minWidth: PanelTokens.minWidth,
+            minWidth: PanelTokens.minWidth - PanelTokens.cardPadding * 2,
             idealWidth: PanelTokens.idealWidth,
-            minHeight: PanelTokens.minContentHeight,
-            alignment: .leading
+            minHeight: PanelTokens.minContentHeight - PanelTokens.cardPadding * 2,
+            alignment: .top
         )
+        .panelCard()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(.updatesFrequently)
@@ -203,16 +229,17 @@ struct FloatingPanelView: View {
             )
     }
 
-    /// Error: a quiet error card with a status dot + retry. Shake animation on appear.
+    /// Error: a card with the message and recovery actions. Shake animation on appear.
     private func errorView(_ message: String) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.x2) {
-            HStack(alignment: .top, spacing: Spacing.x2) {
-                StatusDot(tone: .danger)
-                    .padding(.top, 5)
+        VStack(alignment: .leading, spacing: Spacing.x3) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.x2) {
+                Image(systemName: Tone.danger.icon)
+                    .foregroundStyle(Color(nsColor: .systemRed))
                     .accessibilityHidden(true)
                 Text(message)
                     .foregroundStyle(AstryxColor.textPrimary)
                     .font(.system(size: PanelTokens.bodyFontSize))
+                    .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -220,40 +247,23 @@ struct FloatingPanelView: View {
                 Spacer(minLength: 0)
 
                 if appModel.panelState.errorSystemSettingsURL != nil {
-                    Button(action: { appModel.openErrorSystemSettings() }) {
-                        Label(L10n.t("打开系统设置"), systemImage: "gearshape")
-                            .labelStyle(.titleAndIcon)
-                            .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
-                    }
-                    .buttonStyle(.quiet)
+                    Button(L10n.t("打开系统设置")) { appModel.openErrorSystemSettings() }
                 }
 
                 if appModel.panelState.errorNeedsSettings {
-                    Button(action: { appModel.openSettingsWindow() }) {
-                        Label(L10n.t("打开设置"), systemImage: "gearshape")
-                            .labelStyle(.titleAndIcon)
-                            .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
-                    }
-                    .buttonStyle(.quiet)
+                    Button(L10n.t("打开设置")) { appModel.openSettingsWindow() }
                 }
 
                 if canRetry {
                     Button(action: { appModel.retryLastAction() }) {
                         Label(L10n.t("重试"), systemImage: "arrow.clockwise")
-                            .labelStyle(.titleAndIcon)
-                            .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
                     }
-                    .buttonStyle(.quiet(tint: Color.accentColor))
+                    .buttonStyle(.borderedProminent)
                 }
             }
+            .controlSize(.small)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Spacing.x3)
-        .background(
-            RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
-                .fill(AstryxColor.overlayHover)
-        )
-        .shadowBorder(cornerRadius: Radius.element)
+        .panelCard()
         .accessibilityElement(children: .contain)
         .accessibilityLabel(L10n.t("出错了"))
         .accessibilityValue(message)
@@ -373,16 +383,20 @@ struct FloatingPanelTitlebarView: View {
             }
 
             if shouldShowStatus {
-                HStack(spacing: Spacing.x1_5) {
+                HStack(spacing: Spacing.x1) {
                     statusIcon
 
                     if let activityTitle {
                         Text(activityTitle)
-                            .font(.system(size: PanelTokens.metaFontSize))
-                            .foregroundStyle(AstryxColor.textSecondary)
+                            .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
+                            .foregroundStyle(statusTone.color)
                             .lineLimit(1)
                     }
                 }
+                .padding(.leading, Spacing.x1_5)
+                .padding(.trailing, activityTitle == nil ? Spacing.x1_5 : Spacing.x2)
+                .padding(.vertical, 3)
+                .background(Capsule(style: .continuous).fill(statusTone.mutedFill))
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(headerTitle)
                 .transition(.opacity.combined(with: .offset(y: 4)))
@@ -449,21 +463,21 @@ struct FloatingPanelTitlebarView: View {
             if let error = appModel.panelState.errorMessage, !error.isEmpty {
                 Image(systemName: Tone.danger.icon)
                     .foregroundStyle(Tone.danger.color)
-                    .font(.system(size: 14))
+                    .font(.system(size: 12))
                     .transition(statusIconTransition)
             } else if appModel.panelState.isLoading {
                 ProgressView()
-                    .controlSize(.small)
-                    .frame(width: 14, height: 14)
+                    .controlSize(.mini)
+                    .frame(width: 12, height: 12)
                     .transition(statusIconTransition)
             } else if hasResult {
                 Image(systemName: Tone.success.icon)
                     .foregroundStyle(Tone.success.color)
-                    .font(.system(size: 14))
+                    .font(.system(size: 12))
                     .transition(statusIconTransition)
             }
         }
-        .frame(width: 14, height: 14)
+        .frame(width: 12, height: 12)
         .animation(AstryxMotion.icon, value: contentStatusKey)
         .accessibilityHidden(true)
     }
@@ -500,8 +514,16 @@ struct FloatingPanelTitlebarView: View {
         appModel.panelState.isLoading || (appModel.panelState.errorMessage?.isEmpty == false)
     }
 
-    /// Only thinking/searching get words; the mode switch already names the action.
+    private var statusTone: Tone {
+        (appModel.panelState.errorMessage?.isEmpty == false) ? .danger : .neutral
+    }
+
+    /// The mode switch already names the action, so the badge only spells out
+    /// thinking/searching and failures.
     private var activityTitle: String? {
+        if let error = appModel.panelState.errorMessage, !error.isEmpty {
+            return (appModel.panelState.lastAction ?? .translate).failedTitle
+        }
         guard appModel.panelState.isLoading else { return nil }
         switch appModel.panelState.activity {
         case .thinking: return L10n.t("思考中")
@@ -666,38 +688,25 @@ private struct PanelModeSwitch: View {
     @EnvironmentObject private var appModel: AppModel
 
     var body: some View {
-        HStack(spacing: 2) {
+        Picker(L10n.t("模式"), selection: selection) {
             ForEach(PanelAction.allCases, id: \.self) { action in
-                segment(action)
+                Text(action.displayName).tag(action)
             }
         }
-        .padding(2)
-        .background(
-            RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
-                .fill(AstryxColor.overlayHover)
-        )
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(L10n.t("模式"))
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.small)
+        .fixedSize()
     }
 
-    private func segment(_ action: PanelAction) -> some View {
-        let isSelected = appModel.panelState.lastAction == action
-        return Button(action: { appModel.switchAction(to: action) }) {
-            Text(action.displayName)
-                .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
-                .foregroundStyle(isSelected ? AstryxColor.textPrimary : AstryxColor.textSecondary)
-                .padding(.horizontal, Spacing.x2)
-                .padding(.vertical, 3)
-                .background(
-                    RoundedRectangle(cornerRadius: Radius.element - 2, style: .continuous)
-                        .fill(isSelected ? Color(nsColor: .controlBackgroundColor).opacity(0.9) : Color.clear)
-                        .shadow(color: isSelected ? AstryxColor.shadow : .clear, radius: 1, y: 0.5)
-                )
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.quietIcon)
-        .animation(AstryxMotion.quick, value: isSelected)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    private var selection: Binding<PanelAction> {
+        Binding(
+            get: { appModel.panelState.lastAction ?? .translate },
+            set: { action in
+                guard action != appModel.panelState.lastAction else { return }
+                appModel.switchAction(to: action)
+            }
+        )
     }
 }
 
@@ -722,12 +731,16 @@ private struct TargetLanguageMenu: View {
                 }
             }
         } label: {
-            Text("→ \(current.displayName)")
-                .font(.system(size: 12))
-                .foregroundStyle(AstryxColor.textSecondary)
+            Label(current.displayName, systemImage: "arrow.right")
+                .font(.system(size: 11, weight: .medium))
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.visible)
+        .controlSize(.small)
+        .foregroundStyle(AstryxColor.textSecondary)
+        .padding(.horizontal, Spacing.x2)
+        .padding(.vertical, 2)
+        .background(Capsule(style: .continuous).fill(AstryxColor.overlayHover))
         .fixedSize()
         .help(L10n.t("译文语言"))
         .accessibilityLabel(L10n.f("译文语言：%@", current.displayName))
@@ -743,14 +756,12 @@ private struct SourceTextDisclosure: View {
     @State private var isExpanded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.x1_5) {
+        VStack(alignment: .leading, spacing: 0) {
             Button(action: toggle) {
                 HStack(spacing: Spacing.x1_5) {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
                     Text(L10n.t("原文"))
-                        .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
+                        .font(.system(size: PanelTokens.metaFontSize, weight: .semibold))
+                        .foregroundStyle(AstryxColor.textPrimary)
                     if !isExpanded {
                         Text(preview)
                             .font(.system(size: PanelTokens.metaFontSize))
@@ -758,14 +769,21 @@ private struct SourceTextDisclosure: View {
                             .truncationMode(.tail)
                     }
                     Spacer(minLength: 0)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
                 }
                 .foregroundStyle(AstryxColor.textSecondary)
+                .padding(.horizontal, PanelTokens.cardPadding)
+                .padding(.vertical, Spacing.x2)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.quietIcon(isStatic: true))
             .accessibilityLabel(isExpanded ? L10n.t("收起原文") : L10n.t("展开原文"))
 
             if isExpanded {
+                Divider()
+                    .padding(.horizontal, PanelTokens.cardPadding)
                 ScrollView {
                     Text(text)
                         .font(.system(size: PanelTokens.bodyFontSize))
@@ -773,16 +791,13 @@ private struct SourceTextDisclosure: View {
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(PanelTokens.cardPadding)
                 }
                 .frame(maxHeight: PanelTokens.sourceMaxHeight)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(Spacing.x2)
-                .background(
-                    RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
-                        .fill(AstryxColor.overlayHover)
-                )
             }
         }
+        .panelCard(padding: 0)
     }
 
     private var preview: String {
@@ -814,11 +829,8 @@ private struct ManualInputView: View {
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                     if appModel.panelState.inputNeedsAccessibility {
-                        Button(action: { appModel.openAccessibilitySettings() }) {
-                            Text(L10n.t("授权"))
-                                .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
-                        }
-                        .buttonStyle(.quiet)
+                        Button(L10n.t("授权")) { appModel.openAccessibilitySettings() }
+                            .controlSize(.small)
                     }
                 }
             }
@@ -831,38 +843,24 @@ private struct ManualInputView: View {
                 onEscape: { appModel.closePanel() }
             )
             .frame(minWidth: PanelTokens.minWidth, idealWidth: PanelTokens.idealWidth, minHeight: 96, maxHeight: 160)
-            .padding(Spacing.x2)
-            .background(
-                RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
-                    .fill(AstryxColor.overlayHover)
-            )
-            .shadowBorder(cornerRadius: Radius.element)
+            .panelCard()
 
             HStack(spacing: Spacing.x2) {
                 Button(action: { appModel.startScreenTextCapture() }) {
                     Label(L10n.t("截图识别"), systemImage: "text.viewfinder")
-                        .labelStyle(.titleAndIcon)
-                        .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
                 }
-                .buttonStyle(.quiet)
                 .help(L10n.t("框选屏幕上的区域，识别其中的文字并翻译"))
 
                 Spacer(minLength: 0)
 
-                Button(action: { submit(.explain) }) {
-                    Text(L10n.t("解释"))
-                        .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
-                }
-                .buttonStyle(.quiet)
-                .disabled(isEmpty)
+                Button(L10n.t("解释")) { submit(.explain) }
+                    .disabled(isEmpty)
 
-                Button(action: { submit(.translate) }) {
-                    Text(L10n.t("翻译  ⌘↩"))
-                        .font(.system(size: PanelTokens.metaFontSize, weight: .semibold))
-                }
-                .buttonStyle(.quiet(tint: Color.accentColor))
-                .disabled(isEmpty)
+                Button(L10n.t("翻译  ⌘↩")) { submit(.translate) }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isEmpty)
             }
+            .controlSize(.small)
         }
         // The panel was sized for empty content; grow it once the box is in the tree.
         .onAppear {
@@ -999,12 +997,11 @@ private struct HistoryNoteRow: View {
             Spacer(minLength: 0)
             Button(action: { appModel.regenerate() }) {
                 Label(L10n.t("重新生成"), systemImage: "arrow.clockwise")
-                    .labelStyle(.titleAndIcon)
-                    .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
             }
-            .buttonStyle(.quiet(tint: Color.accentColor))
+            .controlSize(.small)
         }
         .foregroundStyle(AstryxColor.textSecondary)
+        .padding(.horizontal, Spacing.x1)
     }
 }
 
@@ -1019,12 +1016,17 @@ private struct FollowUpTurnView: View {
         VStack(alignment: .leading, spacing: Spacing.x2) {
             Divider()
 
-            Text(turn.question)
-                .font(.system(size: PanelTokens.bodyFontSize, weight: .medium))
-                .foregroundStyle(AstryxColor.textSecondary)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            Label {
+                Text(turn.question)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: "arrow.turn.down.right")
+                    .foregroundStyle(Color.accentColor)
+            }
+            .font(.system(size: PanelTokens.bodyFontSize, weight: .medium))
+            .foregroundStyle(AstryxColor.textSecondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             if let error = turn.errorMessage {
                 HStack(alignment: .top, spacing: Spacing.x2) {
@@ -1038,10 +1040,8 @@ private struct FollowUpTurnView: View {
                     Spacer(minLength: 0)
                     Button(action: { appModel.retryFollowUp(id: turn.id) }) {
                         Label(L10n.t("重试"), systemImage: "arrow.clockwise")
-                            .labelStyle(.titleAndIcon)
-                            .font(.system(size: PanelTokens.metaFontSize, weight: .medium))
                     }
-                    .buttonStyle(.quiet(tint: Color.accentColor))
+                    .controlSize(.small)
                     .disabled(appModel.panelState.isLoading)
                 }
             } else if turn.answer.isEmpty {
@@ -1094,14 +1094,14 @@ private struct FollowUpInputBar: View {
                 .accessibilityLabel(L10n.t("发送追问"))
             }
         }
-        .padding(.leading, Spacing.x2_5)
+        .padding(.leading, Spacing.x3)
         .padding(.trailing, Spacing.x1)
         .padding(.vertical, Spacing.x1)
         .background(
-            RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
-                .fill(AstryxColor.overlayHover)
+            RoundedRectangle(cornerRadius: PanelTokens.cardRadius, style: .continuous)
+                .fill(PanelTokens.cardFill)
         )
-        .shadowBorder(cornerRadius: Radius.element)
+        .hairlineBorder(cornerRadius: PanelTokens.cardRadius)
     }
 
     private var canSend: Bool {
