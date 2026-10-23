@@ -238,8 +238,8 @@ private extension NSRect {
 // MARK: - Bubble View
 
 /// Compact dual-action bar near the selected text: translate + explain.
-/// Translucent material chrome with the same tinted glyph tiles as the Settings
-/// sidebar, so it reads as WhyText without stealing focus from the selection.
+/// Translucent material chrome with the result panel's quiet icon buttons, so it
+/// reads as WhyText without stealing focus from the selection.
 private struct SelectionBubbleBar: View {
     var onTranslate: () -> Void
     var onExplain: () -> Void
@@ -252,8 +252,7 @@ private struct SelectionBubbleBar: View {
         HStack(spacing: Metrics.spacing) {
             BubbleActionButton(
                 title: L10n.t("翻译"),
-                systemName: "character.bubble.fill",
-                tint: Color(nsColor: .systemGreen),
+                systemName: "character.bubble",
                 action: onTranslate
             )
             Rectangle()
@@ -262,8 +261,7 @@ private struct SelectionBubbleBar: View {
                 .accessibilityHidden(true)
             BubbleActionButton(
                 title: L10n.t("解释"),
-                systemName: "questionmark",
-                tint: Color(nsColor: .systemOrange),
+                systemName: "questionmark.circle",
                 action: onExplain
             )
         }
@@ -320,64 +318,39 @@ private struct SelectionBubbleBar: View {
 }
 
 private enum Metrics {
-    /// Concentric with the button hover fill: radius = inner radius + padding.
-    static let radius: CGFloat = 11
+    /// Concentric with the button hover fill: radius = `Radius.element` + padding.
+    static let radius: CGFloat = Radius.element + padding
     static let padding: CGFloat = 4
-    static let buttonRadius: CGFloat = 7
     static let spacing: CGFloat = 2
     static let dividerHeight: CGFloat = 16
-    static let tileSize: CGFloat = 18
+    static let buttonHeight: CGFloat = 28
 }
 
-/// Tinted glyph tile + label, with its own hover fill so each action reads as a
-/// separate target. Height stays ≥28pt and the whole slot is clickable.
+/// Glyph + label in the result panel's quiet button style: secondary glyph, quiet
+/// hover fill, press scale. Height stays 28pt and the whole slot is clickable.
 private struct BubbleActionButton: View {
     let title: String
     let systemName: String
-    let tint: Color
     let action: () -> Void
-
-    @State private var isHovering = false
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: Spacing.x1_5) {
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(tint.gradient)
-                    .frame(width: Metrics.tileSize, height: Metrics.tileSize)
-                    .overlay(
-                        Image(systemName: systemName)
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(.white)
-                    )
+                Image(systemName: systemName)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AstryxColor.textSecondary)
                     .accessibilityHidden(true)
                 Text(title)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(AstryxColor.textPrimary)
                     .lineLimit(1)
             }
-            .padding(.leading, Spacing.x1_5)
-            .padding(.trailing, Spacing.x2_5)
-            .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: Metrics.buttonRadius, style: .continuous)
-                    .fill(AstryxColor.overlayHover.opacity(isHovering ? 1.6 : 0))
-            )
-            .contentShape(RoundedRectangle(cornerRadius: Metrics.buttonRadius, style: .continuous))
+            .padding(.horizontal, Spacing.x2)
+            .frame(height: Metrics.buttonHeight)
+            .quietButtonHover()
+            .contentShape(RoundedRectangle(cornerRadius: Radius.element, style: .continuous))
         }
-        .buttonStyle(BubblePressButtonStyle())
-        .animation(AstryxMotion.quick, value: isHovering)
-        .onHover { isHovering = $0 }
+        .buttonStyle(.quietIcon)
         .accessibilityLabel(title)
-    }
-}
-
-/// Scale-on-press — feedback on pointer-down, interruptible.
-private struct BubblePressButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .opacity(configuration.isPressed ? 0.88 : 1)
-            .animation(AstryxMotion.press, value: configuration.isPressed)
     }
 }
