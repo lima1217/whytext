@@ -415,7 +415,8 @@ struct FloatingPanelTitlebarView: View {
                     isActive: didCopy,
                     activeSystemName: "checkmark",
                     inactiveSystemName: "doc.on.doc",
-                    size: PanelTokens.iconSize
+                    // doc.on.doc draws taller than pin at the same point size.
+                    size: PanelTokens.iconSize - 1
                 )
                 .foregroundStyle(didCopy ? Tone.success.color : AstryxColor.textSecondary)
                 .panelIconButton()
@@ -938,6 +939,8 @@ private struct FollowUpTurnView: View {
                         appModel.retryFollowUp(id: turn.id)
                     }
                     .disabled(appModel.panelState.isLoading)
+                    // Center the 28pt button on the first line, level with the dot.
+                    .alignmentGuide(.top) { $0[VerticalAlignment.center] - 8.5 }
                 }
             } else if turn.answer.isEmpty {
                 ProgressView()
@@ -969,7 +972,7 @@ private struct FollowUpInputBar: View {
             .frame(maxWidth: .infinity)
 
             if appModel.panelState.isLoading {
-                PanelIconButton(systemName: "stop.fill", label: L10n.t("停止")) {
+                PanelIconButton(systemName: "stop.circle", label: L10n.t("停止")) {
                     appModel.cancelCurrentRequest()
                 }
             } else {
