@@ -52,6 +52,8 @@ Use this checklist before replacing the local app in `/Applications`.
 - Select text: the bubble is a rounded rectangle with labeled 翻译 and 解释 actions (gray outline icons) and sizes to the localized labels in every interface language.
 - Confirm the bubble appears near the selection when the app provides selection bounds, and still appears near the mouse as fallback. It auto-dismisses, and hovering pauses dismissal.
 - Click 翻译 and confirm the panel opens in translate mode; click 解释 and confirm explain mode and the explain prompt are used.
+- The panel grows out of the bubble: it starts where the bubble was and glides to its place below the selection while the bubble fades. Nothing pops or jumps.
+- Show the bubble, let it start fading (click elsewhere), and select again right away: the new bubble fades back in and stays.
 
 ## Result Panel
 
@@ -67,6 +69,16 @@ Use this checklist before replacing the local app in `/Applications`.
 - Click outside the panel and confirm it closes; pin it, click outside, and confirm it stays open.
 - Translate the same text twice; the second time shows 来自最近记录，未重新请求 instantly, and 重新生成 requests again.
 - Translate text longer than 4000 characters and confirm chunks appear in order.
+
+### Placement, focus, and motion
+
+- Select a word mid-paragraph and press the shortcut with the mouse elsewhere on screen: the panel opens just below the selected line, left-aligned with the selection, regardless of where the mouse is. As the answer streams in, it grows downward and never covers the selected line.
+- Select a word near the bottom of the screen: the panel opens above the line and grows upward.
+- After the panel opens, the source app keeps its focus: its window still looks active and the selection stays highlighted. Press Esc, then type: the text goes into the document without clicking it first. Clicking into the follow-up field still lets you type (including with a Chinese/Japanese input method).
+- Watch a long streaming answer: the bottom edge glides as it grows instead of jumping in steps, and text doesn't rewrap while the panel appears or closes. Record at 60fps and step through if unsure.
+- Drag the panel somewhere else while an answer is still streaming: it stays where you put it and keeps growing from there.
+- Press Esc and the shortcut again immediately (within a fraction of a second): the new panel opens and stays open.
+- With Reduce Motion on (System Settings → Accessibility → Display), the panel and bubble only fade, and resizes are instant.
 
 ## Other Entry Points
 

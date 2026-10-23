@@ -19,6 +19,7 @@ enum WhyTextCoreSmokeTests {
         try testReadingMemory()
         testSentenceContext()
         testGlossaryMatcher()
+        testPanelPlacement()
         testMemoryMarkdownExporter()
         try testLocalization()
         print("WhyTextCore smoke tests passed")
@@ -459,6 +460,55 @@ enum WhyTextCoreSmokeTests {
 
         expect(GlossaryEntry.suggestedRendering(from: "\n 护城河 \n（比喻竞争壁垒）") == "护城河", "suggested rendering is the first line")
         expect(GlossaryEntry.suggestedRendering(from: String(repeating: "长", count: 100)).count == 60, "suggested rendering is capped")
+    }
+
+    private static func testPanelPlacement() {
+        let screen = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        // A selected word in the middle of the screen (AppKit coordinates).
+        let word = CGRect(x: 400, y: 500, width: 60, height: 18)
+        let below = PanelPlacement.make(anchor: word, visibleFrame: screen, preferredMaxHeight: 560)
+        expect(below.growth == .down && below.fixedEdgeY == 492, "prefers below the selection, top edge just under it")
+        let small = below.frame(for: CGSize(width: 300, height: 120))
+        let tall = below.frame(for: CGSize(width: 300, height: 400))
+        expect(small.maxY == 492 && tall.maxY == 492, "growing keeps the top edge fixed")
+        expect(tall.maxY <= word.minY && small.minX == 400, "never covers the selection; starts at its left edge")
+        expect(below.frame(for: CGSize(width: 300, height: 2000)).height == below.maxHeight, "height is capped by room on screen")
+
+        let nearBottom = CGRect(x: 400, y: 100, width: 60, height: 18)
+        let above = PanelPlacement.make(anchor: nearBottom, visibleFrame: screen, preferredMaxHeight: 560)
+        expect(above.growth == .up && above.fixedEdgeY == 126, "flips above when below is cramped")
+        let grown = above.frame(for: CGSize(width: 300, height: 300))
+        expect(grown.minY == 126 && grown.minY >= nearBottom.maxY, "growing upward keeps the bottom edge fixed, clear of the text")
+
+        let rightEdge = CGRect(x: 1400, y: 500, width: 30, height: 18)
+        let clamped = PanelPlacement.make(anchor: rightEdge, visibleFrame: screen, preferredMaxHeight: 560)
+            .frame(for: CGSize(width: 400, height: 100))
+        expect(clamped.maxX == 1440, "slides left to stay on screen")
+
+        let everything = CGRect(x: 0, y: 20, width: 1440, height: 860)
+        let fallback = PanelPlacement.make(anchor: everything, visibleFrame: screen, preferredMaxHeight: 560)
+        expect(fallback.growth == .down && fallback.fixedEdgeY == 892 && fallback.maxHeight == 560,
+               "a screen-filling selection hangs the panel from the top")
+
+        let dragged = below.moved(to: CGRect(x: 100, y: 300, width: 300, height: 120), preferredMaxHeight: 560)
+        expect(dragged.frame(for: CGSize(width: 300, height: 200)) == CGRect(x: 100, y: 220, width: 300, height: 200),
+               "after a drag, growth continues from the dragged position")
+
+        let bubble = CGRect(x: 470, y: 495, width: 120, height: 28)
+        let origin = below.origin(for: CGSize(width: 300, height: 120), emergingFrom: bubble)
+        expect(origin == CGPoint(x: 470, y: 523 - 120), "emerging from the bubble lines up with its top-left")
+
+        // AX: top-left origin on the primary screen.
+        let screens = [screen, CGRect(x: 1440, y: 0, width: 1920, height: 1080)]
+        let ax = CGRect(x: 400, y: 382, width: 60, height: 18)
+        expect(AXGeometry.cocoaRect(fromAX: ax, primaryScreenHeight: 900, screens: screens, near: CGPoint(x: 410, y: 510)) == word,
+               "AX rects flip against the primary screen")
+        let secondary = CGRect(x: 2000, y: 100, width: 40, height: 20)
+        expect(AXGeometry.cocoaRect(fromAX: secondary, primaryScreenHeight: 900, screens: screens, near: CGPoint(x: 2010, y: 790))
+               == CGRect(x: 2000, y: 780, width: 40, height: 20), "rects on a taller secondary screen flip against the primary")
+        expect(AXGeometry.cocoaRect(fromAX: .zero, primaryScreenHeight: 900, screens: screens, near: .zero) == nil, "empty rects are ignored")
+        expect(AXGeometry.cocoaRect(fromAX: CGRect(x: 9000, y: 9000, width: 10, height: 10), primaryScreenHeight: 900,
+                                    screens: screens, near: .zero) == nil, "off-screen rects are ignored")
     }
 
     private static func testMemoryMarkdownExporter() {

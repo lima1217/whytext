@@ -134,15 +134,15 @@ final class AppModel: ObservableObject {
             }
         }
 
-        selectionBubbleController.onTranslate = { [weak self] in
+        selectionBubbleController.onTranslate = { [weak self] bubbleFrame in
             Task { @MainActor in
-                self?.openPanelFromSelectionBubble(action: .translate)
+                self?.openPanelFromSelectionBubble(action: .translate, bubbleFrame: bubbleFrame)
             }
         }
 
-        selectionBubbleController.onExplain = { [weak self] in
+        selectionBubbleController.onExplain = { [weak self] bubbleFrame in
             Task { @MainActor in
-                self?.openPanelFromSelectionBubble(action: .explain)
+                self?.openPanelFromSelectionBubble(action: .explain, bubbleFrame: bubbleFrame)
             }
         }
 
@@ -197,11 +197,15 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func openPanelFromSelectionBubble(action: PanelAction) {
+    private func openPanelFromSelectionBubble(action: PanelAction, bubbleFrame: NSRect?) {
         let selectedText = AccessibilitySelectionHelpers.sanitizeSelectedText(selectionAutoPopup.pendingText)
         guard !selectedText.isEmpty else { return }
 
-        presentPanel(selectedText: selectedText)
+        presentPanel(
+            selectedText: selectedText,
+            selectionRect: selectionAutoPopup.pendingAnchorRect,
+            emergingFrom: bubbleFrame
+        )
         panelState.lookupInput = .bubble
         panelState.lookupSource = selectionAutoPopup.pendingSource
         run(action: action)
@@ -210,10 +214,12 @@ final class AppModel: ObservableObject {
     private func openPanelFlow() async {
         let selectedText: String
         var source: LookupSource?
+        var selectionRect: CGRect?
         do {
             let selection = try await selectionReader.readSelectedText()
             selectedText = AccessibilitySelectionHelpers.sanitizeSelectedText(selection.text)
             source = selection.source
+            selectionRect = selection.anchorRect
         } catch SelectionError.notTrusted {
             openManualInput(
                 hint: L10n.t("未授权辅助功能，读不到选中文本。可以直接输入或粘贴："),
@@ -229,7 +235,7 @@ final class AppModel: ObservableObject {
             return
         }
 
-        presentPanel(selectedText: selectedText)
+        presentPanel(selectedText: selectedText, selectionRect: selectionRect)
         panelState.lookupInput = .selection
         panelState.lookupSource = source
         run(action: .translate)
@@ -291,7 +297,14 @@ final class AppModel: ObservableObject {
         NSWorkspace.shared.open(url)
     }
 
-    private func presentPanel(selectedText: String = "", errorMessage: String? = nil) {
+    /// `selectionRect` (Accessibility coordinates) places the panel beside the text;
+    /// `emergingFrom` is the bubble's frame when the panel grows out of it.
+    private func presentPanel(
+        selectedText: String = "",
+        errorMessage: String? = nil,
+        selectionRect: CGRect? = nil,
+        emergingFrom bubbleFrame: NSRect? = nil
+    ) {
         selectionAutoPopup.hideBubble()
         translationSession.cancel()
 
@@ -303,7 +316,7 @@ final class AppModel: ObservableObject {
         panelState.isLoading = false
 
         let point = NSEvent.mouseLocation
-        panelController.show(at: point) {
+        panelController.show(at: point, selectionRect: selectionRect, emergingFrom: bubbleFrame) {
             FloatingPanelTitlebarView()
                 .environmentObject(self)
         } content: {

@@ -51,6 +51,11 @@ final class SelectionAutoPopupCoordinator {
         pendingSelectionText
     }
 
+    /// Where the pending selection is, in Accessibility coordinates.
+    var pendingAnchorRect: CGRect? {
+        pendingSelectionAnchorRect
+    }
+
     /// Captured with `pendingText`, before the bubble click moves focus around.
     var pendingSource: LookupSource? {
         pendingSelectionSource

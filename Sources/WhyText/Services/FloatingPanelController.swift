@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import WhyTextCore
 
 final class FloatingPanelController: NSObject, NSWindowDelegate {
     var onDidClose: (() -> Void)?
@@ -11,12 +12,16 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     private var panel: NSPanel?
     private var titlebarAccessory: NSTitlebarAccessoryViewController?
     private var titlebarHostingView: NSHostingView<AnyView>?
-    private var mouseOrigin: NSPoint = .zero
+    private var placement: PanelPlacement?
+    /// Where the panel is headed; it may still be gliding there.
+    private var targetFrame: NSRect?
     private var isClosingProgrammatically = false
     private var outsideClickMonitor: Any?
-    /// While the present animation runs, refits are deferred to its end.
-    private var isPresenting = false
-    private var needsRefitAfterPresent = false
+    /// Set when the user starts dragging the panel; their position then wins.
+    private var isUserMoving = false
+    /// Bumped by every show and close, so a dismiss that finishes after the panel was
+    /// shown again doesn't close the new one.
+    private var presentationID = 0
 
     /// Cap the reading column near ~60–75 Latin / ~30–35 CJK glyphs at default body size.
     private let maxWidth: CGFloat = 560
@@ -24,31 +29,59 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     private let maxHeight: CGFloat = 560
     private let minHeight: CGFloat = 60
 
+    /// Shows the panel beside `selectionRect` (Accessibility coordinates), or beside
+    /// the pointer when the selection's position is unknown. With `sourceFrame` (the
+    /// selection bubble, in screen coordinates) the panel emerges from it.
     func show<Content: View, Titlebar: View>(
         at mouseLocation: NSPoint,
+        selectionRect: CGRect? = nil,
+        emergingFrom sourceFrame: NSRect? = nil,
         @ViewBuilder titlebar: () -> Titlebar,
         @ViewBuilder content: () -> Content
     ) {
-        mouseOrigin = mouseLocation
+        presentationID += 1
+        isClosingProgrammatically = false
 
-        let rootView = AnyView(content())
-        let hostingView = NSHostingView(rootView: rootView)
+        let hostingView = NSHostingView(rootView: AnyView(content()))
         prepareHostingView(hostingView)
         let titlebarView = AnyView(titlebar())
 
-        if let panel {
-            panel.contentView = hostingView
-            fitAndPosition(panel: panel, hostingView: hostingView)
+        let panel = self.panel ?? makePanel()
+        let isNew = self.panel == nil
+        self.panel = panel
+        panel.contentView = hostingView
+        if isNew {
+            installTitlebarAccessory(panel: panel, rootView: titlebarView)
+        } else {
             updateTitlebarAccessory(panel: panel, rootView: titlebarView)
-            panel.orderFrontRegardless()
-            NSApp.activate(ignoringOtherApps: true)
-            installOutsideClickMonitor()
-            return
         }
 
-        let initialSize = NSSize(width: minWidth, height: minHeight)
+        let placement = makePlacement(mouseLocation: mouseLocation, selectionRect: selectionRect)
+        self.placement = placement
+        let size = fittingSize(of: hostingView, placement: placement)
+        let finalFrame = placement.frame(for: size)
+        targetFrame = finalFrame
+
+        // Slide away from the text, or fly out of the bubble.
+        let startOrigin: NSPoint
+        if let sourceFrame {
+            startOrigin = placement.origin(for: size, emergingFrom: sourceFrame)
+        } else {
+            let toward: CGFloat = placement.growth == .down ? PanelChromeMotion.slideDistance : -PanelChromeMotion.slideDistance
+            startOrigin = NSPoint(x: finalFrame.minX, y: finalFrame.minY + toward)
+        }
+        PanelChromeMotion.present(panel: panel, to: finalFrame, from: startOrigin)
+        updateTitlebarAccessoryWidth(panel: panel)
+
+        // Key, but WhyText stays in the background: the app being read keeps its
+        // focus and selection, and gets the keyboard back as soon as the panel closes.
+        panel.makeKey()
+        installOutsideClickMonitor()
+    }
+
+    private func makePanel() -> NSPanel {
         let panel = NSPanel(
-            contentRect: NSRect(origin: .zero, size: initialSize),
+            contentRect: NSRect(origin: .zero, size: NSSize(width: minWidth, height: minHeight)),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -66,28 +99,31 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = true
         panel.delegate = self
-        panel.contentView = hostingView
         disableFullscreen(panel)
+        return panel
+    }
 
-        self.panel = panel
-        installTitlebarAccessory(panel: panel, rootView: titlebarView)
+    private func makePlacement(mouseLocation: NSPoint, selectionRect: CGRect?) -> PanelPlacement {
+        let screens = NSScreen.screens
+        let primaryHeight = screens.first?.frame.maxY ?? 900
+        // Without a selection rectangle, treat the pointer as sitting on the line being read.
+        let anchor = selectionRect.flatMap {
+            AXGeometry.cocoaRect(fromAX: $0, primaryScreenHeight: primaryHeight, screens: screens.map(\.frame), near: mouseLocation)
+        } ?? NSRect(x: mouseLocation.x, y: mouseLocation.y - 12, width: 1, height: 24)
 
-        fitAndPosition(panel: panel, hostingView: hostingView)
+        let screen = screens.first { $0.frame.contains(NSPoint(x: anchor.midX, y: anchor.midY)) }
+            ?? screens.first { $0.frame.contains(mouseLocation) }
+            ?? NSScreen.main
+        let visibleFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        return PanelPlacement.make(anchor: anchor, visibleFrame: visibleFrame, preferredMaxHeight: maxHeight)
+    }
 
-        // Symmetric present path: scale from center + fade (mirrored on dismiss).
-        let finalFrame = panel.frame
-        isPresenting = true
-        needsRefitAfterPresent = false
-        PanelChromeMotion.animatePresent(panel: panel, to: finalFrame) { [weak self] in
-            guard let self else { return }
-            self.isPresenting = false
-            if self.needsRefitAfterPresent {
-                self.needsRefitAfterPresent = false
-                self.refit(force: true)
-            }
-        }
-        NSApp.activate(ignoringOtherApps: true)
-        installOutsideClickMonitor()
+    private func fittingSize(of hostingView: NSHostingView<AnyView>, placement: PanelPlacement) -> NSSize {
+        let fitting = hostingView.fittingSize
+        return NSSize(
+            width: min(max(fitting.width, minWidth), maxWidth),
+            height: min(max(fitting.height, minHeight), placement.maxHeight)
+        )
     }
 
     /// A global monitor only sees events bound for other apps, so clicks on the panel,
@@ -109,31 +145,20 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         outsideClickMonitor = nil
     }
 
-    /// Refit the panel to its current content size, keeping the top-left anchored.
-    /// Without `force`, a panel already at max height is left alone: streamed text
-    /// only grows, and measuring `fittingSize` lays out the whole result each time.
+    /// Refit the panel to its current content size, keeping the edge next to the
+    /// selection fixed. Without `force`, a panel already at its tallest is left alone:
+    /// streamed text only grows, and measuring `fittingSize` lays out the whole result.
     func refit(force: Bool = false) {
-        guard let panel, let hostingView = panel.contentView as? NSHostingView<AnyView> else { return }
-        // Content that grows during the open animation (a restored result, the input
-        // box, early streamed text) would otherwise be clipped to the starting size.
-        if isPresenting {
-            needsRefitAfterPresent = true
-            return
-        }
-        if !force, panel.frame.height >= maxHeight - 1 { return }
+        guard let panel, let placement, let hostingView = panel.contentView as? NSHostingView<AnyView> else { return }
+        let target = targetFrame ?? panel.frame
+        if !force, target.height >= placement.maxHeight - 1 { return }
 
-        let fitting = hostingView.fittingSize
-        let w = min(max(fitting.width, minWidth), maxWidth)
-        let h = min(max(fitting.height, minHeight), maxHeight)
-        let newSize = NSSize(width: w, height: h)
-
-        guard abs(panel.frame.width - w) > 1 || abs(panel.frame.height - h) > 1 else { return }
-
-        var frame = panel.frame
-        let topY = frame.origin.y + frame.size.height
-        frame.size = newSize
-        frame.origin.y = topY - newSize.height
-        panel.setFrame(frame, display: true, animate: false)
+        let frame = placement.frame(for: fittingSize(of: hostingView, placement: placement))
+        guard abs(target.width - frame.width) > 1 || abs(target.height - frame.height) > 1
+            || abs(target.minY - frame.minY) > 1 else { return }
+        targetFrame = frame
+        // Glide, even mid-present: the animation retargets instead of waiting.
+        PanelChromeMotion.resize(panel: panel, to: frame)
     }
 
     func close() {
@@ -141,12 +166,19 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         removeOutsideClickMonitor()
 
         if let panel {
+            presentationID += 1
+            let id = presentationID
             isClosingProgrammatically = true
-            // Leave the way we arrived (scale + fade) — Apple spatial consistency.
-            PanelChromeMotion.animateDismiss(panel: panel) { [weak self] in
-                self?.panel?.close()
-                self?.panel = nil
-                self?.isClosingProgrammatically = false
+            // Leave toward the text it came from, mirroring the way it arrived.
+            let toward: CGFloat = placement?.growth == .up ? -PanelChromeMotion.slideDistance : PanelChromeMotion.slideDistance
+            PanelChromeMotion.dismiss(panel: panel, offset: CGVector(dx: 0, dy: toward)) { [weak self] in
+                // Shown again before the dismiss finished: that panel stays.
+                guard let self, self.presentationID == id else { return }
+                self.panel?.close()
+                self.panel = nil
+                self.placement = nil
+                self.targetFrame = nil
+                self.isClosingProgrammatically = false
             }
         }
 
@@ -162,9 +194,23 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         removeOutsideClickMonitor()
         panel = nil
+        placement = nil
+        targetFrame = nil
         if !isClosingProgrammatically {
             onDidClose?()
         }
+    }
+
+    /// Only user drags send this; programmatic frame changes don't.
+    func windowWillMove(_ notification: Notification) {
+        isUserMoving = true
+    }
+
+    func windowDidMove(_ notification: Notification) {
+        guard isUserMoving, let panel, let placement else { return }
+        isUserMoving = false
+        self.placement = placement.moved(to: panel.frame, preferredMaxHeight: maxHeight)
+        targetFrame = panel.frame
     }
 
     func windowDidResignKey(_ notification: Notification) {
@@ -178,18 +224,6 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     func bringToFrontIfVisible() {
         guard let panel, panel.isVisible else { return }
         panel.orderFrontRegardless()
-    }
-
-    private func fitAndPosition(panel: NSPanel, hostingView: NSHostingView<AnyView>) {
-        let fitting = hostingView.fittingSize
-        let w = min(max(fitting.width, minWidth), maxWidth)
-        let h = min(max(fitting.height, minHeight), maxHeight)
-        let size = NSSize(width: w, height: h)
-
-        panel.setContentSize(size)
-        let origin = ScreenClamp.positionedOrigin(near: mouseOrigin, size: size)
-        panel.setFrameOrigin(origin)
-        updateTitlebarAccessoryWidth(panel: panel)
     }
 
     private func installTitlebarAccessory(panel: NSPanel, rootView: AnyView) {
@@ -227,7 +261,7 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     private func prepareHostingView(_ hostingView: NSHostingView<AnyView>) {
         hostingView.wantsLayer = true
         hostingView.layer?.backgroundColor = NSColor.clear.cgColor
-        // The panel is sized by `fitAndPosition`/`refit` from `fittingSize`. A minimum-size
+        // The panel is sized by `show`/`refit` from `fittingSize`. A minimum-size
         // constraint would instead measure wrapping text at its narrowest and force the
         // window far too tall (seen with two-line Japanese hints).
         hostingView.sizingOptions = [.intrinsicContentSize]

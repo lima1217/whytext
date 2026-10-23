@@ -3,10 +3,14 @@ import SwiftUI
 import WhyTextCore
 
 final class SelectionBubbleController: NSObject, NSWindowDelegate {
-    var onTranslate: (() -> Void)?
-    var onExplain: (() -> Void)?
+    /// Receive the bubble's frame, so the panel can grow out of where it was.
+    var onTranslate: ((NSRect?) -> Void)?
+    var onExplain: ((NSRect?) -> Void)?
 
     private var panel: NSPanel?
+    /// Bumped by every show and hide, so a fade-out that finishes after the bubble
+    /// was shown again doesn't close the new one.
+    private var presentationID = 0
     private var outsideEventMonitor: Any?
     private var autoDismissTask: Task<Void, Never>?
     private var isHoverPaused = false
@@ -14,6 +18,7 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
     func show(at mouseLocation: NSPoint, anchorRect: CGRect? = nil) {
         autoDismissTask?.cancel()
         isHoverPaused = false
+        presentationID += 1
 
         let hostingView = NSHostingView(rootView: SelectionBubbleBar(
             onTranslate: { [weak self] in
@@ -34,8 +39,8 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
             panel.setContentSize(size)
             panel.contentView = hostingView
             positionBubble(panel: panel, at: mouseLocation, anchorRect: anchorRect, size: size)
-            panel.alphaValue = 1
-            panel.orderFrontRegardless()
+            // Picks up from a half-finished fade-out instead of popping to full opacity.
+            PanelChromeMotion.present(panel: panel, to: panel.frame)
             panel.invalidateShadow()
             startOutsideEventMonitor()
             scheduleAutoDismiss()
@@ -65,7 +70,7 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
         self.panel = panel
 
         positionBubble(panel: panel, at: mouseLocation, anchorRect: anchorRect, size: size)
-        PanelChromeMotion.animatePresent(panel: panel, to: panel.frame)
+        PanelChromeMotion.present(panel: panel, to: panel.frame)
         panel.invalidateShadow()
 
         startOutsideEventMonitor()
@@ -80,9 +85,12 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
 
         guard let panel else { return }
 
-        PanelChromeMotion.animateDismiss(panel: panel) { [weak self] in
-            self?.panel?.close()
-            self?.panel = nil
+        presentationID += 1
+        let id = presentationID
+        PanelChromeMotion.dismiss(panel: panel) { [weak self] in
+            guard let self, self.presentationID == id else { return }
+            self.panel?.close()
+            self.panel = nil
         }
     }
 
@@ -96,12 +104,11 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
         panel = nil
     }
 
-    private func handleAction(_ action: (() -> Void)?) {
-        autoDismissTask?.cancel()
-        stopOutsideEventMonitor()
-        panel?.close()
-        panel = nil
-        action?()
+    /// The bubble fades where it is while the panel grows out of its frame.
+    private func handleAction(_ action: ((NSRect?) -> Void)?) {
+        let frame = panel?.frame
+        hide()
+        action?(frame)
     }
 
     private func positionBubble(panel: NSPanel, at mouseLocation: NSPoint, anchorRect: CGRect?, size: NSSize) {
@@ -114,7 +121,7 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
         var x: CGFloat
         var y: CGFloat
 
-        if let anchor = normalizedAnchorRect(anchorRect, near: mouseLocation, screen: screen) {
+        if let anchor = normalizedAnchorRect(anchorRect, near: mouseLocation) {
             x = anchor.maxX + offsetX
             y = anchor.midY - size.height / 2
 
@@ -145,32 +152,15 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
         panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 
-    private func normalizedAnchorRect(_ rect: CGRect?, near mouseLocation: NSPoint, screen: NSScreen?) -> CGRect? {
-        guard let rect, rect.width > 0, rect.height > 0 else {
-            return nil
-        }
-
-        let targetScreen = screen ?? NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) }) ?? NSScreen.main
-        let screenFrame = targetScreen?.frame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let raw = NSRect(x: rect.origin.x, y: rect.origin.y, width: rect.width, height: rect.height)
-        let flipped = NSRect(
-            x: rect.origin.x,
-            y: screenFrame.maxY - rect.maxY,
-            width: rect.width,
-            height: rect.height
+    private func normalizedAnchorRect(_ rect: CGRect?, near mouseLocation: NSPoint) -> CGRect? {
+        guard let rect else { return nil }
+        let screens = NSScreen.screens
+        return AXGeometry.cocoaRect(
+            fromAX: rect,
+            primaryScreenHeight: screens.first?.frame.maxY ?? 900,
+            screens: screens.map(\.frame),
+            near: mouseLocation
         )
-
-        let candidates = [raw, flipped].filter { candidate in
-            candidate.intersects(screenFrame.insetBy(dx: -80, dy: -80))
-        }
-
-        guard !candidates.isEmpty else {
-            return nil
-        }
-
-        return candidates.min { lhs, rhs in
-            lhs.distance(to: mouseLocation) < rhs.distance(to: mouseLocation)
-        }
     }
 
     /// Auto-dismiss after 6 seconds unless the pointer is over the bubble (pause/resume).
@@ -220,18 +210,6 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
     private static func prepareHostingView<Content: View>(_ hostingView: NSHostingView<Content>) {
         hostingView.wantsLayer = true
         hostingView.layer?.backgroundColor = NSColor.clear.cgColor
-    }
-}
-
-private extension NSRect {
-    func distance(to point: NSPoint) -> CGFloat {
-        if contains(point) {
-            return 0
-        }
-
-        let dx = max(minX - point.x, 0, point.x - maxX)
-        let dy = max(minY - point.y, 0, point.y - maxY)
-        return sqrt(dx * dx + dy * dy)
     }
 }
 

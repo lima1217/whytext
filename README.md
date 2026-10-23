@@ -61,7 +61,7 @@ WhyText is a lightweight menu bar app for macOS. It reads the text you have sele
 - **Multiple provider profiles**, each with its own Base URL, model, and API format (`Chat Completions` or `Responses`).
 - **Prompt templates** for translate and explain, with `{{text}}` (source) and `{{target}}` (target language) placeholders.
 - **Interface languages**: Simplified Chinese, Traditional Chinese, English, Japanese, Korean, or follow the system.
-- **Panel behavior**: closes on an outside click, or pin it to keep it open. One-click copy as rich text with a plain-text fallback.
+- **Panel behavior**: opens beside the selection without covering it, and the app you're reading keeps its focus. Closes on an outside click, or pin it to keep it open. One-click copy as rich text with a plain-text fallback.
 - **Launch at login** and **one-click in-app updates**.
 
 ## Installation

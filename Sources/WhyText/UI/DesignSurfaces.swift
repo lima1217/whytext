@@ -135,81 +135,75 @@ extension Animation {
 }
 
 // MARK: - Panel / bubble window animation helpers
-// Symmetric enter/exit paths (Apple spatial consistency): if it scales in, it scales out.
+// One motion language for floating chrome. Windows move and fade but never animate
+// their size on the way in or out: resizing a window re-lays out its text every frame,
+// so a "scale" made from frame changes reflows the words while they're read. Size
+// changes (a streaming answer) get the same short curve, so the edge glides instead
+// of jumping. Every animation can be retargeted or cancelled mid-flight.
 
 enum PanelChromeMotion {
-    /// Present scale for floating chrome (panel, bubble). Reduced motion → opacity only.
-    static let presentScale: CGFloat = 0.94
-    static let presentDuration: TimeInterval = 0.32
-    static let dismissDuration: TimeInterval = 0.18
+    static let presentDuration: TimeInterval = 0.24
+    static let dismissDuration: TimeInterval = 0.16
+    static let resizeDuration: TimeInterval = 0.16
+    /// How far chrome slides as it appears or leaves, toward or away from its anchor.
+    static let slideDistance: CGFloat = 6
 
-    /// `completion` runs when the frame animation ends; frame changes made before then
-    /// are overwritten by the animation's final frame.
-    static func animatePresent(panel: NSPanel, to finalFrame: NSRect, completion: @escaping () -> Void = {}) {
-        if MotionPreference.reduceMotion {
-            panel.setFrame(finalFrame, display: false)
+    /// Fast out, settles without overshoot (a critically damped spring's shape).
+    private static let settleCurve = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.2, 1.0)
+    private static let leaveCurve = CAMediaTimingFunction(controlPoints: 0.4, 0.0, 1.0, 1.0)
+
+    /// Fades in at `finalFrame`'s size, moving from `startOrigin` (default: in place).
+    /// Starting it on a half-dismissed window picks up from where that window is.
+    static func present(
+        panel: NSPanel,
+        to finalFrame: NSRect,
+        from startOrigin: NSPoint? = nil,
+        completion: @escaping () -> Void = {}
+    ) {
+        let reduceMotion = MotionPreference.reduceMotion
+        if !panel.isVisible {
             panel.alphaValue = 0
-            panel.orderFrontRegardless()
-            NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = 0.18
-                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                panel.animator().alphaValue = 1
-            }
-            completion()
-            return
+            let origin = reduceMotion ? finalFrame.origin : (startOrigin ?? finalFrame.origin)
+            panel.setFrame(NSRect(origin: origin, size: finalFrame.size), display: false)
         }
-
-        let scale = presentScale
-        let shrunkWidth = finalFrame.width * scale
-        let shrunkHeight = finalFrame.height * scale
-        let startFrame = NSRect(
-            x: finalFrame.midX - shrunkWidth / 2,
-            y: finalFrame.midY - shrunkHeight / 2,
-            width: shrunkWidth,
-            height: shrunkHeight
-        )
-
-        panel.setFrame(startFrame, display: false)
-        panel.alphaValue = 0
         panel.orderFrontRegardless()
 
-        // Critically damped spring approximation (response ≈ 0.32).
         NSAnimationContext.runAnimationGroup({ ctx in
-            ctx.duration = presentDuration
-            ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.2, 1.0)
+            ctx.duration = reduceMotion ? 0.18 : presentDuration
+            ctx.timingFunction = settleCurve
+            ctx.allowsImplicitAnimation = true
             panel.animator().setFrame(finalFrame, display: true)
             panel.animator().alphaValue = 1
         }, completionHandler: completion)
     }
 
-    static func animateDismiss(panel: NSPanel, completion: @escaping () -> Void) {
-        if MotionPreference.reduceMotion {
-            NSAnimationContext.runAnimationGroup({ ctx in
-                ctx.duration = 0.14
-                ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
-                panel.animator().alphaValue = 0
-            }, completionHandler: completion)
-            return
+    /// Fades out while sliding by `offset`, at a constant size.
+    static func dismiss(panel: NSPanel, offset: CGVector = .zero, completion: @escaping () -> Void) {
+        let reduceMotion = MotionPreference.reduceMotion
+        var frame = panel.frame
+        if !reduceMotion {
+            frame.origin.x += offset.dx
+            frame.origin.y += offset.dy
         }
-
-        let current = panel.frame
-        let scale = presentScale
-        let shrunkWidth = current.width * scale
-        let shrunkHeight = current.height * scale
-        let endFrame = NSRect(
-            x: current.midX - shrunkWidth / 2,
-            y: current.midY - shrunkHeight / 2,
-            width: shrunkWidth,
-            height: shrunkHeight
-        )
-
-        // Mirror the present curve (spatial consistency: leave the way you arrived).
         NSAnimationContext.runAnimationGroup({ ctx in
-            ctx.duration = dismissDuration
-            ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.4, 0.0, 0.8, 0.1)
-            panel.animator().setFrame(endFrame, display: true)
+            ctx.duration = reduceMotion ? 0.14 : dismissDuration
+            ctx.timingFunction = leaveCurve
+            panel.animator().setFrame(frame, display: true)
             panel.animator().alphaValue = 0
         }, completionHandler: completion)
+    }
+
+    /// Glides to a new frame; a new call retargets from wherever the last one is.
+    static func resize(panel: NSPanel, to frame: NSRect) {
+        guard !MotionPreference.reduceMotion else {
+            panel.setFrame(frame, display: true)
+            return
+        }
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = resizeDuration
+            ctx.timingFunction = settleCurve
+            panel.animator().setFrame(frame, display: true)
+        }
     }
 }
 
