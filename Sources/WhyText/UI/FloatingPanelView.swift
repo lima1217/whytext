@@ -7,7 +7,7 @@ private enum PanelTokens {
     static let bottomPadding: CGFloat = Spacing.x4       // 16
     static let bodyFontSize: CGFloat = 13
     static let metaFontSize: CGFloat = 11
-    static let titlebarIconSize: CGFloat = 13
+    static let iconSize: CGFloat = 13
     /// Reading column: ~30–35 CJK / ~55–65 Latin glyphs at default 16pt body.
     static let minWidth: CGFloat = 360
     static let idealWidth: CGFloat = 520
@@ -256,10 +256,9 @@ struct FloatingPanelView: View {
                 }
 
                 if canRetry {
-                    Button(action: { appModel.retryLastAction() }) {
-                        Label(L10n.t("重试"), systemImage: "arrow.clockwise")
+                    PanelIconButton(systemName: "arrow.clockwise", label: L10n.t("重试")) {
+                        appModel.retryLastAction()
                     }
-                    .buttonStyle(.borderedProminent)
                 }
             }
             .controlSize(.small)
@@ -402,10 +401,10 @@ struct FloatingPanelTitlebarView: View {
 
             Button(action: { appModel.togglePanelPinned() }) {
                 Image(systemName: appModel.isPanelPinned ? "pin.fill" : "pin")
-                    .font(.system(size: PanelTokens.titlebarIconSize, weight: .medium))
+                    .font(.system(size: PanelTokens.iconSize, weight: .medium))
                     .rotationEffect(.degrees(45))
                     .foregroundStyle(appModel.isPanelPinned ? Color.accentColor : AstryxColor.textSecondary)
-                    .titlebarIconButton()
+                    .panelIconButton()
             }
             .buttonStyle(.quietIcon)
             .help(appModel.isPanelPinned ? L10n.t("取消固定：点击窗口外会关闭") : L10n.t("固定：点击窗口外不关闭"))
@@ -416,10 +415,10 @@ struct FloatingPanelTitlebarView: View {
                     isActive: didCopy,
                     activeSystemName: "checkmark",
                     inactiveSystemName: "doc.on.doc",
-                    size: PanelTokens.titlebarIconSize
+                    size: PanelTokens.iconSize
                 )
                 .foregroundStyle(didCopy ? Tone.success.color : AstryxColor.textSecondary)
-                .titlebarIconButton()
+                .panelIconButton()
             }
             .buttonStyle(.quietIcon)
             .accessibilityLabel(didCopy ? L10n.t("已复制") : L10n.t("复制结果"))
@@ -528,11 +527,30 @@ struct FloatingPanelTitlebarView: View {
 }
 
 private extension View {
-    /// Shared frame and hover chrome for the titlebar's icon buttons (pin, copy).
-    func titlebarIconButton() -> some View {
+    /// Shared frame and hover chrome for the panel's icon buttons.
+    func panelIconButton() -> some View {
         frame(width: 28, height: 28)
             .quietButtonHover()
             .contentShape(Rectangle())
+    }
+}
+
+/// Icon-only panel action, styled like the titlebar's pin and copy buttons.
+private struct PanelIconButton: View {
+    var systemName: String
+    var label: String
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: PanelTokens.iconSize, weight: .medium))
+                .foregroundStyle(AstryxColor.textSecondary)
+                .panelIconButton()
+        }
+        .buttonStyle(.quietIcon)
+        .help(label)
+        .accessibilityLabel(label)
     }
 }
 
@@ -873,10 +891,9 @@ private struct HistoryNoteRow: View {
             Text(L10n.t("来自最近记录，未重新请求"))
                 .font(.system(size: PanelTokens.metaFontSize))
             Spacer(minLength: 0)
-            Button(action: { appModel.regenerate() }) {
-                Label(L10n.t("重新生成"), systemImage: "arrow.clockwise")
+            PanelIconButton(systemName: "arrow.clockwise", label: L10n.t("重新生成")) {
+                appModel.regenerate()
             }
-            .controlSize(.small)
         }
         .foregroundStyle(AstryxColor.textSecondary)
         .padding(.horizontal, Spacing.x1)
@@ -916,10 +933,9 @@ private struct FollowUpTurnView: View {
                         .foregroundStyle(AstryxColor.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
-                    Button(action: { appModel.retryFollowUp(id: turn.id) }) {
-                        Label(L10n.t("重试"), systemImage: "arrow.clockwise")
+                    PanelIconButton(systemName: "arrow.clockwise", label: L10n.t("重试")) {
+                        appModel.retryFollowUp(id: turn.id)
                     }
-                    .controlSize(.small)
                     .disabled(appModel.panelState.isLoading)
                 }
             } else if turn.answer.isEmpty {
@@ -952,19 +968,15 @@ private struct FollowUpInputBar: View {
             .frame(maxWidth: .infinity)
 
             if appModel.panelState.isLoading {
-                Button(action: { appModel.cancelCurrentRequest() }) {
-                    Image(systemName: "stop.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(AstryxColor.textSecondary)
+                PanelIconButton(systemName: "stop.fill", label: L10n.t("停止")) {
+                    appModel.cancelCurrentRequest()
                 }
-                .buttonStyle(.quietIcon)
-                .help(L10n.t("停止"))
-                .accessibilityLabel(L10n.t("停止"))
             } else {
                 Button(action: submit) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 18))
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: PanelTokens.iconSize, weight: .semibold))
                         .foregroundStyle(canSend ? Color.accentColor : AstryxColor.textDisabled)
+                        .panelIconButton()
                 }
                 .buttonStyle(.quietIcon)
                 .disabled(!canSend)
