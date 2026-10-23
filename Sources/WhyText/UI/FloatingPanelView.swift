@@ -7,6 +7,7 @@ private enum PanelTokens {
     static let bottomPadding: CGFloat = Spacing.x4       // 16
     static let bodyFontSize: CGFloat = 13
     static let metaFontSize: CGFloat = 11
+    static let titlebarIconSize: CGFloat = 13
     /// Reading column: ~30–35 CJK / ~55–65 Latin glyphs at default 16pt body.
     static let minWidth: CGFloat = 360
     static let idealWidth: CGFloat = 520
@@ -365,7 +366,6 @@ struct FloatingPanelView: View {
 struct FloatingPanelTitlebarView: View {
     @EnvironmentObject private var appModel: AppModel
     @State private var didCopy = false
-    @State private var isCopyHovered = false
     @State private var copyResetTask: Task<Void, Never>?
 
     var body: some View {
@@ -402,12 +402,10 @@ struct FloatingPanelTitlebarView: View {
 
             Button(action: { appModel.togglePanelPinned() }) {
                 Image(systemName: appModel.isPanelPinned ? "pin.fill" : "pin")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: PanelTokens.titlebarIconSize, weight: .medium))
                     .rotationEffect(.degrees(45))
                     .foregroundStyle(appModel.isPanelPinned ? Color.accentColor : AstryxColor.textSecondary)
-                    .frame(width: 28, height: 28)
-                    .quietButtonHover()
-                    .contentShape(Rectangle())
+                    .titlebarIconButton()
             }
             .buttonStyle(.quietIcon)
             .help(appModel.isPanelPinned ? L10n.t("取消固定：点击窗口外会关闭") : L10n.t("固定：点击窗口外不关闭"))
@@ -418,22 +416,13 @@ struct FloatingPanelTitlebarView: View {
                     isActive: didCopy,
                     activeSystemName: "checkmark",
                     inactiveSystemName: "doc.on.doc",
-                    size: 14
+                    size: PanelTokens.titlebarIconSize
                 )
                 .foregroundStyle(didCopy ? Tone.success.color : AstryxColor.textSecondary)
-                .frame(width: 28, height: 28)
-                .background(copyButtonBackground)
-                // Grow hit target left/vertical so the glyph stays flush with content trailing.
-                .padding(.leading, 4)
-                .padding(.vertical, 6)
-                .contentShape(Rectangle())
-                .accessibilityLabel(didCopy ? L10n.t("已复制") : L10n.t("复制结果"))
+                .titlebarIconButton()
             }
             .buttonStyle(.quietIcon)
-            .background(CopyTooltipAnchor(isPresented: isCopyHovered && hasResult, text: L10n.t("复制")))
-            .onHover { hovering in
-                isCopyHovered = hovering
-            }
+            .accessibilityLabel(didCopy ? L10n.t("已复制") : L10n.t("复制结果"))
             .disabled(appModel.panelState.isLoading || !hasResult)
             .opacity(hasResult ? 1 : 0)
             .allowsHitTesting(hasResult)
@@ -445,12 +434,6 @@ struct FloatingPanelTitlebarView: View {
         .animation(AstryxMotion.smooth, value: shouldShowStatus)
         .accessibilityElement(children: .contain)
         .onDisappear { copyResetTask?.cancel() }
-    }
-
-    private var copyButtonBackground: some View {
-        RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
-            .fill(isCopyHovered ? AstryxColor.overlayHover : Color.clear)
-            .animation(AstryxMotion.quick, value: isCopyHovered)
     }
 
     @ViewBuilder
@@ -544,113 +527,12 @@ struct FloatingPanelTitlebarView: View {
     }
 }
 
-private struct CopyTooltipAnchor: NSViewRepresentable {
-    var isPresented: Bool
-    var text: String
-
-    func makeNSView(context: Context) -> NSView {
-        NSView(frame: .zero)
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        if isPresented {
-            CopyTooltipWindow.shared.show(text: text, below: nsView)
-        } else {
-            CopyTooltipWindow.shared.hide(anchor: nsView)
-        }
-    }
-
-    static func dismantleNSView(_ nsView: NSView, coordinator: ()) {
-        CopyTooltipWindow.shared.hide(anchor: nsView)
-    }
-}
-
-@MainActor
-private final class CopyTooltipWindow {
-    static let shared = CopyTooltipWindow()
-
-    private var panel: NSPanel?
-    private weak var anchorView: NSView?
-
-    func show(text: String, below view: NSView) {
-        guard let window = view.window else { return }
-        anchorView = view
-
-        let size = NSSize(width: 48, height: 30)
-        let anchorRect = window.convertToScreen(view.convert(view.bounds, to: nil))
-        let origin = NSPoint(
-            x: anchorRect.midX - size.width / 2,
-            y: anchorRect.minY - size.height - 6
-        )
-
-        let panel = panel ?? makePanel(size: size)
-        let hosting = NSHostingView(rootView: CopyTooltipView(text: text))
-        hosting.wantsLayer = true
-        hosting.layer?.backgroundColor = NSColor.clear.cgColor
-        panel.contentView = hosting
-        panel.setFrame(NSRect(origin: origin, size: size), display: true)
-        panel.orderFrontRegardless()
-        panel.invalidateShadow()
-        self.panel = panel
-    }
-
-    func hide(anchor view: NSView? = nil) {
-        if let view, anchorView !== view { return }
-        panel?.orderOut(nil)
-        anchorView = nil
-    }
-
-    private func makePanel(size: NSSize) -> NSPanel {
-        let panel = NSPanel(
-            contentRect: NSRect(origin: .zero, size: size),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        panel.isReleasedWhenClosed = false
-        panel.backgroundColor = .clear
-        panel.isOpaque = false
-        panel.hasShadow = true
-        panel.level = .floating
-        panel.ignoresMouseEvents = true
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        return panel
-    }
-}
-
-private struct CopyTooltipView: View {
-    var text: String
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(AstryxColor.textPrimary)
-            .padding(.horizontal, Spacing.x2)
-            .padding(.vertical, Spacing.x1)
-            .background(
-                ZStack {
-                    if MotionPreference.reduceTransparency {
-                        Color(nsColor: .controlBackgroundColor)
-                    } else {
-                        VisualEffectView(
-                            material: .hudWindow,
-                            blendingMode: .behindWindow,
-                            state: .active,
-                            cornerStyle: .continuous(Radius.element)
-                        )
-                        Color(nsColor: .controlBackgroundColor).opacity(colorScheme == .dark ? 0.35 : 0.72)
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: Radius.element, style: .continuous))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: Radius.element, style: .continuous)
-                    .strokeBorder(
-                        colorScheme == .dark ? Color.white.opacity(0.16) : Color.white.opacity(0.5),
-                        lineWidth: 0.5
-                    )
-            )
+private extension View {
+    /// Shared frame and hover chrome for the titlebar's icon buttons (pin, copy).
+    func titlebarIconButton() -> some View {
+        frame(width: 28, height: 28)
+            .quietButtonHover()
+            .contentShape(Rectangle())
     }
 }
 
