@@ -26,10 +26,8 @@ struct HotKeyRecorderView: View {
                 .accessibilityLabel(L10n.t("当前快捷键"))
                 .accessibilityValue(shortcut?.displayString ?? L10n.t("未设置"))
 
-            Button {
+            Button(L10n.t("录制")) {
                 isRecording.toggle()
-            } label: {
-                Label(L10n.t("录制"), systemImage: isRecording ? "keyboard.badge.ellipsis" : "keyboard")
             }
             .accessibilityLabel(isRecording ? L10n.t("正在录制快捷键，请按下组合键，按 Esc 取消") : L10n.t("录制快捷键"))
 

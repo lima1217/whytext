@@ -27,6 +27,9 @@ struct PermissionsSettingsView: View {
                     Button(L10n.t("打开系统设置")) {
                         appModel.openAccessibilitySettings()
                     }
+                    Button(L10n.t("重启 WhyText")) {
+                        appModel.relaunchApp()
+                    }
                 }
             }
 
@@ -49,14 +52,7 @@ struct PermissionsSettingsView: View {
             }
 
             HStack(spacing: Spacing.x2) {
-                Button(L10n.t("立即诊断")) {
-                    appModel.runSelectionDiagnostics()
-                }
-
-                Button(appModel.selectionDiagnosticsPending ? L10n.t("2秒后诊断（进行中）") : L10n.t("2秒后诊断")) {
-                    appModel.runSelectionDiagnosticsWithDelay(seconds: 2.0)
-                }
-                .disabled(appModel.selectionDiagnosticsPending)
+                Spacer()
 
                 if !appModel.selectionDiagnosticsReport.isEmpty {
                     Button(L10n.t("复制诊断结果")) {
@@ -66,10 +62,18 @@ struct PermissionsSettingsView: View {
                     }
                 }
 
-                Spacer()
+                if appModel.selectionDiagnosticsPending {
+                    ProgressView()
+                        .controlSize(.small)
+                }
 
-                Button(L10n.t("重启 WhyText")) {
-                    appModel.relaunchApp()
+                Button(L10n.t("2秒后诊断")) {
+                    appModel.runSelectionDiagnosticsWithDelay(seconds: 2.0)
+                }
+                .disabled(appModel.selectionDiagnosticsPending)
+
+                Button(L10n.t("立即诊断")) {
+                    appModel.runSelectionDiagnostics()
                 }
             }
 

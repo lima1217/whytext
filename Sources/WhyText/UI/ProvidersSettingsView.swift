@@ -119,10 +119,8 @@ struct ProvidersSettingsView: View {
                     .accessibilityHidden(true)
                 Text(L10n.t("还没有服务商"))
                     .font(AstryxFont.bodySemibold)
-                Button {
+                Button(L10n.t("添加服务商")) {
                     showAddTemplate = true
-                } label: {
-                    Label(L10n.t("添加服务商"), systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -294,22 +292,16 @@ private struct ProviderDetailView: View {
             }
 
             Section {
-                HStack {
-                    Button {
+                HStack(spacing: Spacing.x2) {
+                    Spacer()
+                    if isTestingConnectivity {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                    Button(isTestingConnectivity ? L10n.t("测试中…") : L10n.t("测试连通性")) {
                         runConnectivityTest()
-                    } label: {
-                        if isTestingConnectivity {
-                            HStack(spacing: Spacing.x1_5) {
-                                ProgressView().controlSize(.small)
-                                Text(L10n.t("测试中…"))
-                            }
-                        } else {
-                            Label(L10n.t("测试连通性"), systemImage: "bolt.horizontal")
-                        }
                     }
                     .disabled(isTestingConnectivity)
-                    .accessibilityLabel(isTestingConnectivity ? L10n.t("正在测试连通性") : L10n.t("测试连通性"))
-                    Spacer()
                 }
 
                 if let report = connectivityReport {
