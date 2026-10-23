@@ -80,8 +80,6 @@ extension L10n {
         "授权": "Allow",
         "输入或粘贴要翻译的文字…": "Type or paste text to translate…",
         "截图识别": "From Screenshot",
-        "框选屏幕上的区域，识别其中的文字并翻译": "Select an area of the screen, recognize its text, and translate it",
-        "翻译  ⌘↩": "Translate  ⌘↩",
         "来自最近记录，未重新请求": "From recent results — not requested again",
         "重新生成": "Regenerate",
         "正在回答": "Answering",

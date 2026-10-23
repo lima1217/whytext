@@ -250,7 +250,7 @@ private struct SelectionBubbleBar: View {
 
     var body: some View {
         HStack(spacing: Metrics.spacing) {
-            BubbleActionButton(
+            QuietLabelButton(
                 title: L10n.t("翻译"),
                 systemName: "character.bubble",
                 action: onTranslate
@@ -259,7 +259,7 @@ private struct SelectionBubbleBar: View {
                 .fill(AstryxColor.border)
                 .frame(width: 1, height: Metrics.dividerHeight)
                 .accessibilityHidden(true)
-            BubbleActionButton(
+            QuietLabelButton(
                 title: L10n.t("解释"),
                 systemName: "questionmark.circle",
                 action: onExplain
@@ -323,34 +323,4 @@ private enum Metrics {
     static let padding: CGFloat = 4
     static let spacing: CGFloat = 2
     static let dividerHeight: CGFloat = 16
-    static let buttonHeight: CGFloat = 28
-}
-
-/// Glyph + label in the result panel's quiet button style: secondary glyph, quiet
-/// hover fill, press scale. Height stays 28pt and the whole slot is clickable.
-private struct BubbleActionButton: View {
-    let title: String
-    let systemName: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: Spacing.x1_5) {
-                Image(systemName: systemName)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(AstryxColor.textSecondary)
-                    .accessibilityHidden(true)
-                Text(title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(AstryxColor.textPrimary)
-                    .lineLimit(1)
-            }
-            .padding(.horizontal, Spacing.x2)
-            .frame(height: Metrics.buttonHeight)
-            .quietButtonHover()
-            .contentShape(RoundedRectangle(cornerRadius: Radius.element, style: .continuous))
-        }
-        .buttonStyle(.quietIcon)
-        .accessibilityLabel(title)
-    }
 }

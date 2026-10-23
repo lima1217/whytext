@@ -156,15 +156,57 @@ extension View {
 private struct QuietButtonHover: ViewModifier {
     var cornerRadius: CGFloat
     @State private var isHovering = false
+    @Environment(\.isEnabled) private var isEnabled
 
     func body(content: Content) -> some View {
         content
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(AstryxColor.overlayHover)
-                    .opacity(isHovering ? 1 : 0)
+                    .opacity(isHovering && isEnabled ? 1 : 0)
             )
             .onHover { isHovering = $0 }
             .animation(AstryxMotion.quick, value: isHovering)
+    }
+}
+
+// MARK: - Quiet label button
+// Glyph + label with quiet hover and press scale, for compact action rows
+// (selection bubble, manual input). Height stays 28pt and the whole slot is clickable.
+
+struct QuietLabelButton: View {
+    var title: String
+    var systemName: String
+    /// Optional key hint shown after the title, e.g. "⌘↩".
+    var shortcut: String? = nil
+    var action: () -> Void
+
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Spacing.x1_5) {
+                Image(systemName: systemName)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(isEnabled ? AstryxColor.textSecondary : AstryxColor.textDisabled)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(isEnabled ? AstryxColor.textPrimary : AstryxColor.textDisabled)
+                    .lineLimit(1)
+                if let shortcut {
+                    Text(shortcut)
+                        .font(.system(size: 11))
+                        .foregroundStyle(isEnabled ? AstryxColor.textSecondary : AstryxColor.textDisabled)
+                        .accessibilityHidden(true)
+                }
+            }
+            .padding(.horizontal, Spacing.x2)
+            .frame(height: 28)
+            .quietButtonHover()
+            .contentShape(RoundedRectangle(cornerRadius: Radius.element, style: .continuous))
+        }
+        .buttonStyle(.quietIcon)
+        .accessibilityLabel(title)
     }
 }

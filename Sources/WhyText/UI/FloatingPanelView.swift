@@ -741,22 +741,23 @@ private struct ManualInputView: View {
             .frame(minWidth: PanelTokens.minWidth, idealWidth: PanelTokens.idealWidth, minHeight: 96, maxHeight: 160)
             .panelCard()
 
-            HStack(spacing: Spacing.x2) {
-                Button(action: { appModel.startScreenTextCapture() }) {
-                    Label(L10n.t("截图识别"), systemImage: "text.viewfinder")
+            HStack(spacing: Spacing.half) {
+                PanelIconButton(systemName: "text.viewfinder", label: L10n.t("截图识别")) {
+                    appModel.startScreenTextCapture()
                 }
-                .help(L10n.t("框选屏幕上的区域，识别其中的文字并翻译"))
 
                 Spacer(minLength: 0)
 
-                Button(L10n.t("解释")) { submit(.explain) }
-                    .disabled(isEmpty)
+                QuietLabelButton(title: L10n.t("解释"), systemName: "questionmark.circle") {
+                    submit(.explain)
+                }
+                .disabled(isEmpty)
 
-                Button(L10n.t("翻译  ⌘↩")) { submit(.translate) }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(isEmpty)
+                QuietLabelButton(title: L10n.t("翻译"), systemName: "character.bubble", shortcut: "⌘↩") {
+                    submit(.translate)
+                }
+                .disabled(isEmpty)
             }
-            .controlSize(.small)
         }
         // The panel was sized for empty content; grow it once the box is in the tree.
         .onAppear {
