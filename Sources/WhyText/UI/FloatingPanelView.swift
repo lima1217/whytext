@@ -418,15 +418,12 @@ struct FloatingPanelTitlebarView: View {
                     // doc.on.doc draws taller than pin at the same point size.
                     size: PanelTokens.iconSize - 1
                 )
-                .foregroundStyle(didCopy ? Tone.success.color : AstryxColor.textSecondary)
+                .foregroundStyle(copyGlyphColor)
                 .panelIconButton()
             }
             .buttonStyle(.quietIcon)
             .accessibilityLabel(didCopy ? L10n.t("已复制") : L10n.t("复制结果"))
-            .disabled(appModel.panelState.isLoading || !hasResult)
-            .opacity(hasResult ? 1 : 0)
-            .allowsHitTesting(hasResult)
-            .accessibilityHidden(!hasResult)
+            .disabled(!canCopy)
             .help(didCopy ? L10n.t("已复制") : L10n.t("复制"))
         }
         .frame(height: 32)
@@ -473,8 +470,18 @@ struct FloatingPanelTitlebarView: View {
         return "idle"
     }
 
+    /// Always shown, like pin; dimmed until there is a finished result to copy.
+    private var canCopy: Bool {
+        !appModel.panelState.isLoading && hasResult
+    }
+
+    private var copyGlyphColor: Color {
+        if didCopy { return Tone.success.color }
+        return canCopy ? AstryxColor.textSecondary : AstryxColor.textDisabled
+    }
+
     private func copyResultIfPossible() {
-        guard !appModel.panelState.isLoading, hasResult else { return }
+        guard canCopy else { return }
         appModel.copyResultRichTextToPasteboard()
         didCopy = true
         copyResetTask?.cancel()
