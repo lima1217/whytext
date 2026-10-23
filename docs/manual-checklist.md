@@ -13,7 +13,7 @@ Use this checklist before replacing the local app in `/Applications`.
 - Open `WhyText -> 设置…`. The window opens at about 820×600, can't shrink below 760×520, and has a transparent title bar.
 - The sidebar lists 通用, 快捷键, 翻译方向, 服务商, 提示词, 权限, 更新, each with a tinted glyph tile. Selecting a row switches the pane.
 - Sidebar dots: 快捷键 shows red for a blocking hotkey problem and orange when no hotkey is set or one may conflict; 服务商 shows orange with no providers; 提示词 shows red when a template is missing `{{text}}`; 权限 shows orange without Accessibility; 更新 shows blue when an update is available.
-- 通用 → 当前状态 shows the shortcut and Accessibility status; clicking each row jumps to 快捷键 / 权限.
+- The first group in 通用 shows the shortcut and Accessibility status; clicking each row jumps to 快捷键 / 权限.
 
 ### 快捷键
 
@@ -34,8 +34,8 @@ Use this checklist before replacing the local app in `/Applications`.
 
 ### 提示词
 
-- Edit both 翻译提示词 and 解释提示词, use 插入 `{{text}}`, and 恢复默认. Reopen settings and confirm both templates persist.
-- Remove `{{text}}` from a template: it shows 缺少 `{{text}}` and the sidebar dot turns red.
+- Edit both 翻译提示词 and 解释提示词, then use 恢复默认. Reopen settings and confirm both templates persist.
+- Remove `{{text}}` from a template: it shows 缺少 `{{text}}`, 插入 `{{text}}` appears, and the sidebar dot turns red. Click 插入 `{{text}}`: the placeholder is added, and the badge and button disappear.
 
 ### 权限
 
@@ -49,7 +49,7 @@ Use this checklist before replacing the local app in `/Applications`.
 
 ## Selection Bubble
 
-- Select text: the bubble is a rounded rectangle with labeled actions (green 翻译, orange 解释) and sizes to the localized labels in every interface language.
+- Select text: the bubble is a rounded rectangle with labeled 翻译 and 解释 actions (gray outline icons) and sizes to the localized labels in every interface language.
 - Confirm the bubble appears near the selection when the app provides selection bounds, and still appears near the mouse as fallback. It auto-dismisses, and hovering pauses dismissal.
 - Click 翻译 and confirm the panel opens in translate mode; click 解释 and confirm explain mode and the explain prompt are used.
 
@@ -63,6 +63,7 @@ Use this checklist before replacing the local app in `/Applications`.
 - Expand 原文 and confirm the panel grows; collapse it again.
 - Ask a follow-up question (Return sends, Esc closes the panel); confirm the answer uses the earlier result as context and copy includes it.
 - Confirm the copy button copies rich text (bold/headings/lists) into Notes/Pages, with plain-text fallback.
+- While a translation is loading or streaming, the copy button stays next to the pin, dimmed and unclickable; it becomes clickable once the result finishes.
 - Click outside the panel and confirm it closes; pin it, click outside, and confirm it stays open.
 - Translate the same text twice; the second time shows 来自最近记录，未重新请求 instantly, and 重新生成 requests again.
 - Translate text longer than 4000 characters and confirm chunks appear in order.
