@@ -126,14 +126,18 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         )
     }
 
-    /// A global monitor only sees events bound for other apps, so clicks on the panel,
-    /// the selection bubble, or Settings never close it.
+    /// A global monitor sees events bound for other apps, so clicks on the selection
+    /// bubble or Settings never close the panel. Clicks on the panel itself do reach it:
+    /// WhyText stays inactive, and a mouse-down on an inactive app's non-activating
+    /// panel (a title-bar drag, say) is reported globally, hence the frame check.
     private func installOutsideClickMonitor() {
         guard outsideClickMonitor == nil else { return }
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
         ) { [weak self] _ in
-            guard let self, self.isVisible, self.shouldCloseOnOutsideClick() else { return }
+            guard let self, let panel = self.panel, panel.isVisible,
+                  !panel.frame.contains(NSEvent.mouseLocation),
+                  self.shouldCloseOnOutsideClick() else { return }
             self.onOutsideClick?()
         }
     }
