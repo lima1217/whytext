@@ -227,5 +227,7 @@ extension L10n {
         "在翻译结果上点星标，就能记下这个词的译法；以后翻译到它时会照用。": "Star a translation result to remember how that word is translated; later translations will use it.",
         "翻译时，用到的术语会随请求一起发给服务商。": "When translating, the glossary terms used are sent to your provider with the request.",
         "从术语表移除 %@": "Remove %@ from Glossary",
+        "搜索术语或译法": "Search terms or renderings",
+        "没有匹配的术语。": "No matching terms.",
     ]
 }

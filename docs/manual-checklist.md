@@ -99,6 +99,7 @@ Use this checklist before replacing the local app in `/Applications`.
 - Sentence capture: select one word mid-sentence and export. In TextEdit and Notes the term file quotes the full sentence with the word in bold; in a PDF in Preview the quoted sentence spans the wrapped lines. Note the result for Safari, Chrome, and one Electron app (VS Code or Slack).
 - Glossary: translate a single word (e.g. moat). A star appears next to the pin; it doesn't appear for explanations, long passages, or while loading. Star it and confirm 设置 → 阅读记忆 → 术语表 lists it with the result's first line as the rendering.
 - Translate a sentence containing that word: the translation uses the glossary rendering. Change the rendering in Settings and translate the same sentence again: it is requested again (no 来自最近记录) and uses the new rendering. Unstar it and translate again: requested again.
+- With several glossary entries: 导出 / 清空 sit above the glossary; the list is alphabetical (case-insensitive, numbers in natural order); typing in the search field filters by term or rendering, and a search with no hits says 没有匹配的术语。
 - Export with a glossary entry: 术语表.md lists it, and the term's file says in_glossary: true. 清空阅读记忆… also empties the glossary.
 - 权限 → 选区诊断 on a word in TextEdit shows sentenceCaptured: true and a sentencePreview; on a whole selected sentence it shows false.
 

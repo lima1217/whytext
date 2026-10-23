@@ -5,12 +5,14 @@ struct MemorySettingsView: View {
     @EnvironmentObject private var appModel: AppModel
     @State private var exportError: String?
     @State private var confirmingClear = false
+    @State private var glossaryQuery = ""
 
     var body: some View {
         SettingsPage(.memory) {
             recordingSection
-            glossarySection
+            // Above the glossary, so a long list never pushes them out of sight.
             exportSection
+            glossarySection
         }
     }
 
@@ -20,16 +22,31 @@ struct MemorySettingsView: View {
 
     private var glossarySection: some View {
         Section(L10n.t("术语表")) {
-            let entries = appModel.readingMemory.glossary
-            if entries.isEmpty {
+            if appModel.readingMemory.glossary.isEmpty {
                 CaptionText(text: L10n.t("在翻译结果上点星标，就能记下这个词的译法；以后翻译到它时会照用。"))
             } else {
+                TextField("", text: $glossaryQuery, prompt: Text(L10n.t("搜索术语或译法")))
+                    .labelsHidden()
+                    .textFieldStyle(.roundedBorder)
+
+                let entries = visibleGlossary
+                if entries.isEmpty {
+                    CaptionText(text: L10n.t("没有匹配的术语。"))
+                }
                 ForEach(entries) { entry in
                     GlossaryRow(entry: entry)
                 }
                 CaptionText(text: L10n.t("翻译时，用到的术语会随请求一起发给服务商。"))
             }
         }
+    }
+
+    /// Alphabetical by term; filtered by the search text on term or rendering.
+    private var visibleGlossary: [GlossaryEntry] {
+        let query = glossaryQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        return appModel.readingMemory.glossary
+            .filter { query.isEmpty || $0.term.localizedCaseInsensitiveContains(query) || $0.rendering.localizedCaseInsensitiveContains(query) }
+            .sorted { $0.term.localizedStandardCompare($1.term) == .orderedAscending }
     }
 
     private var recordingSection: some View {
