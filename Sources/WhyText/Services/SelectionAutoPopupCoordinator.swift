@@ -16,6 +16,7 @@ final class SelectionAutoPopupCoordinator {
     private var lastAutoPopupAt = Date.distantPast
     private var pendingSelectionText: String = ""
     private var pendingSelectionAnchorRect: CGRect?
+    private var pendingSelectionSource: LookupSource?
     private var suppressAutoPopupUntil = Date.distantPast
     private var autoPopupTask: Task<Void, Never>?
 
@@ -48,6 +49,11 @@ final class SelectionAutoPopupCoordinator {
 
     var pendingText: String {
         pendingSelectionText
+    }
+
+    /// Captured with `pendingText`, before the bubble click moves focus around.
+    var pendingSource: LookupSource? {
+        pendingSelectionSource
     }
 
     func setEnabled(_ enabled: Bool) {
@@ -136,6 +142,7 @@ final class SelectionAutoPopupCoordinator {
     private func clearPendingSelection() {
         pendingSelectionText = ""
         pendingSelectionAnchorRect = nil
+        pendingSelectionSource = nil
         gestureTracker.clear()
     }
 
@@ -183,6 +190,7 @@ final class SelectionAutoPopupCoordinator {
             BubbleDebugLog.log("gate: final text too short len=\(trimmed.count)")
             pendingSelectionText = ""
             pendingSelectionAnchorRect = nil
+            pendingSelectionSource = nil
             return
         }
 
@@ -196,6 +204,7 @@ final class SelectionAutoPopupCoordinator {
 
         pendingSelectionText = trimmed
         pendingSelectionAnchorRect = selection.anchorRect
+        pendingSelectionSource = selection.source
 
         let point = NSEvent.mouseLocation
         BubbleDebugLog.log("SHOW bubble at \(point) anchor=\(selection.anchorRect?.debugDescription ?? "nil") textLen=\(trimmed.count)")
@@ -244,7 +253,7 @@ final class SelectionAutoPopupCoordinator {
             if accepted {
                 // Drop untrustworthy anchors so the bubble parks near the mouse.
                 let usableAnchor = nearMouse ? anchorRect : nil
-                return SelectionReader.Result(text: trimmed, anchorRect: usableAnchor)
+                return SelectionReader.Result(text: trimmed, anchorRect: usableAnchor, source: selection?.source)
             }
         }
 
@@ -254,7 +263,7 @@ final class SelectionAutoPopupCoordinator {
                 let fallbackText = AccessibilitySelectionHelpers.sanitizeSelectedText(fallback.text)
                 if fallbackText.count >= SelectionAutoPopupPolicy.minimumTextLength {
                     BubbleDebugLog.log("read: clipboard fallback ok textLen=\(fallbackText.count)")
-                    return SelectionReader.Result(text: fallbackText, anchorRect: nil)
+                    return SelectionReader.Result(text: fallbackText, anchorRect: nil, source: fallback.source)
                 }
             }
             BubbleDebugLog.log("read: clipboard fallback empty")

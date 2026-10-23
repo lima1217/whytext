@@ -116,6 +116,8 @@ final class SettingsStore: ObservableObject {
     @Published var secondaryLanguage: TranslationLanguage
     /// Keep recent results on disk and reuse them for identical requests.
     @Published var saveHistory: Bool
+    /// Keep every finished lookup in reading memory (separate from the history cache).
+    @Published var saveReadingMemory: Bool
     /// Look for a newer GitHub release once a day.
     @Published var autoCheckForUpdates: Bool
     @Published var interfaceLanguage: InterfaceLanguage
@@ -162,6 +164,7 @@ final class SettingsStore: ObservableObject {
             self.primaryLanguage = decoded.primaryLanguage
             self.secondaryLanguage = decoded.secondaryLanguage
             self.saveHistory = decoded.saveHistory
+            self.saveReadingMemory = decoded.saveReadingMemory
             self.autoCheckForUpdates = decoded.autoCheckForUpdates
             self.interfaceLanguage = decoded.interfaceLanguage
 
@@ -234,6 +237,7 @@ final class SettingsStore: ObservableObject {
             self.primaryLanguage = .simplifiedChinese
             self.secondaryLanguage = .english
             self.saveHistory = true
+            self.saveReadingMemory = true
             self.autoCheckForUpdates = true
             self.interfaceLanguage = .system
         }
@@ -359,6 +363,11 @@ final class SettingsStore: ObservableObject {
             .sink { [weak self] _ in self?.schedulePersist() }
             .store(in: &cancellables)
 
+        $saveReadingMemory
+            .dropFirst()
+            .sink { [weak self] _ in self?.schedulePersist() }
+            .store(in: &cancellables)
+
         $autoCheckForUpdates
             .dropFirst()
             .sink { [weak self] _ in self?.schedulePersist() }
@@ -397,6 +406,7 @@ final class SettingsStore: ObservableObject {
             primaryLanguage: primaryLanguage,
             secondaryLanguage: secondaryLanguage,
             saveHistory: saveHistory,
+            saveReadingMemory: saveReadingMemory,
             autoCheckForUpdates: autoCheckForUpdates,
             interfaceLanguage: interfaceLanguage
         )
@@ -440,6 +450,7 @@ private struct PersistedSettings: Codable {
     var primaryLanguage: TranslationLanguage
     var secondaryLanguage: TranslationLanguage
     var saveHistory: Bool
+    var saveReadingMemory: Bool
     var autoCheckForUpdates: Bool
     var interfaceLanguage: InterfaceLanguage
 
@@ -458,6 +469,7 @@ private struct PersistedSettings: Codable {
         primaryLanguage: TranslationLanguage,
         secondaryLanguage: TranslationLanguage,
         saveHistory: Bool,
+        saveReadingMemory: Bool,
         autoCheckForUpdates: Bool,
         interfaceLanguage: InterfaceLanguage
     ) {
@@ -475,6 +487,7 @@ private struct PersistedSettings: Codable {
         self.primaryLanguage = primaryLanguage
         self.secondaryLanguage = secondaryLanguage
         self.saveHistory = saveHistory
+        self.saveReadingMemory = saveReadingMemory
         self.autoCheckForUpdates = autoCheckForUpdates
         self.interfaceLanguage = interfaceLanguage
     }
@@ -497,6 +510,7 @@ private struct PersistedSettings: Codable {
         self.primaryLanguage = (try? container.decodeIfPresent(TranslationLanguage.self, forKey: .primaryLanguage)) ?? .simplifiedChinese
         self.secondaryLanguage = (try? container.decodeIfPresent(TranslationLanguage.self, forKey: .secondaryLanguage)) ?? .english
         self.saveHistory = try container.decodeIfPresent(Bool.self, forKey: .saveHistory) ?? true
+        self.saveReadingMemory = try container.decodeIfPresent(Bool.self, forKey: .saveReadingMemory) ?? true
         self.autoCheckForUpdates = try container.decodeIfPresent(Bool.self, forKey: .autoCheckForUpdates) ?? true
         self.interfaceLanguage = (try? container.decodeIfPresent(InterfaceLanguage.self, forKey: .interfaceLanguage)) ?? .system
     }

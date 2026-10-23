@@ -16,6 +16,8 @@ enum WhyTextCoreSmokeTests {
         testRecentList()
         testSemanticVersion()
         testOCRTextLayout()
+        try testReadingMemory()
+        testMemoryMarkdownExporter()
         try testLocalization()
         print("WhyTextCore smoke tests passed")
     }
@@ -365,6 +367,86 @@ enum WhyTextCoreSmokeTests {
             line("This is the first line, and", row: 0),
         ])
         expect(unsorted == "This is the first line, and second line of the same paragraph", "lines are ordered top to bottom")
+    }
+
+    private static func testReadingMemory() throws {
+        expect(TermKey.make("  Moat. ") == "moat", "term key trims, lowercases, and drops punctuation")
+        expect(TermKey.make("context\n  window") == "context window", "term key collapses whitespace")
+        expect(TermKey.make("护城河") == "护城河", "CJK terms are kept")
+        expect(TermKey.make(String(repeating: "a", count: 41)) == nil, "over 40 characters is a passage")
+        expect(TermKey.make("one two three four five") == nil, "more than four words is a passage")
+        expect(TermKey.make(" ... ") == nil, "punctuation alone is not a term")
+
+        let record = LookupRecord(
+            date: Date(timeIntervalSince1970: 1_761_000_000),
+            sessionID: UUID(),
+            action: "translate",
+            input: .selection,
+            sourceText: "Moat",
+            resultText: "护城河",
+            targetLanguage: "zh-Hans",
+            source: LookupSource(appName: "Safari", documentURL: "https://example.com/a")
+        )
+        expect(record.termKey == "moat", "records derive their term key")
+
+        var log = try LookupLog.encodeLine(record)
+        log.append(Data("{\"broken\": tr\n".utf8))
+        log.append(try LookupLog.encodeLine(record))
+        let decoded = LookupLog.decode(log)
+        expect(decoded.count == 2, "a corrupt line is skipped, not fatal")
+        expect(decoded.first == record, "records round-trip through a log line")
+    }
+
+    private static func testMemoryMarkdownExporter() {
+        L10n.language = .simplifiedChinese
+        let utc = TimeZone(identifier: "UTC")!
+        let session = UUID()
+        func lookup(_ text: String, _ result: String, at seconds: TimeInterval, session: UUID = UUID(),
+                    action: String = "translate", source: LookupSource = LookupSource()) -> LookupRecord {
+            LookupRecord(date: Date(timeIntervalSince1970: seconds), sessionID: session, action: action,
+                         input: .selection, sourceText: text, resultText: result, targetLanguage: nil, source: source)
+        }
+        // 2025-10-20 22:40 UTC and later.
+        let base: TimeInterval = 1_761_000_000
+        let records = [
+            lookup("Moat", "护城河", at: base, session: session, source: LookupSource(
+                appName: "Safari", windowTitle: "Make Something Heavy",
+                documentURL: "https://example.com/heavy",
+                sentence: "It largely wipes out moats and the middle."
+            )),
+            lookup("moat", "护城河（壁垒）", at: base + 60, session: session, action: "explain"),
+            lookup("MOAT", "护城河", at: base + 86_400 * 15, source: LookupSource(
+                appName: "Preview", documentURL: "file:///Users/me/Zero%20to%20One.pdf"
+            )),
+            lookup("a/b:c", "斜杠", at: base + 120),
+            lookup("A?B:C", "问号", at: base + 180),
+            lookup("This is a long passage that is not a term at all.", "长段落", at: base + 240),
+        ]
+        let files = MemoryMarkdownExporter.render(records: records, exportedAt: Date(timeIntervalSince1970: base), timeZone: utc)
+
+        expect(files[MemoryMarkdownExporter.markerFileName] == "", "export carries its marker file")
+        expect(files["README.md"]?.contains("记录总数：6") == true, "readme counts records")
+        expect(Set(files.keys.filter { $0.hasPrefix("词条/") }) == ["词条/MOAT.md", "词条/a b c.md", "词条/A B C (2).md"],
+               "terms group by key, names are sanitized, and case-insensitive clashes get a suffix")
+
+        let moat = files["词条/MOAT.md"] ?? ""
+        expect(moat.contains("count: 2"), "count is panel sessions, not records")
+        expect(moat.contains("first_seen: 2025-10-20") && moat.contains("last_seen: 2025-11-04"), "first and last seen dates")
+        expect(moat.contains("**来源**：Make Something Heavy — https://example.com/heavy"), "title and web address")
+        expect(moat.contains("**来源**：Zero to One.pdf"), "local documents show the file name only")
+        expect(moat.contains("> It largely wipes out **moat**s and the middle."), "the looked-up text is bolded in its sentence")
+        expect(moat.contains("## 2025-10-20 · 解释"), "records without an app omit it from the heading")
+        expect(moat.range(of: "2025-11-04")!.lowerBound < moat.range(of: "## 2025-10-20")!.lowerBound, "newest first")
+
+        expect(Set(files.keys.filter { $0.hasPrefix("日志/") }) == ["日志/2025-10.md", "日志/2025-11.md"], "one log per month")
+        let october = files["日志/2025-10.md"] ?? ""
+        expect(october.contains("> This is a long passage that is not a term at all."), "passages appear in the log")
+        expect(october.range(of: "护城河（壁垒）")!.lowerBound > october.range(of: "### 10-20 22:40 · 翻译 · Safari")!.lowerBound,
+               "the log is oldest first")
+
+        expect(MemoryMarkdownExporter.fileName(for: "..hidden") == "hidden", "never a hidden file")
+        expect(MemoryMarkdownExporter.fileName(for: "\n") == "untitled", "empty names get a fallback")
+        expect(MemoryMarkdownExporter.fileName(for: String(repeating: "长", count: 100)).count == 80, "names are capped")
     }
 
     private static func testLocalization() throws {

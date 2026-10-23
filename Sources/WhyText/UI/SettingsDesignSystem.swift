@@ -17,6 +17,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     case translation
     case providers
     case prompts
+    case memory
     case permissions
     case updates
 
@@ -29,6 +30,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .translation: L10n.t("翻译方向")
         case .providers: L10n.t("服务商")
         case .prompts: L10n.t("提示词")
+        case .memory: L10n.t("阅读记忆")
         case .permissions: L10n.t("权限")
         case .updates: L10n.t("更新")
         }
@@ -41,6 +43,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .translation: "character.bubble.fill"
         case .providers: "server.rack"
         case .prompts: "text.quote"
+        case .memory: "books.vertical.fill"
         case .permissions: "hand.raised.fill"
         case .updates: "arrow.down.circle.fill"
         }
@@ -53,6 +56,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .translation: Color(nsColor: .systemGreen)
         case .providers: Color(nsColor: .systemPurple)
         case .prompts: Color(nsColor: .systemOrange)
+        case .memory: Color(nsColor: .systemTeal)
         case .permissions: Color(nsColor: .systemIndigo)
         case .updates: Color(nsColor: .systemPink)
         }

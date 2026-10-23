@@ -76,6 +76,15 @@ Use this checklist before replacing the local app in `/Applications`.
 - Open 最近 in the menu bar, pick an entry, and confirm the panel shows it and accepts a follow-up. Clear it and confirm the menu disappears.
 - Turn off 保存最近的翻译和解释 in 通用 and confirm records are cleared and repeated text is requested again.
 
+## Reading Memory
+
+- Select a word in TextEdit and translate it; in Safari, select a word and translate it. Open 设置 → 阅读记忆 and confirm the count went up by 2.
+- 导出到文件夹…: pick a folder, confirm Finder opens WhyText 阅读记忆 with README.md, 词条/ and 日志/. The Safari term file shows the page title and address; the TextEdit one shows the window title.
+- Look up the same word again from a new panel: the panel shows 第 2 次查这个词. Switching 翻译/解释 in the same panel does not raise the number.
+- Export again into the same parent: the folder is replaced. Create an unrelated folder named WhyText 阅读记忆 elsewhere and export there: the export is refused and the folder is untouched.
+- Turn off 记录查过的词和段落, translate something, and confirm the count doesn't change. 清空阅读记忆… asks first, then the count drops to 0.
+- Typed text (输入文字翻译…) and 截图翻译 are recorded with only the app name.
+
 ## Updates
 
 - One-click update (needs an older installed version and a newer release): 更新到 x.x.x… in the menu bar (or 立即更新 in 更新) shows download progress, then WhyText quits and reopens as the new version from the same location. A copy run from a read-only folder or Downloads (translocated) offers the download page instead.

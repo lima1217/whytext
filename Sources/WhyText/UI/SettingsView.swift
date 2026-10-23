@@ -31,6 +31,7 @@ struct SettingsView: View {
         case .translation: TranslationSettingsView()
         case .providers: ProvidersSettingsView()
         case .prompts: PromptsSettingsView()
+        case .memory: MemorySettingsView()
         case .permissions: PermissionsSettingsView()
         case .updates: UpdatesSettingsView()
         }
@@ -101,7 +102,7 @@ private struct SettingsSidebar: View {
             return appModel.accessibilityStatus() == .trusted ? nil : .warning
         case .updates:
             return appModel.updateChecker.availableUpdate != nil ? .success : nil
-        case .general, .translation:
+        case .general, .translation, .memory:
             return nil
         }
     }

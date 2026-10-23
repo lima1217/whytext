@@ -127,6 +127,50 @@ final class AccessibilitySelectionService {
         return SelectionDiagnostics(report: lines.joined(separator: "\n"), selectedText: selectedText)
     }
 
+    /// Where the current selection lives: app, window title, and page or document.
+    /// Best-effort and cheap (a handful of AX reads); every field may be nil.
+    func captureSource() -> LookupSource {
+        let app = NSWorkspace.shared.frontmostApplication
+        var source = LookupSource(appName: app?.localizedName, bundleID: app?.bundleIdentifier)
+        guard status() == .trusted, let app else { return source }
+
+        let appElement = AXUIElementCreateApplication(app.processIdentifier)
+        let window = copyElementAttribute(kAXFocusedWindowAttribute as CFString, from: appElement)
+        if let window {
+            source.windowTitle = nonEmptyTrimmed(copyStringAttribute(kAXTitleAttribute as CFString, from: window))
+        }
+
+        if let focused = copyElementAttribute(kAXFocusedUIElementAttribute as CFString, from: appElement),
+           let webArea = findNearestAncestor(withRole: "AXWebArea", startingAt: focused, maxDepth: 12)
+               ?? (copyStringAttribute(kAXRoleAttribute as CFString, from: focused) == "AXWebArea" ? focused : nil),
+           let url = copyURLAttribute(webAreaURLAttribute, from: webArea) {
+            source.documentURL = url
+        } else if let window, let url = copyURLAttribute(kAXDocumentAttribute as CFString, from: window) {
+            source.documentURL = url
+        }
+        return source
+    }
+
+    private let webAreaURLAttribute = "AXURL" as CFString
+
+    /// http(s) and file URLs only; AX returns these as CFURL or as a string.
+    private func copyURLAttribute(_ attribute: CFString, from element: AXUIElement) -> String? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success, let value else { return nil }
+        let url: URL?
+        if let cfURL = value as? URL {
+            url = cfURL
+        } else if let string = value as? String {
+            url = URL(string: string)
+        } else {
+            url = nil
+        }
+        guard let url, let scheme = url.scheme?.lowercased(), ["http", "https", "file"].contains(scheme) else {
+            return nil
+        }
+        return url.absoluteString
+    }
+
     func getSelectedText() throws -> String {
         try getSelectedTextResult().text
     }

@@ -19,6 +19,7 @@ final class AppModel: ObservableObject {
 
     var settingsStore: SettingsStore
     let historyStore: HistoryStore
+    let readingMemory: ReadingMemoryStore
     let updateChecker = UpdateChecker()
 
     private let selectionService: AccessibilitySelectionService
@@ -39,6 +40,7 @@ final class AppModel: ObservableObject {
     init(
         settingsStore: SettingsStore = SettingsStore(),
         historyStore: HistoryStore = HistoryStore(),
+        readingMemory: ReadingMemoryStore = ReadingMemoryStore(),
         selectionService: AccessibilitySelectionService = AccessibilitySelectionService(),
         selectionReader: SelectionReader? = nil,
         llmClient: LLMClient = LLMClient(),
@@ -48,6 +50,7 @@ final class AppModel: ObservableObject {
         let resolvedSelectionReader = selectionReader ?? SelectionReader(accessibility: selectionService)
         self.settingsStore = settingsStore
         self.historyStore = historyStore
+        self.readingMemory = readingMemory
         self.selectionService = selectionService
         self.selectionReader = resolvedSelectionReader
         self.panelController = panelController
@@ -74,6 +77,10 @@ final class AppModel: ObservableObject {
             .store(in: &cancellables)
 
         historyStore.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+
+        readingMemory.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
 
@@ -195,14 +202,18 @@ final class AppModel: ObservableObject {
         guard !selectedText.isEmpty else { return }
 
         presentPanel(selectedText: selectedText)
+        panelState.lookupInput = .bubble
+        panelState.lookupSource = selectionAutoPopup.pendingSource
         run(action: action)
     }
 
     private func openPanelFlow() async {
         let selectedText: String
+        var source: LookupSource?
         do {
             let selection = try await selectionReader.readSelectedText()
             selectedText = AccessibilitySelectionHelpers.sanitizeSelectedText(selection.text)
+            source = selection.source
         } catch SelectionError.notTrusted {
             openManualInput(
                 hint: L10n.t("未授权辅助功能，读不到选中文本。可以直接输入或粘贴："),
@@ -219,12 +230,17 @@ final class AppModel: ObservableObject {
         }
 
         presentPanel(selectedText: selectedText)
+        panelState.lookupInput = .selection
+        panelState.lookupSource = source
         run(action: .translate)
     }
 
     /// Opens the panel with a text box; used when nothing is selected.
     func openManualInput(hint: String? = nil, needsAccessibility: Bool = false) {
+        let source = Self.frontmostAppSource()
         presentPanel()
+        panelState.lookupInput = .manual
+        panelState.lookupSource = source
         panelState.phase = .input
         panelState.inputHint = hint
         panelState.inputNeedsAccessibility = needsAccessibility
@@ -249,6 +265,7 @@ final class AppModel: ObservableObject {
         closePanel()
         selectionAutoPopup.hideBubble()
 
+        let source = Self.frontmostAppSource()
         Task { @MainActor in
             defer { isCapturingScreenText = false }
             do {
@@ -257,6 +274,8 @@ final class AppModel: ObservableObject {
                     return // cancelled
                 }
                 presentPanel(selectedText: text)
+                panelState.lookupInput = .screenshot
+                panelState.lookupSource = source
                 run(action: .translate)
             } catch {
                 presentPanel(errorMessage: error.localizedDescription)
@@ -397,6 +416,15 @@ final class AppModel: ObservableObject {
             splitLongInput: settingsStore.splitLongInput
         )
 
+        let lookup = PendingLookup(
+            sessionID: panelState.lookupSessionID,
+            input: panelState.lookupInput,
+            source: panelState.lookupSource ?? LookupSource(),
+            action: action,
+            targetLanguage: action == .translate ? targetLanguage : nil,
+            sourceText: preflight.selectedText
+        )
+
         if settingsStore.saveHistory, !bypassHistory,
            let entry = historyStore.lookup(key: historyKey, sourceText: preflight.selectedText) {
             translationSession.cancel()
@@ -404,6 +432,7 @@ final class AppModel: ObservableObject {
             var refreshed = entry
             refreshed.date = Date()
             historyStore.record(refreshed)
+            remember(lookup, resultText: entry.resultText)
             return
         }
 
@@ -440,6 +469,9 @@ final class AppModel: ObservableObject {
                 switch result {
                 case .success(let conversation):
                     self.panelState.conversation = conversation
+                    if !conversation.isEmpty {
+                        self.remember(lookup, resultText: self.panelState.resultText)
+                    }
                     // Empty means cancelled; a partial answer isn't worth reusing.
                     if self.settingsStore.saveHistory, !conversation.isEmpty {
                         self.historyStore.record(HistoryEntry(
@@ -456,6 +488,73 @@ final class AppModel: ObservableObject {
                 }
             }
         )
+    }
+
+    private struct PendingLookup {
+        var sessionID: UUID
+        var input: LookupInput
+        var source: LookupSource
+        var action: PanelAction
+        var targetLanguage: TranslationLanguage?
+        var sourceText: String
+    }
+
+    /// Adds a finished lookup to reading memory and points out repeat lookups.
+    private func remember(_ lookup: PendingLookup, resultText: String) {
+        guard settingsStore.saveReadingMemory else { return }
+        let record = LookupRecord(
+            date: Date(),
+            sessionID: lookup.sessionID,
+            action: lookup.action.rawValue,
+            input: lookup.input,
+            sourceText: lookup.sourceText,
+            resultText: resultText,
+            targetLanguage: lookup.targetLanguage?.rawValue,
+            source: lookup.source
+        )
+        readingMemory.append(record)
+
+        guard let termKey = record.termKey,
+              panelState.lookupSessionID == lookup.sessionID,
+              panelState.noticeMessage == nil else { return }
+        let count = readingMemory.count(for: termKey)
+        if count >= 2 {
+            panelState.noticeMessage = L10n.f("第 %@ 次查这个词", String(count))
+        }
+    }
+
+    /// Only the app, for input that wasn't read from a selection. Skips WhyText itself,
+    /// which is frontmost when the menu bar item opened the panel.
+    private static func frontmostAppSource() -> LookupSource {
+        guard let app = NSWorkspace.shared.frontmostApplication,
+              app.bundleIdentifier != Bundle.main.bundleIdentifier else { return LookupSource() }
+        return LookupSource(appName: app.localizedName, bundleID: app.bundleIdentifier)
+    }
+
+    func clearReadingMemory() {
+        readingMemory.clearAll()
+    }
+
+    /// Asks for a folder, writes the Markdown export there, and shows it in Finder.
+    func exportReadingMemory(completion: @escaping (String?) -> Void) {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = L10n.t("导出到这里")
+        panel.message = L10n.f("将在所选位置创建「%@」文件夹", MemoryMarkdownExporter.folderName)
+        guard panel.runModal() == .OK, let parent = panel.url else { return }
+
+        readingMemory.export(into: parent) { result in
+            switch result {
+            case .success(let folder):
+                NSWorkspace.shared.activateFileViewerSelecting([folder])
+                completion(nil)
+            case .failure(let error):
+                completion(L10n.f("导出失败：%@", error.localizedDescription))
+            }
+        }
     }
 
     func retryLastAction() {

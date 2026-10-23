@@ -80,12 +80,17 @@ final class HistoryStore: ObservableObject {
         }
     }
 
-    private static func defaultFileURL() -> URL? {
+    /// `~/Library/Application Support/<bundle ID>/`, shared with `ReadingMemoryStore`.
+    static func supportDirectory() -> URL? {
         guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             return nil
         }
         let folder = Bundle.main.bundleIdentifier ?? "WhyText"
         return base.appendingPathComponent(folder, isDirectory: true)
+    }
+
+    private static func defaultFileURL() -> URL? {
+        supportDirectory()?
             // Not "history.json": a removed earlier feature used that name, in a
             // different format, and its leftover file must not be overwritten.
             .appendingPathComponent("recent-results.json")

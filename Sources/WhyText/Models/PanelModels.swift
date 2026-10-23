@@ -34,6 +34,11 @@ struct PanelState: Equatable {
     var followUps: [FollowUpTurn] = []
     /// The result was restored from history instead of requested.
     var isFromHistory: Bool = false
+    /// One panel opening; reading memory counts repeat lookups per session.
+    var lookupSessionID = UUID()
+    var lookupInput: LookupInput = .selection
+    /// Where the text was read, captured when the panel opened.
+    var lookupSource: LookupSource?
 
     var canAskFollowUp: Bool {
         !isLoading && !conversation.isEmpty && (errorMessage?.isEmpty ?? true)
