@@ -262,46 +262,21 @@ private struct ProviderDetailView: View {
                     }
                 }
 
-                HStack(spacing: Spacing.x2) {
-                    StatusBadge(
-                        text: apiKeyIsEmpty ? L10n.t("未填写") : L10n.t("已保存到 Keychain"),
-                        tone: apiKeyIsEmpty ? .warning : .success
-                    )
-
-                    if let keychainRepairMessage, !keychainRepairMessage.isEmpty {
-                        CaptionText(text: keychainRepairMessage)
+                // One row when it fits; otherwise the status takes its own line so no
+                // button label truncates (long Japanese/English labels at minimum width).
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: Spacing.x2) {
+                        apiKeyStatus
+                        Spacer()
+                        apiKeyActions
                     }
-
-                    Spacer()
-
-                    Button(L10n.t("粘贴")) {
-                        apiKeyDraft = NSPasteboard.general.string(forType: .string) ?? ""
+                    VStack(alignment: .leading, spacing: Spacing.x2) {
+                        apiKeyStatus
+                        HStack(spacing: Spacing.x2) {
+                            Spacer()
+                            apiKeyActions
+                        }
                     }
-                    .accessibilityLabel(L10n.t("粘贴 API Key"))
-
-                    Button(L10n.t("修复钥匙串")) {
-                        repairKeychainEntry()
-                    }
-                    .help(L10n.t("重新写入当前 API Key 到钥匙串"))
-
-                    Button(L10n.t("清除")) {
-                        apiKeyDraft = ""
-                    }
-                    .accessibilityLabel(L10n.t("清除 API Key"))
-                }
-            }
-
-            Section {
-                HStack(spacing: Spacing.x2) {
-                    Spacer()
-                    if isTestingConnectivity {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-                    Button(isTestingConnectivity ? L10n.t("测试中…") : L10n.t("测试连通性")) {
-                        runConnectivityTest()
-                    }
-                    .disabled(isTestingConnectivity)
                 }
 
                 if let report = connectivityReport {
@@ -353,6 +328,48 @@ private struct ProviderDetailView: View {
                 saveAPIKey(trimmed)
             }
         }
+    }
+
+    // MARK: - API Key row
+
+    private var apiKeyStatus: some View {
+        HStack(spacing: Spacing.x2) {
+            StatusBadge(
+                text: apiKeyIsEmpty ? L10n.t("未填写") : L10n.t("已保存到 Keychain"),
+                tone: apiKeyIsEmpty ? .warning : .success
+            )
+
+            if let keychainRepairMessage, !keychainRepairMessage.isEmpty {
+                CaptionText(text: keychainRepairMessage)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var apiKeyActions: some View {
+        Button(L10n.t("粘贴")) {
+            apiKeyDraft = NSPasteboard.general.string(forType: .string) ?? ""
+        }
+        .accessibilityLabel(L10n.t("粘贴 API Key"))
+
+        Button(L10n.t("修复钥匙串")) {
+            repairKeychainEntry()
+        }
+        .help(L10n.t("重新写入当前 API Key 到钥匙串"))
+
+        Button(L10n.t("清除")) {
+            apiKeyDraft = ""
+        }
+        .accessibilityLabel(L10n.t("清除 API Key"))
+
+        if isTestingConnectivity {
+            ProgressView()
+                .controlSize(.small)
+        }
+        Button(isTestingConnectivity ? L10n.t("测试中…") : L10n.t("测试连通性")) {
+            runConnectivityTest()
+        }
+        .disabled(isTestingConnectivity)
     }
 
     // MARK: - Helpers
