@@ -54,8 +54,6 @@ struct UpdatesSettingsView: View {
 
                 Toggle(L10n.t("每天自动检查更新"), isOn: $appModel.settingsStore.autoCheckForUpdates)
                     .toggleStyle(.switch)
-            } footer: {
-                SettingsFooter(L10n.t("从 GitHub Releases 查询最新版本。点「立即更新」会下载新版本、确认签名与当前 App 一致后替换并自动重启。"))
             }
         }
     }

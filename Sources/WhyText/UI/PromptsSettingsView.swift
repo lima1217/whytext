@@ -12,7 +12,6 @@ struct PromptsSettingsView: View {
         SettingsPage(.prompts) {
             PromptTemplateCard(
                 title: L10n.t("翻译提示词"),
-                subtitle: L10n.t("决定语气、格式与输出边界。模板必须包含 {{text}}，运行时会替换为你选中的原文；{{target}} 会替换为自动判断的目标语言（如「英文」「简体中文」）。"),
                 template: $appModel.settingsStore.translatePromptTemplate,
                 defaultTemplate: SettingsStore.defaultTranslatePromptTemplate,
                 onReset: {
@@ -22,7 +21,6 @@ struct PromptsSettingsView: View {
 
             PromptTemplateCard(
                 title: L10n.t("解释提示词"),
-                subtitle: L10n.t("选中气泡上的问号会用这份模板解释原文，而不是翻译。模板必须包含 {{text}}；{{target}} 会替换为你的母语。"),
                 template: $appModel.settingsStore.explainPromptTemplate,
                 defaultTemplate: SettingsStore.defaultExplainPromptTemplate,
                 onReset: {
@@ -35,7 +33,6 @@ struct PromptsSettingsView: View {
 
 private struct PromptTemplateCard: View {
     let title: String
-    let subtitle: String
     @Binding var template: String
     let defaultTemplate: String
     let onReset: () -> Void
@@ -45,22 +42,17 @@ private struct PromptTemplateCard: View {
             editor
 
             HStack(spacing: Spacing.x2) {
-                StatusBadge(
-                    text: hasPlaceholder ? L10n.t("占位符有效") : L10n.t("缺少 {{text}}"),
-                    tone: hasPlaceholder ? .success : .danger
-                )
-
-                Text(L10n.f("%@ 字符", String(templateCharacterCount)))
-                    .font(AstryxFont.captionM)
-                    .monospacedDigit()
-                    .foregroundStyle(AstryxColor.textSecondary)
+                if !hasPlaceholder {
+                    StatusBadge(text: L10n.t("缺少 {{text}}"), tone: .danger)
+                }
 
                 Spacer()
 
-                Button(L10n.t("插入 {{text}}")) {
-                    insertTextPlaceholder()
+                if !hasPlaceholder {
+                    Button(L10n.t("插入 {{text}}")) {
+                        insertTextPlaceholder()
+                    }
                 }
-                .disabled(hasPlaceholder)
 
                 Button(L10n.t("恢复默认")) {
                     onReset()
@@ -69,8 +61,6 @@ private struct PromptTemplateCard: View {
             }
         } header: {
             Text(title)
-        } footer: {
-            SettingsFooter(subtitle)
         }
     }
 
@@ -80,10 +70,6 @@ private struct PromptTemplateCard: View {
             .scrollContentBackground(.hidden)
             .frame(height: PromptUITokens.editorHeight)
             .settingsWell(padding: Spacing.x2)
-    }
-
-    private var templateCharacterCount: Int {
-        template.count
     }
 
     private var isDefaultTemplate: Bool {

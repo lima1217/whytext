@@ -46,21 +46,6 @@ struct StatusDot: View {
     }
 }
 
-// MARK: - Section label
-// A small uppercase-ish label for grouping content inside a card.
-
-struct SectionLabel: View {
-    var text: String
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(AstryxColor.textSecondary)
-            .textCase(.uppercase)
-            .tracking(TypeRhythm.sectionTracking)
-    }
-}
-
 // MARK: - Quiet button style
 // A restrained secondary control: transparent at rest, soft overlay on hover,
 // shadow-as-border, scale-on-press. For high-frequency secondary actions.

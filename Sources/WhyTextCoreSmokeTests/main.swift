@@ -404,11 +404,7 @@ enum WhyTextCoreSmokeTests {
 
         L10n.language = .english
         expect(L10n.t("翻译") == "Translate", "lookup uses the current language")
-        expect(
-            L10n.f("仅保存在本机，最多 %1$@ 条（当前 %2$@ 条）。关闭后会清除已有记录。", "50", "3")
-                == "Stored only on this Mac, up to 50 (currently 3). Turning this off clears them.",
-            "positional arguments format"
-        )
+        expect(L10n.f("发现新版本 %@", "1.2.0") == "Version 1.2.0 is available", "arguments format")
         L10n.language = .simplifiedChinese
         expect(L10n.t("翻译") == "翻译", "Simplified Chinese returns the key")
         expect(L10n.t("not a key") == "not a key", "unknown keys fall back to themselves")

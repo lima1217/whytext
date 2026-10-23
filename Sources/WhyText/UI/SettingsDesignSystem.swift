@@ -133,23 +133,6 @@ struct SettingsRowLabel: View {
     }
 }
 
-/// Section footer text, matching System Settings' explanatory captions.
-struct SettingsFooter: View {
-    var text: String
-
-    init(_ text: String) {
-        self.text = text
-    }
-
-    var body: some View {
-        Text(text)
-            .font(AstryxFont.captionM)
-            .foregroundStyle(AstryxColor.textSecondary)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
 // MARK: - Shared pieces
 
 struct StatusBadge: View {

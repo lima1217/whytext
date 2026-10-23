@@ -73,8 +73,6 @@ struct ProvidersSettingsView: View {
                     }
                 }
             }
-        } footer: {
-            SettingsFooter(L10n.t("选择一个服务商，填写接口、模型和 API Key 后先测试连通性。"))
         }
     }
 
@@ -82,11 +80,6 @@ struct ProvidersSettingsView: View {
 
     private var addTemplatePopover: some View {
         VStack(alignment: .leading, spacing: Spacing.x1) {
-            SectionLabel(text: L10n.t("内置模板"))
-                .padding(.horizontal, Spacing.x2)
-                .padding(.top, Spacing.x1_5)
-                .padding(.bottom, Spacing.half)
-
             ForEach(ProviderTemplate.allCases) { template in
                 Button {
                     addProvider(from: template)
@@ -97,14 +90,9 @@ struct ProvidersSettingsView: View {
                             .font(.system(size: 13))
                             .foregroundStyle(AstryxColor.textSecondary)
                             .frame(width: 18)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(template.name)
-                                .font(AstryxFont.bodyMedium)
-                                .foregroundStyle(AstryxColor.textPrimary)
-                            Text(template.subtitle)
-                                .font(.system(size: 11))
-                                .foregroundStyle(AstryxColor.textSecondary)
-                        }
+                        Text(template.name)
+                            .font(AstryxFont.bodyMedium)
+                            .foregroundStyle(AstryxColor.textPrimary)
                         Spacer()
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -116,8 +104,8 @@ struct ProvidersSettingsView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.bottom, Spacing.x1_5)
-        .frame(width: 240)
+        .padding(.vertical, Spacing.x1_5)
+        .frame(width: 200)
     }
 
     // MARK: - Empty State
@@ -131,10 +119,6 @@ struct ProvidersSettingsView: View {
                     .accessibilityHidden(true)
                 Text(L10n.t("还没有服务商"))
                     .font(AstryxFont.bodySemibold)
-                Text(L10n.t("添加一个服务商后，才能翻译选中文本。") + "\n" + L10n.t("从模板添加 DeepSeek、OpenAI，或自定义接口。"))
-                    .font(AstryxFont.captionM)
-                    .foregroundStyle(AstryxColor.textSecondary)
-                    .multilineTextAlignment(.center)
                 Button {
                     showAddTemplate = true
                 } label: {
@@ -196,13 +180,6 @@ private enum ProviderTemplate: String, CaseIterable, Identifiable {
         }
     }
 
-    var subtitle: String {
-        switch self {
-        case .deepSeek: "api.deepseek.com"
-        case .openAI: "api.openai.com"
-        case .custom: L10n.t("填写自定义接口")
-        }
-    }
 
     var icon: String {
         switch self {
@@ -252,10 +229,6 @@ private struct ProviderDetailView: View {
                         Text(mode.displayName).tag(mode)
                     }
                 }
-            } header: {
-                Text(L10n.t("接口"))
-            } footer: {
-                SettingsFooter(L10n.t("Base URL 不需要填写具体 endpoint，应用会根据 API 格式拼接请求路径。"))
             }
 
             Section {
@@ -318,12 +291,10 @@ private struct ProviderDetailView: View {
                     }
                     .accessibilityLabel(L10n.t("清除 API Key"))
                 }
-            } footer: {
-                SettingsFooter(L10n.t("输入后会自动保存到 macOS Keychain，本地设置不会明文持久化。"))
             }
 
             Section {
-                LabeledContent {
+                HStack {
                     Button {
                         runConnectivityTest()
                     } label: {
@@ -338,8 +309,7 @@ private struct ProviderDetailView: View {
                     }
                     .disabled(isTestingConnectivity)
                     .accessibilityLabel(isTestingConnectivity ? L10n.t("正在测试连通性") : L10n.t("测试连通性"))
-                } label: {
-                    SettingsRowLabel(L10n.t("连通性"), subtitle: L10n.t("保存配置后做一次真实请求，确认 URL、Key 和模型都能工作。"))
+                    Spacer()
                 }
 
                 if let report = connectivityReport {

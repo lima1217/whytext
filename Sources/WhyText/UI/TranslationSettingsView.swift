@@ -9,11 +9,6 @@ struct TranslationSettingsView: View {
             Section {
                 languagePicker(L10n.t("母语"), selection: $appModel.settingsStore.primaryLanguage)
                 languagePicker(L10n.t("第二语言"), selection: $appModel.settingsStore.secondaryLanguage)
-            } footer: {
-                VStack(alignment: .leading, spacing: Spacing.x1_5) {
-                    SettingsFooter(L10n.t("自动判断原文语言：已是母语的译成第二语言，其他语言一律译成母语。结果窗口里也可以临时改选。"))
-                    SettingsFooter(L10n.t("翻译提示词里的 {{target}} 会替换成本次的目标语言。"))
-                }
             }
 
             Section {
@@ -34,10 +29,6 @@ struct TranslationSettingsView: View {
                             .frame(width: 40, alignment: .trailing)
                     }
                 }
-            } header: {
-                Text(L10n.t("翻译窗口"))
-            } footer: {
-                SettingsFooter(L10n.t("调整结果窗口正文的阅读尺寸。"))
             }
         }
     }

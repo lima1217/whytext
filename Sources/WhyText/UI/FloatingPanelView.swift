@@ -372,10 +372,6 @@ struct FloatingPanelTitlebarView: View {
         HStack(spacing: Spacing.x2) {
             if appModel.panelState.lastAction != nil {
                 PanelModeSwitch()
-            } else if appModel.panelState.phase == .input {
-                Text(L10n.t("输入文字"))
-                    .font(AstryxFont.bodyMedium)
-                    .foregroundStyle(AstryxColor.textSecondary)
             }
 
             if let target = appModel.panelState.targetLanguage, appModel.panelState.lastAction == .translate {

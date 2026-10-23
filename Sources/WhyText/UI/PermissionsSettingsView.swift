@@ -11,16 +11,11 @@ struct PermissionsSettingsView: View {
                 // Poll: macOS doesn't notify us when the user flips the switch.
                 TimelineView(.periodic(from: .now, by: 1.5)) { _ in
                     let trusted = appModel.accessibilityStatus() == .trusted
-                    VStack(alignment: .leading, spacing: Spacing.x2) {
-                        LabeledContent(L10n.t("辅助功能权限")) {
-                            StatusBadge(
-                                text: trusted ? L10n.t("已授权") : L10n.t("未授权"),
-                                tone: trusted ? .success : .warning
-                            )
-                        }
-                        if !trusted {
-                            CaptionText(text: L10n.t("授权后如果仍读取不到选中文本，先重启 WhyText，再使用诊断查看当前 App 是否暴露选区。"))
-                        }
+                    LabeledContent(L10n.t("辅助功能权限")) {
+                        StatusBadge(
+                            text: trusted ? L10n.t("已授权") : L10n.t("未授权"),
+                            tone: trusted ? .success : .warning
+                        )
                     }
                 }
 
@@ -33,8 +28,6 @@ struct PermissionsSettingsView: View {
                         appModel.openAccessibilitySettings()
                     }
                 }
-            } footer: {
-                SettingsFooter(L10n.t("macOS 需要授权后，应用才能读取其他 App 中的选中文本。"))
             }
 
             diagnosticsSection
@@ -82,10 +75,6 @@ struct PermissionsSettingsView: View {
 
             if hasDiagnosticsOutput {
                 VStack(alignment: .leading, spacing: Spacing.x2) {
-                    if let updatedAt = appModel.selectionDiagnosticsUpdatedAt {
-                        CaptionText(text: L10n.f("最近诊断：%@", updatedAt.formatted(date: .abbreviated, time: .standard)))
-                    }
-
                     if !appModel.selectionDiagnosticsTextPreview.isEmpty {
                         Text(L10n.f("选中文本预览：%@", appModel.selectionDiagnosticsTextPreview))
                             .font(AstryxFont.captionM)
