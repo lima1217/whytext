@@ -11,6 +11,8 @@ struct SelectionDiagnostics: Equatable {
 struct SelectedTextResult: Equatable {
     var text: String
     var anchorRect: CGRect?
+    /// The sentence around the selection, when the element exposes its text.
+    var sentence: String? = nil
 }
 
 final class AccessibilitySelectionService {
@@ -114,6 +116,10 @@ final class AccessibilitySelectionService {
             lines.append("getSelectedText: success")
             lines.append("selectedLength: \(result.text.count)")
             lines.append("selectedPreview: \(AccessibilitySelectionHelpers.preview(result.text))")
+            lines.append("sentenceCaptured: \(result.sentence != nil)")
+            if let sentence = result.sentence {
+                lines.append("sentencePreview: \(AccessibilitySelectionHelpers.preview(sentence))")
+            }
             if let anchorRect = result.anchorRect {
                 lines.append("selectedAnchorRect: \(anchorRect.debugDescription)")
             } else {
@@ -250,12 +256,21 @@ final class AccessibilitySelectionService {
 
     private func selectedText(in element: AXUIElement) throws -> SelectedTextResult? {
         if let text = nonEmptyTrimmed(copyStringAttribute(kAXSelectedTextAttribute as CFString, from: element)) {
-            return SelectedTextResult(text: text, anchorRect: selectedBounds(in: element))
+            let selectedRangeValue = copyAXValueAttribute(kAXSelectedTextRangeAttribute as CFString, from: element)
+            return SelectedTextResult(
+                text: text,
+                anchorRect: selectedRangeValue.flatMap { selectedBounds(for: $0, in: element) },
+                sentence: selectedRangeValue.flatMap { sentence(around: $0, selectedText: text, in: element) }
+            )
         }
 
         if let selectedRangeValue = copyAXValueAttribute(kAXSelectedTextRangeAttribute as CFString, from: element),
            let text = selectedText(for: selectedRangeValue, in: element) {
-            return SelectedTextResult(text: text, anchorRect: selectedBounds(for: selectedRangeValue, in: element))
+            return SelectedTextResult(
+                text: text,
+                anchorRect: selectedBounds(for: selectedRangeValue, in: element),
+                sentence: sentence(around: selectedRangeValue, selectedText: text, in: element)
+            )
         }
 
         if let markerSelection = selectedTextFromMarkerRange(in: element) {
@@ -263,6 +278,56 @@ final class AccessibilitySelectionService {
         }
 
         return nil
+    }
+
+    /// UTF-16 units read on each side of the selection to find its sentence. Wider
+    /// than SentenceContext's 400-character cap, so a long sentence is still whole.
+    private let sentenceSearchRadius = 600
+
+    /// Reads a bounded window of text around the selection (never the whole
+    /// document, which can be megabytes in an editor) and finds its sentence.
+    private func sentence(around selectedRangeValue: AXValue, selectedText: String, in element: AXUIElement) -> String? {
+        guard let selection = extractCFRange(from: selectedRangeValue),
+              selection.location != kCFNotFound,
+              selection.length > 0 else { return nil }
+
+        let start = max(0, selection.location - sentenceSearchRadius)
+        var end = selection.location + selection.length + sentenceSearchRadius
+        if let total = copyIntAttribute(kAXNumberOfCharactersAttribute as CFString, from: element) {
+            end = min(end, total)
+        }
+        guard end > start else { return nil }
+
+        var windowRange = CFRange(location: start, length: end - start)
+        var windowText: String?
+        if let windowValue = AXValueCreate(.cfRange, &windowRange) {
+            var value: CFTypeRef?
+            if AXUIElementCopyParameterizedAttributeValue(
+                element,
+                kAXStringForRangeParameterizedAttribute as CFString,
+                windowValue,
+                &value
+            ) == .success {
+                windowText = value as? String
+            }
+        }
+        // Elements without string-for-range: slice the value instead.
+        if windowText == nil, let value = copyStringAttribute(kAXValueAttribute as CFString, from: element) {
+            windowText = substring(value, utf16Range: windowRange)
+        }
+        guard let windowText else { return nil }
+
+        return SentenceContext.extract(
+            fullText: windowText,
+            selectionUTF16: NSRange(location: selection.location - start, length: selection.length),
+            expectedSelection: selectedText
+        )
+    }
+
+    private func copyIntAttribute(_ attribute: CFString, from element: AXUIElement) -> Int? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success else { return nil }
+        return (value as? NSNumber)?.intValue
     }
 
     private func selectedText(for selectedRangeValue: AXValue, in element: AXUIElement) -> String? {
@@ -315,13 +380,6 @@ final class AccessibilitySelectionService {
         }
 
         return SelectedTextResult(text: text, anchorRect: selectedBounds(forMarkerRange: markerRange, in: element))
-    }
-
-    private func selectedBounds(in element: AXUIElement) -> CGRect? {
-        guard let selectedRangeValue = copyAXValueAttribute(kAXSelectedTextRangeAttribute as CFString, from: element) else {
-            return nil
-        }
-        return selectedBounds(for: selectedRangeValue, in: element)
     }
 
     private func selectedBounds(for selectedRangeValue: AXValue, in element: AXUIElement) -> CGRect? {

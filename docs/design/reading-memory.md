@@ -319,6 +319,13 @@ in_glossary: true
 - `documentURL` 是从前台 App 当前的焦点元素向上找 `AXWebArea`，而不是从找到选区的那个元素开始。两者在实际中基本是同一个，这样改不用动选区搜索的代码。
 - 设置页的说明文案、导出前的文件夹选择提示，用的都是新加的本地化文案。
 
+**阶段 B 实施时与上文的差异**：
+
+- 原句采集不只在 range 路径上做。TextEdit 这类原生 App 直接命中 `kAXSelectedTextAttribute`，所以只要元素还提供 `kAXSelectedTextRangeAttribute`，这条分支也会采集。
+- 不读元素的完整 `kAXValue`，而是用 `kAXStringForRangeParameterizedAttribute` 只读选区前后各 600 个 UTF-16 单位，避免在编辑器里一次复制几 MB 文本。只有元素不支持按范围取字符串时，才退回到截取 `kAXValue`。
+- 断句前先把单个换行等长替换成空格。PDF（Preview）和硬换行文本每行都有换行，不这样处理的话，一句话会被截成半行。连续两个换行仍然当作段落边界。
+- `SentenceContext.extract` 多了 `expectedSelection` 参数：按范围取到的文字和选中文字对不上时返回 nil。有些 App 报告的范围和实际文本不一致，宁可不记，也不记错。
+
 **0.6.0 = A + B + C。** 下一版候选（不在本方案内）：把原句发给服务商（需要更新 README 隐私表并加开关）、补 marker 路径的原句采集、复习。
 
 ## 11. 改动的文件

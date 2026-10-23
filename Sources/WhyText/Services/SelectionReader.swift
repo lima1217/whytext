@@ -24,7 +24,9 @@ final class SelectionReader {
     func readSelectedText(allowClipboardFallback: Bool = true) async throws -> Result {
         if accessibility.status() == .trusted {
             if let selection = try? accessibility.getSelectedTextResult(), !selection.text.isEmpty {
-                return Result(text: selection.text, anchorRect: selection.anchorRect, source: accessibility.captureSource())
+                var source = accessibility.captureSource()
+                source.sentence = selection.sentence
+                return Result(text: selection.text, anchorRect: selection.anchorRect, source: source)
             }
 
             if allowClipboardFallback,

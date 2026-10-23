@@ -84,6 +84,8 @@ Use this checklist before replacing the local app in `/Applications`.
 - Export again into the same parent: the folder is replaced. Create an unrelated folder named WhyText 阅读记忆 elsewhere and export there: the export is refused and the folder is untouched.
 - Turn off 记录查过的词和段落, translate something, and confirm the count doesn't change. 清空阅读记忆… asks first, then the count drops to 0.
 - Typed text (输入文字翻译…) and 截图翻译 are recorded with only the app name.
+- Sentence capture: select one word mid-sentence and export. In TextEdit and Notes the term file quotes the full sentence with the word in bold; in a PDF in Preview the quoted sentence spans the wrapped lines. Note the result for Safari, Chrome, and one Electron app (VS Code or Slack).
+- 权限 → 选区诊断 on a word in TextEdit shows sentenceCaptured: true and a sentencePreview; on a whole selected sentence it shows false.
 
 ## Updates
 

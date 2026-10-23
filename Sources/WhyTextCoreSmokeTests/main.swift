@@ -17,6 +17,7 @@ enum WhyTextCoreSmokeTests {
         testSemanticVersion()
         testOCRTextLayout()
         try testReadingMemory()
+        testSentenceContext()
         testMemoryMarkdownExporter()
         try testLocalization()
         print("WhyTextCore smoke tests passed")
@@ -395,6 +396,42 @@ enum WhyTextCoreSmokeTests {
         let decoded = LookupLog.decode(log)
         expect(decoded.count == 2, "a corrupt line is skipped, not fatal")
         expect(decoded.first == record, "records round-trip through a log line")
+    }
+
+    private static func testSentenceContext() {
+        func extract(_ text: String, _ selection: String, occurrence: Int = 0,
+                     expected: String? = nil, maxLength: Int = 400) -> String? {
+            var range = (text as NSString).range(of: selection)
+            for _ in 0..<occurrence {
+                let from = NSMaxRange(range)
+                range = (text as NSString).range(of: selection, range: NSRange(location: from, length: (text as NSString).length - from))
+            }
+            return SentenceContext.extract(fullText: text, selectionUTF16: range, expectedSelection: expected, maxLength: maxLength)
+        }
+
+        let text = "First one here. It wipes out moats and the middle. Last one."
+        expect(extract(text, "moats") == "It wipes out moats and the middle.", "returns the sentence holding the selection")
+        expect(extract(text, "middle. Last") == "It wipes out moats and the middle. Last one.", "a selection across sentences joins them")
+        expect(extract(text, "It wipes out moats and the middle.") == nil, "a whole-sentence selection adds nothing")
+        expect(extract("Line one\nkeeps going. Next.", "keeps") == "Line one keeps going.", "hard-wrapped lines join into one sentence")
+        expect(extract("A heading\n\nThe body starts here.", "body") == "The body starts here.", "a blank line still ends a paragraph")
+        expect(extract("A heading\r\nThe body starts here.", "body") == "The body starts here.", "CRLF is a line pair, not a wrap")
+        expect(extract("我们读书。护城河很宽，难以逾越。然后呢？", "护城河") == "护城河很宽，难以逾越。", "CJK sentences split on 。")
+        expect(extract(text, "moats", expected: "castles") == nil, "a range that doesn't match the selected text is ignored")
+        expect(extract(text, "moats", expected: " moats ") != nil, "the match ignores surrounding whitespace")
+        expect(SentenceContext.extract(fullText: "short", selectionUTF16: NSRange(location: 2, length: 10)) == nil, "out-of-range selections are rejected")
+
+        let long = "Start " + String(repeating: "word ", count: 100) + "TARGET " + String(repeating: "word ", count: 100) + "end."
+        let cut = extract(long, "TARGET", maxLength: 60) ?? ""
+        expect(cut.hasPrefix("…") && cut.hasSuffix("…") && cut.contains("TARGET"), "long sentences are cut around the selection")
+        expect(cut.count <= 62, "a cut sentence stays within the cap plus ellipses")
+        let nearStart = extract(long, "Start", maxLength: 60) ?? ""
+        expect(!nearStart.hasPrefix("…") && nearStart.hasSuffix("…"), "a selection at the start keeps the start")
+
+        let emoji = "Hi. " + String(repeating: "👍", count: 40) + " TARGET " + String(repeating: "👍", count: 40) + "."
+        let emojiCut = extract(emoji, "TARGET", maxLength: 21) ?? ""
+        expect(emojiCut.contains("TARGET") && !emojiCut.unicodeScalars.contains { $0.value == 0xFFFD }, "cuts never split an emoji")
+        expect(extract("The cat sat. The cat ran.", "cat", occurrence: 1) == "The cat ran.", "the selection's own occurrence is used")
     }
 
     private static func testMemoryMarkdownExporter() {
