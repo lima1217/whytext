@@ -18,6 +18,7 @@ final class SettingsWindowController {
 
         if let window {
             (window.contentView as? NSHostingView<AnyView>)?.rootView = rootView
+            Self.showInDock(true)
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
@@ -50,12 +51,23 @@ final class SettingsWindowController {
             guard let self else { return }
             Task { @MainActor in
                 self.window = nil
+                Self.showInDock(false)
             }
         }
 
         self.window = window
 
+        Self.showInDock(true)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// WhyText is a menu bar app with no Dock icon, so once another app covers
+    /// Settings there's no way back to it and it looks closed. While Settings is
+    /// open, WhyText shows in the Dock and ⌘Tab like a normal app.
+    private static func showInDock(_ visible: Bool) {
+        let policy: NSApplication.ActivationPolicy = visible ? .regular : .accessory
+        guard NSApp.activationPolicy() != policy else { return }
+        NSApp.setActivationPolicy(policy)
     }
 }

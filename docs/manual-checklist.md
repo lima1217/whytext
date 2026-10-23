@@ -10,8 +10,9 @@ Use this checklist before replacing the local app in `/Applications`.
 
 ## Settings Window
 
+- Open Settings: WhyText appears in the Dock and ⌘Tab. Click another app so it covers Settings, then click the Dock icon or ⌘Tab back: Settings returns on the same page. Close Settings: the Dock icon goes away.
 - Open `WhyText -> 设置…`. The window opens at about 820×600, can't shrink below 760×520, and has a transparent title bar.
-- The sidebar lists 通用, 快捷键, 翻译方向, 服务商, 提示词, 权限, 更新, each with a tinted glyph tile. Selecting a row switches the pane.
+- The sidebar lists 通用, 快捷键, 翻译方向, 服务商, 提示词, 阅读记忆, 权限, 更新, each with a tinted glyph tile. Selecting a row switches the pane.
 - Sidebar dots: 快捷键 shows red for a blocking hotkey problem and orange when no hotkey is set or one may conflict; 服务商 shows orange with no providers; 提示词 shows red when a template is missing `{{text}}`; 权限 shows orange without Accessibility; 更新 shows blue when an update is available.
 - The first group in 通用 shows the shortcut and Accessibility status; clicking each row jumps to 快捷键 / 权限.
 
