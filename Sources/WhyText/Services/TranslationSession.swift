@@ -32,6 +32,7 @@ final class TranslationSession {
         splitLongInput: Bool,
         enableStreaming: Bool,
         glossary: [GlossaryEntry],
+        contextHint: String?,
         onNotice: @escaping (String?) -> Void,
         onActivity: @escaping (LLMActivity) -> Void,
         onPartialResult: @escaping (String) -> Void,
@@ -71,6 +72,7 @@ final class TranslationSession {
                 mode: mode,
                 targetLanguage: targetLanguage.promptName,
                 glossaryHints: chunking.chunks.map(glossaryHint),
+                contextHint: contextHint,
                 onActivity: { activity in await deliver { onActivity(activity) } },
                 onUpdate: { partial in await deliver { onPartialResult(partial) } }
             )
@@ -81,7 +83,8 @@ final class TranslationSession {
                 text: wholeText,
                 mode: mode,
                 targetLanguage: targetLanguage.promptName,
-                glossaryHint: glossaryHint(for: wholeText)
+                glossaryHint: glossaryHint(for: wholeText),
+                contextHint: contextHint
             )
             return [
                 ConversationMessage(role: .user, content: prompt),

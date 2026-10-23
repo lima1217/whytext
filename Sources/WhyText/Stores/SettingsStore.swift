@@ -11,6 +11,49 @@ final class SettingsStore: ObservableObject {
         "把下面的英文翻译成简体中文。只输出译文。\n\n{{text}}",
     ]
     static let defaultExplainPromptTemplate = """
+        我在读东西，读到 <text> 里这部分没看懂。像朋友聊天那样，用{{target}}跟我讲讲它在这里是什么意思。
+
+        用几段自然的话直接讲，别用标题、列表、加粗，也别写「一句话总结」这类格式。
+
+        选的是一个词或短语，就说它在这里指什么、在这句话里起什么作用；有几种意思时只讲这里用的那个，有 <context> 就照 <context> 判断。选的是一句或一段，就先说它大意在讲什么，再顺着把读懂它需要的东西带出来：提到的人和事指什么，背后默认了什么，前后怎么接上。
+
+        讲的是意思，不是语言：别分析语法，别谈怎么翻译；原文是外文，就直接用{{target}}讲意思。背景只补读懂所需的那一点，难懂的地方可以打个日常的比方。拿不准的就直说拿不准，别编。
+
+        \(UnifiedTranslationRequest.webSearchInstruction)
+
+        讲清楚就停：不要开场白，不要总结，也不用问我还有没有问题，想追问我会自己问。
+
+        <text>
+        {{text}}
+        </text>
+        """
+
+    /// Earlier explain defaults. Saved copies upgrade to the current default once,
+    /// while customized prompts stay put.
+    static let legacyExplainPromptTemplates = [
+        // Word/passage branches, but answered as bullet lists rather than talk.
+        """
+        我在读东西，选中了 <text> 里的文字，没看懂。请用{{target}}讲清它在这里是什么意思。
+
+        先看选中的是什么：
+        - 一个词、术语、专名、缩写或短语：说清它在这里指什么，再说它在这句话里起什么作用。有几种意思时，只讲这里用的那个；有 <context> 时，按 <context> 判断。
+        - 一句话或一段话：先用一句话点出它在讲什么；再补上读懂它需要的关键点：提到的概念、人物或事件指什么，隐含了什么前提，前后怎么推进。
+
+        讲的是意思，不是语言：不分析语法，不谈怎么翻译。原文是外文时，直接用{{target}}讲意思，不逐句翻译。
+
+        背景只补读懂所需的那一点。难懂的概念可以用一个日常比喻帮助理解。原文和你都拿不准的地方，标成不确定，不编。
+
+        \(UnifiedTranslationRequest.webSearchInstruction)
+
+        白话、短句；讲清楚就停，不写开场白、总结或延伸议论。
+
+        <text>
+        {{text}}
+        </text>
+        """,
+        // Passage-only: a selected word was forced into "what the author argues",
+        // with definitions and background ruled out.
+        """
         我在读下面这段文字，想弄懂它在说什么。请用白话把内容讲清楚。
 
         解释的对象是内容本身：作者在讲什么事、想表达什么观点、凭什么这么说。不讲语言本身：不逐词释义，不谈原文用词、语法，也不谈怎么翻译或为什么这样译。原文是外文时，直接用{{target}}讲它的内容。
@@ -31,11 +74,7 @@ final class SettingsStore: ObservableObject {
         <text>
         {{text}}
         </text>
-        """
-
-    /// Earlier explain defaults. Saved copies upgrade to the current default once,
-    /// while customized prompts stay put.
-    static let legacyExplainPromptTemplates = [
+        """,
         // Fixed Chinese output before {{target}}.
         """
         我在读下面这段文字，想弄懂它在说什么。请用白话把内容讲清楚。

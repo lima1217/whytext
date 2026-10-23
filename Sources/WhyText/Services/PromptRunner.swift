@@ -19,6 +19,7 @@ final class PromptRunner {
         history: [ConversationMessage] = [],
         /// One per chunk; nil (or missing) where a chunk uses no glossary term.
         glossaryHints: [String?] = [],
+        contextHint: String? = nil,
         onActivity: @escaping (LLMActivity) async -> Void = { _ in },
         onUpdate: @escaping (String) async -> Void
     ) async throws -> String {
@@ -45,7 +46,8 @@ final class PromptRunner {
                     mode: mode,
                     targetLanguage: targetLanguage,
                     history: history,
-                    glossaryHint: index < glossaryHints.count ? glossaryHints[index] : nil
+                    glossaryHint: index < glossaryHints.count ? glossaryHints[index] : nil,
+                    contextHint: contextHint
                 )
                 nextIndex += 1
                 group.addTask {
@@ -125,7 +127,8 @@ final class PromptRunner {
         text: String,
         mode: TranslationMode,
         targetLanguage: String,
-        glossaryHint: String?
+        glossaryHint: String?,
+        contextHint: String? = nil
     ) -> String {
         buildRequest(
             template: template,
@@ -135,7 +138,8 @@ final class PromptRunner {
             mode: mode,
             targetLanguage: targetLanguage,
             history: [],
-            glossaryHint: glossaryHint
+            glossaryHint: glossaryHint,
+            contextHint: contextHint
         )
         .renderedPrompt(supportsWebSearch: false)
     }
@@ -148,7 +152,8 @@ final class PromptRunner {
         mode: TranslationMode,
         targetLanguage: String,
         history: [ConversationMessage],
-        glossaryHint: String? = nil
+        glossaryHint: String? = nil,
+        contextHint: String? = nil
     ) -> UnifiedTranslationRequest {
         UnifiedTranslationRequest(
             model: model,
@@ -162,7 +167,8 @@ final class PromptRunner {
             includeStructureHint: mode == .translate && history.isEmpty,
             enableWebSearch: mode == .explain,
             history: history,
-            glossaryHint: glossaryHint
+            glossaryHint: glossaryHint,
+            contextHint: contextHint
         )
     }
 }

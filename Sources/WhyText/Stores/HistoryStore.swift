@@ -16,6 +16,9 @@ struct HistoryCacheKey: Codable, Equatable {
     /// The glossary constraints sent with the request, so editing the glossary
     /// asks again. Optional: entries saved before the glossary decode as nil.
     var glossaryHint: String?
+    /// The selection's surroundings sent with an explanation: the same word in
+    /// another sentence asks again.
+    var contextHint: String?
 }
 
 struct HistoryEntry: Codable, Identifiable, Equatable {

@@ -417,6 +417,11 @@ final class AppModel: ObservableObject {
             template = settingsStore.explainPromptTemplate
         }
 
+        // Only explanations read the surroundings; a translation renders the selection as is.
+        let contextHint = action == .explain
+            ? UnifiedTranslationRequest.contextHint(for: panelState.lookupSource)
+            : nil
+
         let historyKey = HistoryCacheKey(
             action: action,
             targetLanguage: targetLanguage,
@@ -433,7 +438,8 @@ final class AppModel: ObservableObject {
                     entries: readingMemory.glossary,
                     targetLanguage: targetLanguage.rawValue
                 ))
-                : nil
+                : nil,
+            contextHint: contextHint
         )
 
         let lookup = PendingLookup(
@@ -471,6 +477,7 @@ final class AppModel: ObservableObject {
             splitLongInput: settingsStore.splitLongInput,
             enableStreaming: settingsStore.enableStreaming,
             glossary: readingMemory.glossary,
+            contextHint: contextHint,
             onNotice: { [weak self] notice in
                 self?.panelState.noticeMessage = notice
             },

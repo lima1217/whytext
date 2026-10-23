@@ -44,6 +44,9 @@ struct UnifiedTranslationRequest {
     var history: [ConversationMessage] = []
     /// Glossary terms this text uses and the renderings to keep (`GlossaryMatcher.hint`).
     var glossaryHint: String?
+    /// Where the selection was read (`contextHint(for:)`), so a short selection is
+    /// explained as it is used there.
+    var contextHint: String?
 
     /// The default explain prompt's search sentence. Providers without
     /// server-side search get it stripped so the model never pretends to search.
@@ -72,8 +75,22 @@ struct UnifiedTranslationRequest {
                 .replacingOccurrences(of: Self.webSearchInstruction + "\n\n", with: "")
                 .replacingOccurrences(of: Self.webSearchInstruction, with: "")
 
-        let hints = [includeStructureHint ? Self.structureHint : nil, glossaryHint].compactMap { $0 }
+        let hints = [includeStructureHint ? Self.structureHint : nil, glossaryHint, contextHint].compactMap { $0 }
         return (hints + [prompt]).joined(separator: "\n\n")
+    }
+
+    /// The window title and surrounding sentence of a selection; nil when neither was captured.
+    static func contextHint(for source: LookupSource?) -> String? {
+        var lines: [String] = []
+        if let title = source?.windowTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
+            lines.append("来源窗口：\(title)")
+        }
+        if let sentence = source?.sentence?.trimmingCharacters(in: .whitespacesAndNewlines), !sentence.isEmpty {
+            lines.append("所在句子：\(sentence)")
+        }
+        guard !lines.isEmpty else { return nil }
+        return (["<context>（下面是选中文字的出处，只用来判断它在这里的意思；解释对象仍是 <text> 里的选中文字）"]
+            + lines + ["</context>"]).joined(separator: "\n")
     }
 
     private static let structureHint = "保持原文段落结构：原文分几段，译文也分几段；不要合并段落。"
