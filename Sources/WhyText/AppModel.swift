@@ -650,7 +650,9 @@ final class AppModel: ObservableObject {
         panelState.conversation = entry.conversation
         panelState.followUps = []
         panelState.isFromHistory = true
-        panelController.refit(force: true)
+        // Measure after SwiftUI renders the result; measuring now sees the empty
+        // layout and leaves the panel too short to show it.
+        DispatchQueue.main.async { [weak self] in self?.refitPanel() }
     }
 
     /// Switch between translate and explain on the same selection.
