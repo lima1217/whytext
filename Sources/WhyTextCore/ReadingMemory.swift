@@ -124,3 +124,39 @@ public enum LookupLog {
         return decoder
     }()
 }
+
+/// A term the user chose to keep, with the rendering translations must use.
+public struct GlossaryEntry: Codable, Identifiable, Equatable, Sendable {
+    public var id: UUID
+    public var term: String
+    public var rendering: String
+    /// `TranslationLanguage.rawValue` the rendering is in.
+    public var targetLanguage: String
+    public var note: String?
+    public var createdAt: Date
+
+    public init(
+        id: UUID = UUID(),
+        term: String,
+        rendering: String,
+        targetLanguage: String,
+        note: String? = nil,
+        createdAt: Date
+    ) {
+        self.id = id
+        self.term = term
+        self.rendering = rendering
+        self.targetLanguage = targetLanguage
+        self.note = note
+        self.createdAt = createdAt
+    }
+
+    /// The rendering a starred result suggests: its first line, capped at 60 characters.
+    public static func suggestedRendering(from result: String) -> String {
+        let firstLine = result
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .components(separatedBy: .newlines)
+            .first ?? ""
+        return String(firstLine.trimmingCharacters(in: .whitespaces).prefix(60))
+    }
+}

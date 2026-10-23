@@ -6,6 +6,8 @@ import WhyTextCore
 /// Used from the main thread; file IO runs on a serial background queue.
 final class ReadingMemoryStore: ObservableObject {
     @Published private(set) var recordCount = 0
+    /// Terms the user starred, with the renderings translations must use.
+    @Published private(set) var glossary: [GlossaryEntry] = []
 
     private(set) var records: [LookupRecord] = [] {
         didSet { recordCount = records.count }
@@ -16,10 +18,16 @@ final class ReadingMemoryStore: ObservableObject {
     private var clearedWhileLoading = false
 
     private let fileURL: URL?
+    private let glossaryURL: URL?
     private let queue = DispatchQueue(label: "whytext.reading-memory", qos: .utility)
 
-    init(fileURL: URL? = ReadingMemoryStore.defaultFileURL()) {
-        self.fileURL = fileURL
+    init(directory: URL? = ReadingMemoryStore.defaultDirectory()) {
+        self.fileURL = directory?.appendingPathComponent("lookups.jsonl")
+        self.glossaryURL = directory?.appendingPathComponent("glossary.json")
+        // Small, and needed by the first translation, so read it right away.
+        if let glossaryURL, let data = try? Data(contentsOf: glossaryURL) {
+            glossary = (try? Self.glossaryDecoder.decode([GlossaryEntry].self, from: data)) ?? []
+        }
         guard let fileURL else { return }
         // Read off the main thread: a year of lookups is megabytes of JSON.
         queue.async { [weak self] in
@@ -52,11 +60,68 @@ final class ReadingMemoryStore: ObservableObject {
         clearedWhileLoading = true
         records = []
         termSessions = [:]
-        guard let fileURL else { return }
+        glossary = []
+        let urls = [fileURL, glossaryURL].compactMap { $0 }
         queue.async {
-            try? FileManager.default.removeItem(at: fileURL)
+            urls.forEach { try? FileManager.default.removeItem(at: $0) }
         }
     }
+
+    // MARK: - Glossary
+
+    /// The starred entry for this text and target language, compared by term key.
+    func glossaryEntry(forTerm text: String, targetLanguage: String) -> GlossaryEntry? {
+        guard let key = TermKey.make(text) else { return nil }
+        return glossary.first { $0.targetLanguage == targetLanguage && TermKey.make($0.term) == key }
+    }
+
+    func upsertGlossary(_ entry: GlossaryEntry) {
+        if let index = glossary.firstIndex(where: { $0.id == entry.id }) {
+            glossary[index] = entry
+        } else {
+            glossary.append(entry)
+        }
+        saveGlossary()
+    }
+
+    func removeGlossary(id: UUID) {
+        glossary.removeAll { $0.id == id }
+        saveGlossary()
+    }
+
+    private func saveGlossary() {
+        guard let glossaryURL else { return }
+        let snapshot = glossary
+        queue.async {
+            do {
+                if snapshot.isEmpty {
+                    try? FileManager.default.removeItem(at: glossaryURL)
+                    return
+                }
+                try FileManager.default.createDirectory(
+                    at: glossaryURL.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                let data = try Self.glossaryEncoder.encode(snapshot)
+                try data.write(to: glossaryURL, options: [.atomic, .completeFileProtection])
+            } catch {
+                // Best-effort, like lookups; the in-memory glossary still applies.
+            }
+        }
+    }
+
+    private static let glossaryEncoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        return encoder
+    }()
+
+    private static let glossaryDecoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }()
 
     enum ExportError: LocalizedError {
         case folderNotOurs(String)
@@ -72,7 +137,7 @@ final class ReadingMemoryStore: ObservableObject {
     /// Writes the Markdown export into `parent`, replacing an earlier WhyText export
     /// there but never a folder WhyText didn't create. Returns the export folder.
     func export(into parent: URL, completion: @escaping (Result<URL, Error>) -> Void) {
-        let files = MemoryMarkdownExporter.render(records: records, exportedAt: Date())
+        let files = MemoryMarkdownExporter.render(records: records, glossary: glossary, exportedAt: Date())
         let folderName = MemoryMarkdownExporter.folderName
         queue.async {
             let result = Result { try Self.write(files, folderName: folderName, into: parent) }
@@ -142,9 +207,7 @@ final class ReadingMemoryStore: ObservableObject {
         return destination
     }
 
-    private static func defaultFileURL() -> URL? {
-        HistoryStore.supportDirectory()?
-            .appendingPathComponent("memory", isDirectory: true)
-            .appendingPathComponent("lookups.jsonl")
+    private static func defaultDirectory() -> URL? {
+        HistoryStore.supportDirectory()?.appendingPathComponent("memory", isDirectory: true)
     }
 }

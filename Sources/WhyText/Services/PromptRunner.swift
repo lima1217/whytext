@@ -17,6 +17,8 @@ final class PromptRunner {
         mode: TranslationMode = .translate,
         targetLanguage: String = "auto",
         history: [ConversationMessage] = [],
+        /// One per chunk; nil (or missing) where a chunk uses no glossary term.
+        glossaryHints: [String?] = [],
         onActivity: @escaping (LLMActivity) async -> Void = { _ in },
         onUpdate: @escaping (String) async -> Void
     ) async throws -> String {
@@ -42,7 +44,8 @@ final class PromptRunner {
                     stream: enableStreaming,
                     mode: mode,
                     targetLanguage: targetLanguage,
-                    history: history
+                    history: history,
+                    glossaryHint: index < glossaryHints.count ? glossaryHints[index] : nil
                 )
                 nextIndex += 1
                 group.addTask {
@@ -121,7 +124,8 @@ final class PromptRunner {
         template: String,
         text: String,
         mode: TranslationMode,
-        targetLanguage: String
+        targetLanguage: String,
+        glossaryHint: String?
     ) -> String {
         buildRequest(
             template: template,
@@ -130,7 +134,8 @@ final class PromptRunner {
             stream: false,
             mode: mode,
             targetLanguage: targetLanguage,
-            history: []
+            history: [],
+            glossaryHint: glossaryHint
         )
         .renderedPrompt(supportsWebSearch: false)
     }
@@ -142,7 +147,8 @@ final class PromptRunner {
         stream: Bool,
         mode: TranslationMode,
         targetLanguage: String,
-        history: [ConversationMessage]
+        history: [ConversationMessage],
+        glossaryHint: String? = nil
     ) -> UnifiedTranslationRequest {
         UnifiedTranslationRequest(
             model: model,
@@ -155,7 +161,8 @@ final class PromptRunner {
             // The paragraph hint is for translating source text, not answering questions.
             includeStructureHint: mode == .translate && history.isEmpty,
             enableWebSearch: mode == .explain,
-            history: history
+            history: history,
+            glossaryHint: glossaryHint
         )
     }
 }

@@ -216,5 +216,16 @@ extension L10n {
         "记录总数：%@": "Records: %@",
         "「词条」按词归类短的查询；「日志」按月列出全部记录。": "“Terms” groups short lookups by word; “Log” lists every record by month.",
         "**来源**：%@": "**Source**: %@",
+        "术语表": "Glossary",
+        "译法": "Rendering",
+        "目标语言": "Target language",
+        "备注": "Note",
+        "不再记住这个译法": "Stop using this rendering",
+        "记住这个译法，以后翻译照用": "Remember this rendering for future translations",
+        "从术语表移除": "Remove from Glossary",
+        "加入术语表": "Add to Glossary",
+        "在翻译结果上点星标，就能记下这个词的译法；以后翻译到它时会照用。": "Star a translation result to remember how that word is translated; later translations will use it.",
+        "翻译时，用到的术语会随请求一起发给服务商。": "When translating, the glossary terms used are sent to your provider with the request.",
+        "从术语表移除 %@": "Remove %@ from Glossary",
     ]
 }

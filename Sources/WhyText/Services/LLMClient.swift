@@ -42,6 +42,8 @@ struct UnifiedTranslationRequest {
     var enableWebSearch: Bool = false
     /// Earlier turns sent before this request's prompt (follow-up questions).
     var history: [ConversationMessage] = []
+    /// Glossary terms this text uses and the renderings to keep (`GlossaryMatcher.hint`).
+    var glossaryHint: String?
 
     /// The default explain prompt's search sentence. Providers without
     /// server-side search get it stripped so the model never pretends to search.
@@ -70,11 +72,8 @@ struct UnifiedTranslationRequest {
                 .replacingOccurrences(of: Self.webSearchInstruction + "\n\n", with: "")
                 .replacingOccurrences(of: Self.webSearchInstruction, with: "")
 
-        guard includeStructureHint else {
-            return prompt
-        }
-
-        return "\(Self.structureHint)\n\n\(prompt)"
+        let hints = [includeStructureHint ? Self.structureHint : nil, glossaryHint].compactMap { $0 }
+        return (hints + [prompt]).joined(separator: "\n\n")
     }
 
     private static let structureHint = "保持原文段落结构：原文分几段，译文也分几段；不要合并段落。"

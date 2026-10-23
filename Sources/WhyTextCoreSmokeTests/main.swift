@@ -18,6 +18,7 @@ enum WhyTextCoreSmokeTests {
         testOCRTextLayout()
         try testReadingMemory()
         testSentenceContext()
+        testGlossaryMatcher()
         testMemoryMarkdownExporter()
         try testLocalization()
         print("WhyTextCore smoke tests passed")
@@ -434,6 +435,32 @@ enum WhyTextCoreSmokeTests {
         expect(extract("The cat sat. The cat ran.", "cat", occurrence: 1) == "The cat ran.", "the selection's own occurrence is used")
     }
 
+    private static func testGlossaryMatcher() {
+        func entry(_ term: String, _ rendering: String = "x", target: String = "zh-Hans") -> GlossaryEntry {
+            GlossaryEntry(term: term, rendering: rendering, targetLanguage: target, createdAt: Date(timeIntervalSince1970: 0))
+        }
+        func terms(_ text: String, _ entries: [GlossaryEntry], limit: Int = 20) -> [String] {
+            GlossaryMatcher.matches(in: text, entries: entries, targetLanguage: "zh-Hans", limit: limit).map(\.term)
+        }
+
+        expect(terms("Key learnings from the year", [entry("learning")]).isEmpty, "whole words only")
+        expect(terms("Machine Learning is fun", [entry("learning"), entry("machine learning")]) == ["machine learning", "learning"],
+               "case-insensitive, longest term first")
+        expect(terms("a learning moat", [entry("moat", target: "ja")]).isEmpty, "other target languages don't match")
+        expect(terms("护城河很宽", [entry("护城河")]) == ["护城河"], "CJK terms match inside running text")
+        expect(terms("写 C++ 代码", [entry("C++")]) == ["C++"], "terms with regex symbols match literally")
+        expect(terms("ABC++ is not it", [entry("C++")]).isEmpty, "symbol terms still respect the edge before a letter")
+        expect(terms("one two three", [entry("one"), entry("two"), entry("three")], limit: 2).count == 2, "results are capped")
+        expect(terms("the moat", [entry("moat", " ")]).isEmpty, "blank renderings are ignored")
+
+        expect(GlossaryMatcher.hint(for: []) == nil, "no matches, no hint")
+        expect(GlossaryMatcher.hint(for: [entry(" moat ", "护城河")]) == "下列术语按给定译法翻译，不要改用别的说法：\n- moat → 护城河",
+               "hint lists term → rendering")
+
+        expect(GlossaryEntry.suggestedRendering(from: "\n 护城河 \n（比喻竞争壁垒）") == "护城河", "suggested rendering is the first line")
+        expect(GlossaryEntry.suggestedRendering(from: String(repeating: "长", count: 100)).count == 60, "suggested rendering is capped")
+    }
+
     private static func testMemoryMarkdownExporter() {
         L10n.language = .simplifiedChinese
         let utc = TimeZone(identifier: "UTC")!
@@ -480,6 +507,21 @@ enum WhyTextCoreSmokeTests {
         expect(october.contains("> This is a long passage that is not a term at all."), "passages appear in the log")
         expect(october.range(of: "护城河（壁垒）")!.lowerBound > october.range(of: "### 10-20 22:40 · 翻译 · Safari")!.lowerBound,
                "the log is oldest first")
+
+        expect(files["术语表.md"] == nil, "no glossary file without glossary entries")
+        expect(moat.contains("in_glossary: false"), "terms not in the glossary say so")
+
+        let glossary = [
+            GlossaryEntry(term: "Moat", rendering: "护城河", targetLanguage: "zh-Hans", note: "a|b", createdAt: Date(timeIntervalSince1970: base)),
+            GlossaryEntry(term: "api", rendering: "接口\n层", targetLanguage: "xx", createdAt: Date(timeIntervalSince1970: base)),
+        ]
+        let withGlossary = MemoryMarkdownExporter.render(records: records, glossary: glossary,
+                                                         exportedAt: Date(timeIntervalSince1970: base), timeZone: utc)
+        let table = withGlossary["术语表.md"] ?? ""
+        expect(table.contains("| Moat | 护城河 | 简体中文 | a\\|b |"), "glossary rows name the language and escape pipes")
+        expect(table.contains("| api | 接口 层 | xx |  |"), "line breaks become spaces; unknown languages show their code")
+        expect(table.range(of: "| api")!.lowerBound < table.range(of: "| Moat")!.lowerBound, "glossary is sorted by term")
+        expect(withGlossary["词条/MOAT.md"]?.contains("in_glossary: true") == true, "starred terms are marked by term key")
 
         expect(MemoryMarkdownExporter.fileName(for: "..hidden") == "hidden", "never a hidden file")
         expect(MemoryMarkdownExporter.fileName(for: "\n") == "untitled", "empty names get a fallback")

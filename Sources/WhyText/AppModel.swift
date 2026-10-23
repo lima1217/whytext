@@ -413,7 +413,14 @@ final class AppModel: ObservableObject {
             apiMode: preflight.provider.apiMode,
             template: template,
             maxInputCharacters: settingsStore.maxInputCharacters,
-            splitLongInput: settingsStore.splitLongInput
+            splitLongInput: settingsStore.splitLongInput,
+            glossaryHint: action == .translate
+                ? GlossaryMatcher.hint(for: GlossaryMatcher.matches(
+                    in: preflight.selectedText,
+                    entries: readingMemory.glossary,
+                    targetLanguage: targetLanguage.rawValue
+                ))
+                : nil
         )
 
         let lookup = PendingLookup(
@@ -450,6 +457,7 @@ final class AppModel: ObservableObject {
             maxInputCharacters: settingsStore.maxInputCharacters,
             splitLongInput: settingsStore.splitLongInput,
             enableStreaming: settingsStore.enableStreaming,
+            glossary: readingMemory.glossary,
             onNotice: { [weak self] notice in
                 self?.panelState.noticeMessage = notice
             },
@@ -529,6 +537,44 @@ final class AppModel: ObservableObject {
         guard let app = NSWorkspace.shared.frontmostApplication,
               app.bundleIdentifier != Bundle.main.bundleIdentifier else { return LookupSource() }
         return LookupSource(appName: app.localizedName, bundleID: app.bundleIdentifier)
+    }
+
+    // MARK: - Glossary
+
+    /// A finished translation of a short term can be starred into the glossary.
+    var canStarResult: Bool {
+        guard panelState.lastAction == .translate,
+              panelState.targetLanguage != nil,
+              !panelState.isLoading,
+              panelState.errorMessage?.isEmpty ?? true,
+              !panelState.resultText.isEmpty,
+              let input = panelState.lastInputText else { return false }
+        return TermKey.make(input) != nil
+    }
+
+    var isResultStarred: Bool {
+        guard let input = panelState.lastInputText, let target = panelState.targetLanguage else { return false }
+        return readingMemory.glossaryEntry(forTerm: input, targetLanguage: target.rawValue) != nil
+    }
+
+    /// Stars the current term with the result's first line as its rendering, or unstars it.
+    func toggleResultStarred() {
+        guard canStarResult, let input = panelState.lastInputText, let target = panelState.targetLanguage else { return }
+        if let entry = readingMemory.glossaryEntry(forTerm: input, targetLanguage: target.rawValue) {
+            readingMemory.removeGlossary(id: entry.id)
+            return
+        }
+        let term = input
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+            .trimmingCharacters(in: .punctuationCharacters.union(.whitespaces))
+        readingMemory.upsertGlossary(GlossaryEntry(
+            term: term,
+            rendering: GlossaryEntry.suggestedRendering(from: panelState.resultText),
+            targetLanguage: target.rawValue,
+            createdAt: Date()
+        ))
     }
 
     func clearReadingMemory() {

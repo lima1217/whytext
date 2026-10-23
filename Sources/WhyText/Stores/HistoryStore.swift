@@ -13,6 +13,9 @@ struct HistoryCacheKey: Codable, Equatable {
     var template: String
     var maxInputCharacters: Int
     var splitLongInput: Bool
+    /// The glossary constraints sent with the request, so editing the glossary
+    /// asks again. Optional: entries saved before the glossary decode as nil.
+    var glossaryHint: String?
 }
 
 struct HistoryEntry: Codable, Identifiable, Equatable {

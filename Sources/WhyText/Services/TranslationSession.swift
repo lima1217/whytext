@@ -31,6 +31,7 @@ final class TranslationSession {
         maxInputCharacters: Int,
         splitLongInput: Bool,
         enableStreaming: Bool,
+        glossary: [GlossaryEntry],
         onNotice: @escaping (String?) -> Void,
         onActivity: @escaping (LLMActivity) -> Void,
         onPartialResult: @escaping (String) -> Void,
@@ -51,6 +52,16 @@ final class TranslationSession {
                 await deliver { onNotice(L10n.f("输入过长，已分 %@ 段处理", String(chunking.chunks.count))) }
             }
 
+            // Matched per chunk, so a long text doesn't send every term with every chunk.
+            func glossaryHint(for text: String) -> String? {
+                guard mode == .translate else { return nil }
+                return GlossaryMatcher.hint(for: GlossaryMatcher.matches(
+                    in: text,
+                    entries: glossary,
+                    targetLanguage: targetLanguage.rawValue
+                ))
+            }
+
             let output = try await promptRunner.run(
                 template: template,
                 chunks: chunking.chunks,
@@ -59,15 +70,18 @@ final class TranslationSession {
                 enableStreaming: enableStreaming,
                 mode: mode,
                 targetLanguage: targetLanguage.promptName,
+                glossaryHints: chunking.chunks.map(glossaryHint),
                 onActivity: { activity in await deliver { onActivity(activity) } },
                 onUpdate: { partial in await deliver { onPartialResult(partial) } }
             )
 
+            let wholeText = chunking.chunks.joined(separator: "\n\n")
             let prompt = promptRunner.transcriptPrompt(
                 template: template,
-                text: chunking.chunks.joined(separator: "\n\n"),
+                text: wholeText,
                 mode: mode,
-                targetLanguage: targetLanguage.promptName
+                targetLanguage: targetLanguage.promptName,
+                glossaryHint: glossaryHint(for: wholeText)
             )
             return [
                 ConversationMessage(role: .user, content: prompt),

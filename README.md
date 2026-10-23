@@ -54,6 +54,7 @@ WhyText is a lightweight menu bar app for macOS. It reads the text you have sele
 - **Long input**: translations over 4,000 characters are split into chunks and requested in parallel (up to 3 at once), displayed in order.
 - **Recent results** can be reopened from the menu bar. Identical requests reuse the stored result instead of calling the provider again.
 - **Reading memory** keeps every finished lookup with where it came from (app, window title, web page or document) and, in apps that expose it, the sentence around the selection. Looking up the same word again shows how many times you have; export everything as a folder of plain Markdown files.
+- **Glossary**: star a translated word to keep its rendering. Later translations that contain the word use it, and you can edit or remove entries in Settings.
 
 ### Customization
 
@@ -118,7 +119,7 @@ Settings are grouped into pages in the sidebar of the Settings window:
 | Translation Direction | Primary and second language for automatic direction; result panel text size. |
 | Providers | Provider profiles (Base URL, model, API format, API key) and a connectivity check. |
 | Prompts | Translate and explain templates. Each must contain `{{text}}`. The hotkey runs *translate*; the bubble's question-mark action runs *explain*. |
-| Reading Memory | Turn recording on or off, export to a Markdown folder, or clear it. |
+| Reading Memory | Turn recording on or off, edit or remove glossary entries, export to a Markdown folder, or clear it. |
 | Permissions | Accessibility status and selection-reading diagnostics. |
 | Updates | Daily update checks and one-click install. |
 
@@ -129,6 +130,7 @@ Settings are grouped into pages in the sidebar of the Settings window:
 | API keys | macOS Keychain. |
 | Other settings | `UserDefaults`. |
 | Selected text | Sent only to the provider you configured. |
+| Glossary | Starred terms and renderings in `~/Library/Application Support/<bundle ID>/memory/glossary.json`. When a translation contains a starred term, that term and its rendering are sent to your provider with the request. |
 | Screenshots | Require Screen Recording permission. Used only for on-device text recognition and deleted immediately; only the recognized text is sent to your provider. |
 | Recent results | Up to 50 entries in `~/Library/Application Support/<bundle ID>/recent-results.json`. Can be turned off or cleared. |
 | Reading memory | Every finished lookup (text, result, app, window title, page or document address, surrounding sentence) in `~/Library/Application Support/<bundle ID>/memory/lookups.jsonl`. Never sent anywhere. Can be turned off, exported, or cleared. |

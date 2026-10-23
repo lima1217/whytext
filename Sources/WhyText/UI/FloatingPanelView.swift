@@ -399,6 +399,20 @@ struct FloatingPanelTitlebarView: View {
 
             Spacer(minLength: Spacing.x2)
 
+            if appModel.canStarResult {
+                let starred = appModel.isResultStarred
+                Button(action: { appModel.toggleResultStarred() }) {
+                    Image(systemName: starred ? "star.fill" : "star")
+                        .font(.system(size: PanelTokens.iconSize, weight: .medium))
+                        .foregroundStyle(starred ? Color.accentColor : AstryxColor.textSecondary)
+                        .panelIconButton()
+                }
+                .buttonStyle(.quietIcon)
+                .help(starred ? L10n.t("不再记住这个译法") : L10n.t("记住这个译法，以后翻译照用"))
+                .accessibilityLabel(starred ? L10n.t("从术语表移除") : L10n.t("加入术语表"))
+                .transition(.opacity)
+            }
+
             Button(action: { appModel.togglePanelPinned() }) {
                 Image(systemName: appModel.isPanelPinned ? "pin.fill" : "pin")
                     .font(.system(size: PanelTokens.iconSize, weight: .medium))

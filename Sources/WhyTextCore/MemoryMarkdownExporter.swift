@@ -10,6 +10,7 @@ public enum MemoryMarkdownExporter {
 
     public static func render(
         records: [LookupRecord],
+        glossary: [GlossaryEntry] = [],
         exportedAt: Date,
         timeZone: TimeZone = .current
     ) -> [String: String] {
@@ -18,9 +19,14 @@ public enum MemoryMarkdownExporter {
         files[markerFileName] = ""
         files["README.md"] = readme(recordCount: records.count, exportedAt: exportedAt, dates: dates)
 
+        if !glossary.isEmpty {
+            files["\(L10n.t("术语表")).md"] = glossaryPage(glossary)
+        }
+
+        let glossaryKeys = Set(glossary.compactMap { TermKey.make($0.term) })
         let termsFolder = L10n.t("词条")
         for (name, group) in termFiles(records) {
-            files["\(termsFolder)/\(name).md"] = termPage(group, dates: dates)
+            files["\(termsFolder)/\(name).md"] = termPage(group, inGlossary: glossaryKeys.contains(group[0].termKey!), dates: dates)
         }
 
         let logFolder = L10n.t("日志")
@@ -90,7 +96,31 @@ public enum MemoryMarkdownExporter {
             .trimmingCharacters(in: .punctuationCharacters.union(.symbols).union(.whitespaces))
     }
 
-    private static func termPage(_ newestFirst: [LookupRecord], dates: DateFormats) -> String {
+    private static func glossaryPage(_ glossary: [GlossaryEntry]) -> String {
+        var lines = [
+            "# \(L10n.t("术语表"))",
+            "",
+            "| \(L10n.t("原文")) | \(L10n.t("译法")) | \(L10n.t("目标语言")) | \(L10n.t("备注")) |",
+            "| --- | --- | --- | --- |",
+        ]
+        let sorted = glossary.sorted { $0.term.localizedCaseInsensitiveCompare($1.term) == .orderedAscending }
+        for entry in sorted {
+            let language = TranslationLanguage(rawValue: entry.targetLanguage)?.displayName ?? entry.targetLanguage
+            let cells = [entry.term, entry.rendering, language, entry.note ?? ""].map(tableCell)
+            lines.append("| " + cells.joined(separator: " | ") + " |")
+        }
+        lines.append("")
+        return lines.joined(separator: "\n")
+    }
+
+    private static func tableCell(_ text: String) -> String {
+        text.components(separatedBy: .newlines)
+            .joined(separator: " ")
+            .replacingOccurrences(of: "|", with: "\\|")
+            .trimmingCharacters(in: .whitespaces)
+    }
+
+    private static func termPage(_ newestFirst: [LookupRecord], inGlossary: Bool, dates: DateFormats) -> String {
         let term = displayTerm(newestFirst)
         let sessions = Set(newestFirst.map(\.sessionID)).count
         var lines = [
@@ -99,6 +129,7 @@ public enum MemoryMarkdownExporter {
             "count: \(sessions)",
             "first_seen: \(dates.day.string(from: newestFirst.last!.date))",
             "last_seen: \(dates.day.string(from: newestFirst[0].date))",
+            "in_glossary: \(inGlossary)",
             "---",
             "",
             "# \(term)",

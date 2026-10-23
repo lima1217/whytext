@@ -326,6 +326,15 @@ in_glossary: true
 - 断句前先把单个换行等长替换成空格。PDF（Preview）和硬换行文本每行都有换行，不这样处理的话，一句话会被截成半行。连续两个换行仍然当作段落边界。
 - `SentenceContext.extract` 多了 `expectedSelection` 参数：按范围取到的文字和选中文字对不上时返回 nil。有些 App 报告的范围和实际文本不一致，宁可不记，也不记错。
 
+**阶段 C 实施时与上文的差异**：
+
+- 按 chunk 匹配术语放在 `TranslationSession` 里做：它把每个 chunk 的 hint 算好，以 `glossaryHints: [String?]` 传给 `PromptRunner`。`PromptRunner` 不知道术语表的存在，只负责把 hint 放进请求。
+- 匹配时跳过译法为空的条目。用户在设置里把译法删空，相当于暂时停用这条，不会发出“moat → ”这样的空约束。
+- 拉丁词的边界用“前后不是字母、数字、下划线”的 lookaround，而不是 `\b`，这样 `C++` 这类以符号结尾的词也能匹配。代价是 `C+` 会命中 `C++`。
+- 日文假名和韩文和 CJK 一样按子串匹配：韩文虽然有空格，但助词紧贴在词后面。
+- `renderedPrompt` 和 `HistoryCacheKey` 都在 `WhyText` 模块里，smoke tests 只能测 `WhyTextCore`，所以这两处没有自动测试。`renderedPrompt` 在 hint 为 nil 时逐字节不变，这一点是通过对照代码确认的，不是测试验证的。
+- “清空阅读记忆”会同时清空术语表；导出和清空按钮在“有记录或有术语”时都可用。
+
 **0.6.0 = A + B + C。** 下一版候选（不在本方案内）：把原句发给服务商（需要更新 README 隐私表并加开关）、补 marker 路径的原句采集、复习。
 
 ## 11. 改动的文件
