@@ -30,6 +30,26 @@ struct TranslationSettingsView: View {
                     }
                 }
             }
+
+            Section {
+                glassTintSlider(L10n.t("浅色模式玻璃色调"), value: $appModel.settingsStore.lightGlassTint)
+                glassTintSlider(L10n.t("深色模式玻璃色调"), value: $appModel.settingsStore.darkGlassTint)
+                CaptionText(text: L10n.t("调低色调，玻璃更通透；为 0 时只保留模糊、边缘和阴影。"))
+            }
+        }
+    }
+
+    private func glassTintSlider(_ title: String, value: Binding<Double>) -> some View {
+        LabeledContent(title) {
+            HStack(spacing: Spacing.x3) {
+                Slider(value: value, in: SettingsStore.glassTintRange, step: 0.05)
+                    .frame(width: 200)
+                Text("\(Int((value.wrappedValue * 100).rounded()))%")
+                    .font(AstryxFont.captionM)
+                    .monospacedDigit()
+                    .foregroundStyle(AstryxColor.textSecondary)
+                    .frame(width: 40, alignment: .trailing)
+            }
         }
     }
 

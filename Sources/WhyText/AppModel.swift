@@ -44,9 +44,11 @@ final class AppModel: ObservableObject {
         selectionService: AccessibilitySelectionService = AccessibilitySelectionService(),
         selectionReader: SelectionReader? = nil,
         llmClient: LLMClient = LLMClient(),
-        panelController: FloatingPanelController = FloatingPanelController(),
-        selectionBubbleController: SelectionBubbleController = SelectionBubbleController()
+        panelController: FloatingPanelController? = nil,
+        selectionBubbleController: SelectionBubbleController? = nil
     ) {
+        let panelController = panelController ?? FloatingPanelController()
+        let selectionBubbleController = selectionBubbleController ?? SelectionBubbleController()
         let resolvedSelectionReader = selectionReader ?? SelectionReader(accessibility: selectionService)
         self.settingsStore = settingsStore
         self.historyStore = historyStore
@@ -75,6 +77,10 @@ final class AppModel: ObservableObject {
         settingsStore.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
+
+        let glassTints = settingsStore.$lightGlassTint.combineLatest(settingsStore.$darkGlassTint)
+        panelController.glass.bindTintScales(glassTints)
+        selectionBubbleController.glass.bindTintScales(glassTints)
 
         historyStore.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
