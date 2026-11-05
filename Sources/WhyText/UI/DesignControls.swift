@@ -159,9 +159,12 @@ private struct QuietButtonHover: ViewModifier {
     @Environment(\.isEnabled) private var isEnabled
 
     func body(content: Content) -> some View {
-        // On glass this is a lighter layer of the glass; off glass, the usual overlay.
         content
-            .glassHighlight(cornerRadius: cornerRadius, isHovered: isHovering && isEnabled)
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(AstryxColor.overlayHover)
+                    .opacity(isHovering && isEnabled ? 1 : 0)
+            )
             .onHover { isHovering = $0 }
             .animation(AstryxMotion.quick, value: isHovering)
     }
@@ -185,16 +188,16 @@ struct QuietLabelButton: View {
             HStack(spacing: Spacing.x1_5) {
                 Image(systemName: systemName)
                     .font(.system(size: 13, weight: .medium))
-                    .glassInk(.secondary, override: isEnabled ? nil : AstryxColor.textDisabled)
+                    .foregroundStyle(isEnabled ? AstryxColor.textSecondary : AstryxColor.textDisabled)
                     .accessibilityHidden(true)
                 Text(title)
                     .font(.system(size: 12, weight: .medium))
-                    .glassInk(.primary, override: isEnabled ? nil : AstryxColor.textDisabled)
+                    .foregroundStyle(isEnabled ? AstryxColor.textPrimary : AstryxColor.textDisabled)
                     .lineLimit(1)
                 if let shortcut {
                     Text(shortcut)
                         .font(.system(size: 11))
-                        .glassInk(.secondary, override: isEnabled ? nil : AstryxColor.textDisabled)
+                        .foregroundStyle(isEnabled ? AstryxColor.textSecondary : AstryxColor.textDisabled)
                         .accessibilityHidden(true)
                 }
             }

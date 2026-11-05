@@ -2,15 +2,12 @@ import AppKit
 import SwiftUI
 import WhyTextCore
 
-@MainActor
 final class SelectionBubbleController: NSObject, NSWindowDelegate {
     /// Receive the bubble's frame, so the panel can grow out of where it was.
     var onTranslate: ((NSRect?) -> Void)?
     var onExplain: ((NSRect?) -> Void)?
 
     private var panel: NSPanel?
-    /// Short-lived chrome: theme ink and a dense tint, no scene capture.
-    let glass = GlassBackdrop(source: .theme, cornerRadius: Metrics.radius)
     /// Bumped by every show and hide, so a fade-out that finishes after the bubble
     /// was shown again doesn't close the new one.
     private var presentationID = 0
@@ -24,7 +21,6 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
         presentationID += 1
 
         let hostingView = NSHostingView(rootView: SelectionBubbleBar(
-            glass: glass,
             onTranslate: { [weak self] in
                 self?.handleAction(self?.onTranslate)
             },
@@ -70,7 +66,6 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
         panel.ignoresMouseEvents = false
         panel.contentView = hostingView
         panel.delegate = self
-        glass.attach(to: panel)
 
         self.panel = panel
 
@@ -224,13 +219,12 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
 /// Translucent material chrome with the result panel's quiet icon buttons, so it
 /// reads as WhyText without stealing focus from the selection.
 private struct SelectionBubbleBar: View {
-    @ObservedObject var glass: GlassBackdrop
     var onTranslate: () -> Void
     var onExplain: () -> Void
     var onHoverChange: (Bool) -> Void
 
     @State private var appeared = false
-    @State private var isHovered = false
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(spacing: Metrics.spacing) {
@@ -250,16 +244,16 @@ private struct SelectionBubbleBar: View {
             )
         }
         .padding(Metrics.padding)
-        .background(GlassWindowBackground(backdrop: glass, cornerRadius: Metrics.radius, isHovered: isHovered))
-        .environment(\.glass, glass.state)
+        .background(bubbleMaterial)
+        .overlay(
+            RoundedRectangle(cornerRadius: Metrics.radius, style: .continuous)
+                .strokeBorder(materialEdgeHighlight, lineWidth: 0.5)
+        )
         // No SwiftUI drop shadow — the panel uses `hasShadow` so the silhouette
         // follows the rounded alpha instead of the rectangular window bounds.
         .scaleEffect(appeared || MotionPreference.reduceMotion ? 1.0 : 0.94)
         .opacity(appeared || MotionPreference.reduceMotion ? 1 : 0)
-        .onHover {
-            isHovered = $0
-            onHoverChange($0)
-        }
+        .onHover { onHoverChange($0) }
         .onAppear {
             guard !MotionPreference.reduceMotion else {
                 appeared = true
@@ -273,6 +267,31 @@ private struct SelectionBubbleBar: View {
         .fixedSize()
         .accessibilityElement(children: .contain)
         .accessibilityLabel(L10n.t("WhyText 操作"))
+    }
+
+    private var bubbleMaterial: some View {
+        ZStack {
+            if MotionPreference.reduceTransparency {
+                Color(nsColor: .windowBackgroundColor)
+            } else {
+                // cornerStyle masks at CALayer — SwiftUI clipShape alone does not clip materials.
+                VisualEffectView(
+                    material: .popover,
+                    blendingMode: .behindWindow,
+                    state: .active,
+                    cornerStyle: .continuous(Metrics.radius)
+                )
+                Color(nsColor: .windowBackgroundColor).opacity(colorScheme == .dark ? 0.2 : 0.45)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: Metrics.radius, style: .continuous))
+    }
+
+    /// Bright rim — materials read as thicker when lit at the edge.
+    private var materialEdgeHighlight: Color {
+        colorScheme == .dark
+            ? Color.white.opacity(0.16)
+            : Color.black.opacity(0.08)
     }
 }
 

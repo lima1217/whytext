@@ -1,5 +1,4 @@
 import AppKit
-import CoreImage
 import Foundation
 import SwiftUI
 import WhyTextCore
@@ -29,7 +28,6 @@ struct MarkdownTextView: NSViewRepresentable {
     func updateNSView(_ nsView: SelectableMarkdownTextView, context: Context) {
         let trimmed = markdown.trimmingCharacters(in: .whitespacesAndNewlines)
         nsView.setMarkdown(trimmed, fontSize: fontSize)
-        nsView.setGlassInk(context.environment.glass?.ink)
     }
 }
 
@@ -54,20 +52,6 @@ final class SelectableMarkdownTextView: NSTextView {
         super.setFrameSize(newSize)
         textContainer?.containerSize = NSSize(width: max(0, newSize.width), height: .greatestFiniteMagnitude)
         invalidateIntrinsicContentSize()
-    }
-
-    /// On glass the text blends into it like SwiftUI ink does: multiply on bright
-    /// glass, plus-lighter on dark. AppKit text sits outside SwiftUI's blend modes,
-    /// so this goes through the layer.
-    func setGlassInk(_ ink: GlassInk?) {
-        wantsLayer = true
-        let name: String? = switch ink {
-        case .dark: "CIMultiplyBlendMode"
-        case .light: "CIAdditionCompositing"
-        case nil: nil
-        }
-        guard (layer?.compositingFilter as? CIFilter)?.name != name else { return }
-        layer?.compositingFilter = name.flatMap { CIFilter(name: $0) }
     }
 
     func setMarkdown(_ markdown: String, fontSize: CGFloat) {

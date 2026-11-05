@@ -160,12 +160,6 @@ final class SettingsStore: ObservableObject {
     /// Look for a newer GitHub release once a day.
     @Published var autoCheckForUpdates: Bool
     @Published var interfaceLanguage: InterfaceLanguage
-    /// Scales the glass tint in the light theme, 0…1.5 (1 = as designed).
-    @Published var lightGlassTint: Double
-    /// Scales the glass tint in the dark theme, 0…1.5 (1 = as designed).
-    @Published var darkGlassTint: Double
-
-    static let glassTintRange: ClosedRange<Double> = 0...1.5
 
     private var cancellables = Set<AnyCancellable>()
     private var persistWorkItem: DispatchWorkItem?
@@ -212,8 +206,6 @@ final class SettingsStore: ObservableObject {
             self.saveReadingMemory = decoded.saveReadingMemory
             self.autoCheckForUpdates = decoded.autoCheckForUpdates
             self.interfaceLanguage = decoded.interfaceLanguage
-            self.lightGlassTint = decoded.lightGlassTint
-            self.darkGlassTint = decoded.darkGlassTint
 
             if self.translatePromptTemplate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 self.translatePromptTemplate = Self.defaultTranslatePromptTemplate
@@ -287,8 +279,6 @@ final class SettingsStore: ObservableObject {
             self.saveReadingMemory = true
             self.autoCheckForUpdates = true
             self.interfaceLanguage = .system
-            self.lightGlassTint = 1
-            self.darkGlassTint = 1
         }
 
         bindAutoSave()
@@ -426,16 +416,6 @@ final class SettingsStore: ObservableObject {
             .dropFirst()
             .sink { [weak self] _ in self?.schedulePersist() }
             .store(in: &cancellables)
-
-        $lightGlassTint
-            .dropFirst()
-            .sink { [weak self] _ in self?.schedulePersist() }
-            .store(in: &cancellables)
-
-        $darkGlassTint
-            .dropFirst()
-            .sink { [weak self] _ in self?.schedulePersist() }
-            .store(in: &cancellables)
     }
 
     private func schedulePersist() {
@@ -467,9 +447,7 @@ final class SettingsStore: ObservableObject {
             saveHistory: saveHistory,
             saveReadingMemory: saveReadingMemory,
             autoCheckForUpdates: autoCheckForUpdates,
-            interfaceLanguage: interfaceLanguage,
-            lightGlassTint: lightGlassTint,
-            darkGlassTint: darkGlassTint
+            interfaceLanguage: interfaceLanguage
         )
         guard let data = try? JSONEncoder().encode(settings) else { return }
         UserDefaults.standard.set(data, forKey: userDefaultsKey)
@@ -514,8 +492,6 @@ private struct PersistedSettings: Codable {
     var saveReadingMemory: Bool
     var autoCheckForUpdates: Bool
     var interfaceLanguage: InterfaceLanguage
-    var lightGlassTint: Double
-    var darkGlassTint: Double
 
     init(
         providers: [LLMProvider],
@@ -534,9 +510,7 @@ private struct PersistedSettings: Codable {
         saveHistory: Bool,
         saveReadingMemory: Bool,
         autoCheckForUpdates: Bool,
-        interfaceLanguage: InterfaceLanguage,
-        lightGlassTint: Double,
-        darkGlassTint: Double
+        interfaceLanguage: InterfaceLanguage
     ) {
         self.providers = providers
         self.selectedProviderID = selectedProviderID
@@ -555,8 +529,6 @@ private struct PersistedSettings: Codable {
         self.saveReadingMemory = saveReadingMemory
         self.autoCheckForUpdates = autoCheckForUpdates
         self.interfaceLanguage = interfaceLanguage
-        self.lightGlassTint = lightGlassTint
-        self.darkGlassTint = darkGlassTint
     }
 
     init(from decoder: Decoder) throws {
@@ -580,9 +552,6 @@ private struct PersistedSettings: Codable {
         self.saveReadingMemory = try container.decodeIfPresent(Bool.self, forKey: .saveReadingMemory) ?? true
         self.autoCheckForUpdates = try container.decodeIfPresent(Bool.self, forKey: .autoCheckForUpdates) ?? true
         self.interfaceLanguage = (try? container.decodeIfPresent(InterfaceLanguage.self, forKey: .interfaceLanguage)) ?? .system
-        let tintRange = SettingsStore.glassTintRange
-        self.lightGlassTint = min(tintRange.upperBound, max(tintRange.lowerBound, try container.decodeIfPresent(Double.self, forKey: .lightGlassTint) ?? 1))
-        self.darkGlassTint = min(tintRange.upperBound, max(tintRange.lowerBound, try container.decodeIfPresent(Double.self, forKey: .darkGlassTint) ?? 1))
     }
 }
 

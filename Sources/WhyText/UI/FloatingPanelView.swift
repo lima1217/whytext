@@ -26,19 +26,34 @@ private extension View {
         self
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .glassCard(cornerRadius: PanelTokens.cardRadius, solidFill: PanelTokens.cardFill)
+            .background(
+                RoundedRectangle(cornerRadius: PanelTokens.cardRadius, style: .continuous)
+                    .fill(PanelTokens.cardFill)
+            )
+            .hairlineBorder(cornerRadius: PanelTokens.cardRadius)
     }
 }
 
 struct FloatingPanelView: View {
     @EnvironmentObject private var appModel: AppModel
-    @EnvironmentObject private var glass: GlassBackdrop
     @State private var shakeOffset: CGFloat = 0
 
     var body: some View {
         ZStack {
-            GlassWindowBackground(backdrop: glass, cornerRadius: GlassMetrics.windowCornerRadius)
+            VisualEffectView(material: .popover, blendingMode: .behindWindow, state: .active)
                 .ignoresSafeArea()
+
+            // Material weight: soft fill keeps vibrancy text legible without stacking glass on glass.
+            // Reduce Transparency → frostier/solid surface.
+            Group {
+                if MotionPreference.reduceTransparency {
+                    Color(nsColor: .windowBackgroundColor)
+                } else {
+                    Color(nsColor: .windowBackgroundColor).opacity(0.18)
+                }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
 
             VStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: Spacing.x2) {
@@ -74,7 +89,7 @@ struct FloatingPanelView: View {
                         Image(systemName: "info.circle")
                     }
                     .font(.system(size: PanelTokens.metaFontSize))
-                    .glassInk(.secondary)
+                    .foregroundStyle(AstryxColor.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, PanelTokens.horizontalPadding + Spacing.x1)
                     .padding(.top, -Spacing.x2)
@@ -146,8 +161,12 @@ struct FloatingPanelView: View {
                 }
                 .padding(PanelTokens.cardPadding)
             }
+            .background(
+                RoundedRectangle(cornerRadius: PanelTokens.cardRadius, style: .continuous)
+                    .fill(PanelTokens.cardFill)
+            )
             .clipShape(RoundedRectangle(cornerRadius: PanelTokens.cardRadius, style: .continuous))
-            .glassCard(cornerRadius: PanelTokens.cardRadius, solidFill: PanelTokens.cardFill)
+            .hairlineBorder(cornerRadius: PanelTokens.cardRadius)
             .onChange(of: appModel.panelState.followUps) { _ in
                 proxy.scrollTo(Self.scrollBottomID, anchor: .bottom)
             }
@@ -219,7 +238,7 @@ struct FloatingPanelView: View {
                     .foregroundStyle(Color(nsColor: .systemRed))
                     .accessibilityHidden(true)
                 Text(message)
-                    .glassInk(.primary)
+                    .foregroundStyle(AstryxColor.textPrimary)
                     .font(.system(size: PanelTokens.bodyFontSize))
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
@@ -385,7 +404,7 @@ struct FloatingPanelTitlebarView: View {
                 Button(action: { appModel.toggleResultStarred() }) {
                     Image(systemName: starred ? "star.fill" : "star")
                         .font(.system(size: PanelTokens.iconSize, weight: .medium))
-                        .glassInk(.secondary, override: starred ? Color.accentColor : nil)
+                        .foregroundStyle(starred ? Color.accentColor : AstryxColor.textSecondary)
                         .panelIconButton()
                 }
                 .buttonStyle(.quietIcon)
@@ -398,7 +417,7 @@ struct FloatingPanelTitlebarView: View {
                 Image(systemName: appModel.isPanelPinned ? "pin.fill" : "pin")
                     .font(.system(size: PanelTokens.iconSize, weight: .medium))
                     .rotationEffect(.degrees(45))
-                    .glassInk(.secondary, override: appModel.isPanelPinned ? Color.accentColor : nil)
+                    .foregroundStyle(appModel.isPanelPinned ? Color.accentColor : AstryxColor.textSecondary)
                     .panelIconButton()
             }
             .buttonStyle(.quietIcon)
@@ -413,7 +432,7 @@ struct FloatingPanelTitlebarView: View {
                     // doc.on.doc draws taller than pin at the same point size.
                     size: PanelTokens.iconSize - 1
                 )
-                .glassInk(.secondary, override: copyGlyphOverride)
+                .foregroundStyle(copyGlyphColor)
                 .panelIconButton()
             }
             .buttonStyle(.quietIcon)
@@ -470,10 +489,9 @@ struct FloatingPanelTitlebarView: View {
         !appModel.panelState.isLoading && hasResult
     }
 
-    /// Success and disabled keep their colors; otherwise the glyph is drawn in ink.
-    private var copyGlyphOverride: Color? {
+    private var copyGlyphColor: Color {
         if didCopy { return Tone.success.color }
-        return canCopy ? nil : AstryxColor.textDisabled
+        return canCopy ? AstryxColor.textSecondary : AstryxColor.textDisabled
     }
 
     private func copyResultIfPossible() {
@@ -549,7 +567,7 @@ private struct PanelIconButton: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: PanelTokens.iconSize, weight: .medium))
-                .glassInk(.secondary)
+                .foregroundStyle(AstryxColor.textSecondary)
                 .panelIconButton()
         }
         .buttonStyle(.quietIcon)
@@ -661,20 +679,19 @@ private struct SourceTextDisclosure: View {
                 HStack(spacing: Spacing.x1_5) {
                     Text(L10n.t("原文"))
                         .font(.system(size: PanelTokens.metaFontSize, weight: .semibold))
-                        .glassInk(.primary)
+                        .foregroundStyle(AstryxColor.textPrimary)
                     if !isExpanded {
                         Text(preview)
                             .font(.system(size: PanelTokens.metaFontSize))
                             .lineLimit(1)
                             .truncationMode(.tail)
-                            .glassInk(.secondary)
                     }
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.down")
                         .font(.system(size: 9, weight: .semibold))
                         .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                        .glassInk(.secondary)
                 }
+                .foregroundStyle(AstryxColor.textSecondary)
                 .padding(.horizontal, PanelTokens.cardPadding)
                 .padding(.vertical, Spacing.x2)
                 .contentShape(Rectangle())
@@ -688,7 +705,7 @@ private struct SourceTextDisclosure: View {
                 ScrollView {
                     Text(text)
                         .font(.system(size: PanelTokens.bodyFontSize))
-                        .glassInk(.secondary)
+                        .foregroundStyle(AstryxColor.textSecondary)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -726,7 +743,7 @@ private struct ManualInputView: View {
                 HStack(spacing: Spacing.x2) {
                     Text(hint)
                         .font(.system(size: PanelTokens.metaFontSize))
-                        .glassInk(.secondary)
+                        .foregroundStyle(AstryxColor.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                     if appModel.panelState.inputNeedsAccessibility {
@@ -894,15 +911,14 @@ private struct HistoryNoteRow: View {
         HStack(spacing: Spacing.x1_5) {
             Image(systemName: "clock.arrow.circlepath")
                 .font(.system(size: 10))
-                .glassInk(.secondary)
             Text(L10n.t("来自最近记录，未重新请求"))
                 .font(.system(size: PanelTokens.metaFontSize))
-                .glassInk(.secondary)
             Spacer(minLength: 0)
             PanelIconButton(systemName: "arrow.clockwise", label: L10n.t("重新生成")) {
                 appModel.regenerate()
             }
         }
+        .foregroundStyle(AstryxColor.textSecondary)
         .padding(.horizontal, Spacing.x1)
     }
 }
@@ -922,12 +938,12 @@ private struct FollowUpTurnView: View {
                 Text(turn.question)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
-                    .glassInk(.secondary)
             } icon: {
                 Image(systemName: "arrow.turn.down.right")
                     .foregroundStyle(Color.accentColor)
             }
             .font(.system(size: PanelTokens.bodyFontSize, weight: .medium))
+            .foregroundStyle(AstryxColor.textSecondary)
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if let error = turn.errorMessage {
@@ -937,7 +953,7 @@ private struct FollowUpTurnView: View {
                         .accessibilityHidden(true)
                     Text(error)
                         .font(.system(size: PanelTokens.bodyFontSize))
-                        .glassInk(.primary)
+                        .foregroundStyle(AstryxColor.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                     PanelIconButton(systemName: "arrow.clockwise", label: L10n.t("重试")) {
@@ -996,7 +1012,11 @@ private struct FollowUpInputBar: View {
         .padding(.leading, Spacing.x3)
         .padding(.trailing, Spacing.x1)
         .padding(.vertical, Spacing.x1)
-        .glassCard(cornerRadius: PanelTokens.cardRadius, solidFill: PanelTokens.cardFill)
+        .background(
+            RoundedRectangle(cornerRadius: PanelTokens.cardRadius, style: .continuous)
+                .fill(PanelTokens.cardFill)
+        )
+        .hairlineBorder(cornerRadius: PanelTokens.cardRadius)
     }
 
     private var canSend: Bool {

@@ -2,7 +2,6 @@ import AppKit
 import SwiftUI
 import WhyTextCore
 
-@MainActor
 final class FloatingPanelController: NSObject, NSWindowDelegate {
     var onDidClose: (() -> Void)?
     /// Called for a mouse-down in another app while the panel is open.
@@ -11,12 +10,6 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     var shouldCloseOnOutsideClick: () -> Bool = { true }
 
     private var panel: NSPanel?
-    /// The panel's glass: reads the scene behind it and remembers its ink between opens.
-    let glass = GlassBackdrop(
-        source: .scene,
-        cornerRadius: GlassMetrics.windowCornerRadius,
-        inkMemoryKey: "WhyText.Glass.panelVariant"
-    )
     private var titlebarAccessory: NSTitlebarAccessoryViewController?
     private var titlebarHostingView: NSHostingView<AnyView>?
     private var placement: PanelPlacement?
@@ -49,9 +42,9 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         presentationID += 1
         isClosingProgrammatically = false
 
-        let hostingView = NSHostingView(rootView: AnyView(GlassScope(backdrop: glass, content: content)))
+        let hostingView = NSHostingView(rootView: AnyView(content()))
         prepareHostingView(hostingView)
-        let titlebarView = AnyView(GlassScope(backdrop: glass, content: titlebar))
+        let titlebarView = AnyView(titlebar())
 
         let panel = self.panel ?? makePanel()
         let isNew = self.panel == nil
@@ -107,7 +100,6 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         panel.isMovableByWindowBackground = true
         panel.delegate = self
         disableFullscreen(panel)
-        glass.attach(to: panel)
         return panel
     }
 
