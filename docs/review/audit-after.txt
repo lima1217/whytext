@@ -1,0 +1,62 @@
+# WhyText UI audit
+
+## Text font sizes per surface (limit 4)
+
+- Settings (all panes share chrome): 4 sizes [11.0, 12.0, 13.0, 15.0] [OK]
+    11pt: SettingsDesignSystem.swift:174, PermissionsSettingsView.swift:110
+    12pt: SettingsDesignSystem.swift:132, SettingsDesignSystem.swift:161, SettingsDesignSystem.swift:192, SettingsView.swift:62, GeneralSettingsView.swift:49, ShortcutsSettingsView.swift:39 …
+    13pt: SettingsView.swift:59, SettingsView.swift:125, ProvidersSettingsView.swift:105, ProvidersSettingsView.swift:132, PromptsSettingsView.swift:75, UpdatesSettingsView.swift:47 …
+    15pt: SettingsDesignSystem.swift:100
+- Floating panel: 3 sizes [11.0, 12.0, 13.0] [OK]
+    11pt: FloatingPanelView.swift:387, FloatingPanelView.swift:655, FloatingPanelView.swift:684, FloatingPanelView.swift:688, FloatingPanelView.swift:748, FloatingPanelView.swift:921 …
+    12pt: DesignControls.swift:194
+    13pt: FloatingPanelView.swift:243, FloatingPanelView.swift:710, FloatingPanelView.swift:961, DesignControls.swift:86
+- Selection bubble: 0 sizes [] [OK]
+
+## Styling that needs a written reason
+
+- italic: 1 hits, 0 without an obvious reason
+      Sources/WhyText/UI/MarkdownTextView.swift:373  let italic = base.fontDescriptor.withSymbolicTraits(.italic)
+- uppercase: 0 hits, 0 without an obvious reason
+- middle dot: 1 hits, 0 without an obvious reason
+      Sources/WhyTextCore/MemoryMarkdownExporter.swift:171  return parts.joined(separator: " · ")
+- monospaced: 10 hits, 0 without an obvious reason
+      Sources/WhyText/UI/SettingsView.swift:63  .monospacedDigit()
+      Sources/WhyText/UI/ProvidersSettingsView.swift:232  labeledField(title: L10n.t("接口地址"), placeholder: "https://api.deepseek.com", text: $provid
+      Sources/WhyText/UI/ProvidersSettingsView.swift:233  labeledField(title: L10n.t("模型"), placeholder: "deepseek-chat", text: $provider.model, mon
+      Sources/WhyText/UI/ProvidersSettingsView.swift:254  .font(.system(.body, design: .monospaced))
+      Sources/WhyText/UI/ProvidersSettingsView.swift:394  monospaced: Bool = false
+      Sources/WhyText/UI/ProvidersSettingsView.swift:401  .font(monospaced ? .system(.body, design: .monospaced) : .body)
+      Sources/WhyText/UI/PermissionsSettingsView.swift:110  .font(.system(size: 11, design: .monospaced))
+      Sources/WhyText/UI/MarkdownTextView.swift:342  return NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+      Sources/WhyText/UI/TranslationSettingsView.swift:34  .monospacedDigit()
+      Sources/WhyText/UI/DesignTokens.swift:148  static let bodyMono = Font.system(size: 13, weight: .regular, design: .monospaced)
+- middle dot in strings: 0 []
+
+## Token contrast (WCAG 2.2: text >= 4.5, large text/icons >= 3)
+
+- textPrimary: light window 14.54, light row 17.18, dark window 14.80, dark row 12.74
+- textSecondary: light window 5.13, light row 6.06, dark window 6.99, dark row 6.02
+- textDisabled: light window 2.25 !, light row 2.66 !, dark window 2.29 !, dark row 1.97 !
+- success: light window 5.36, light row 6.33, dark window 11.24, dark row 9.68
+- error: light window 6.63, light row 7.84, dark window 11.19, dark row 9.64
+- warning: light window 5.49, light row 6.48, dark window 11.28, dark row 9.72
+- accentText: light window 5.35, light row 6.32, dark window 5.84, dark row 5.03
+
+## Gray temperature (R-B > 0 is warm)
+
+- textPrimary light #1D1B18: R-B=5 warm
+- textPrimary dark #F4F1EC: R-B=8 warm
+- textSecondary light #66625C: R-B=10 warm
+- textSecondary dark #ADA79F: R-B=14 warm
+- textDisabled light #A39E96: R-B=13 warm
+- textDisabled dark #5A5650: R-B=10 warm
+- borderEmphasized light #D3CEC6: R-B=13 warm
+- borderEmphasized dark #57534D: R-B=10 warm
+- border light #E8E4DE: R-B=10 warm
+- border dark #FFFFFF1A: R-B=0 neutral
+
+## Numbers built by string interpolation (should use a formatter)
+
+
+Hard violations: 0

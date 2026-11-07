@@ -1,0 +1,72 @@
+# WhyText UI audit
+
+## Text font sizes per surface (limit 4)
+
+- Settings (all panes share chrome): 4 sizes [11.0, 12.0, 13.0, 15.0] [OK]
+    11pt: SettingsDesignSystem.swift:148, PermissionsSettingsView.swift:92
+    12pt: SettingsDesignSystem.swift:132, SettingsDesignSystem.swift:166, SettingsView.swift:62, ShortcutsSettingsView.swift:39, TranslationSettingsView.swift:26, ProvidersSettingsView.swift:289 …
+    13pt: SettingsView.swift:59, SettingsView.swift:134, ProvidersSettingsView.swift:94, ProvidersSettingsView.swift:121, PromptsSettingsView.swift:69, UpdatesSettingsView.swift:47 …
+    15pt: SettingsDesignSystem.swift:100
+- Floating panel: 3 sizes [11.0, 12.0, 13.0] [OK]
+    11pt: FloatingPanelView.swift:386, FloatingPanelView.swift:653, FloatingPanelView.swift:681, FloatingPanelView.swift:685, FloatingPanelView.swift:745, FloatingPanelView.swift:915 …
+    12pt: DesignControls.swift:194
+    13pt: FloatingPanelView.swift:242, FloatingPanelView.swift:707, FloatingPanelView.swift:955, DesignControls.swift:86
+- Selection bubble: 0 sizes [] [OK]
+
+## Styling that needs a written reason
+
+- italic: 1 hits, 1 without an obvious reason
+    ! Sources/WhyText/UI/MarkdownTextView.swift:371  let italic = base.fontDescriptor.withSymbolicTraits(.italic)
+- uppercase: 0 hits, 0 without an obvious reason
+- middle dot: 1 hits, 1 without an obvious reason
+    ! Sources/WhyTextCore/MemoryMarkdownExporter.swift:169  return parts.joined(separator: " · ")
+- monospaced: 10 hits, 3 without an obvious reason
+      Sources/WhyText/UI/SettingsView.swift:63  .monospacedDigit()
+      Sources/WhyText/UI/ProvidersSettingsView.swift:222  labeledField(title: "Base URL", placeholder: "https://api.deepseek.com", text: $provider.b
+      Sources/WhyText/UI/ProvidersSettingsView.swift:223  labeledField(title: "Model", placeholder: "deepseek-chat", text: $provider.model, monospac
+      Sources/WhyText/UI/ProvidersSettingsView.swift:244  .font(.system(.body, design: .monospaced))
+    ! Sources/WhyText/UI/ProvidersSettingsView.swift:381  monospaced: Bool = false
+    ! Sources/WhyText/UI/ProvidersSettingsView.swift:387  .font(monospaced ? .system(.body, design: .monospaced) : .body)
+      Sources/WhyText/UI/PermissionsSettingsView.swift:92  .font(.system(size: 11, design: .monospaced))
+    ! Sources/WhyText/UI/MarkdownTextView.swift:341  return NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+      Sources/WhyText/UI/TranslationSettingsView.swift:27  .monospacedDigit()
+      Sources/WhyText/UI/DesignTokens.swift:141  static let bodyMono = Font.system(size: 13, weight: .regular, design: .monospaced)
+- middle dot in strings: 0 []
+
+## Token contrast (WCAG 2.2: text >= 4.5, large text/icons >= 3)
+
+- textPrimary: light window 15.18, light row 17.93, dark window 15.97, dark row 13.75
+- textSecondary: light window 4.01 !, light row 4.74, dark window 6.61, dark row 5.69
+- textDisabled: light window 2.14 !, light row 2.52 !, dark window 2.13 !, dark row 1.84 !
+- success: light window 5.36, light row 6.33, dark window 11.24, dark row 9.68
+- error: light window 6.63, light row 7.84, dark window 11.19, dark row 9.64
+- warning: light window 5.49, light row 6.48, dark window 11.28, dark row 9.72
+
+## Gray temperature (R-B > 0 is warm)
+
+- textPrimary light #171717: R-B=0 neutral
+- textPrimary dark #fafafa: R-B=0 neutral
+- textSecondary light #737373: R-B=0 neutral
+- textSecondary dark #a3a3a3: R-B=0 neutral
+- textDisabled light #a3a3a3: R-B=0 neutral
+- textDisabled dark #525252: R-B=0 neutral
+- borderEmphasized light #d4d4d4: R-B=0 neutral
+- borderEmphasized dark #525252: R-B=0 neutral
+- border light #ebebeb: R-B=0 neutral
+- border dark #FFFFFF1A: R-B=0 neutral
+
+## Numbers built by string interpolation (should use a formatter)
+
+  ! Sources/WhyText/AppModel.swift:550  panelState.noticeMessage = L10n.f("第 %@ 次查这个词", String(count))
+  ! Sources/WhyText/AppModel.swift:787  selectionDiagnosticsReport = L10n.f("等待 %@ 秒后采样，请切回目标应用并选中文本…", String(format: "%.1f", seconds))
+  ! Sources/WhyText/UI/MemorySettingsView.swift:56  CaptionText(text: L10n.f("已记录 %@ 条，只保存在这台 Mac 上。", String(appModel.readingMemory.recordCount)))
+  ! Sources/WhyText/UI/MenuBarView.swift:101  Label(L10n.f("正在下载更新（%@）…", "\(Int(fraction * 100))%"), systemImage: "arrow.down.circle")
+  ! Sources/WhyText/UI/TranslationSettingsView.swift:25  Text("\(Int(appModel.settingsStore.translationFontSize)) pt")
+  ! Sources/WhyText/UI/UpdatesSettingsView.swift:64  return L10n.f("正在下载更新（%@）…", "\(Int(fraction * 100))%")
+  ! Sources/WhyText/Services/SelectionAutoPopupCoordinator.swift:114  "mouseUp clicks=\(clickCount) distance=\(String(format: "%.1f", gesture.distance)) draggedEvent=\(ge
+  ! Sources/WhyText/Services/UpdateChecker.swift:162  userInfo: [NSLocalizedDescriptionKey: L10n.f("GitHub 返回 HTTP %@", String(http.statusCode))]
+  ! Sources/WhyText/Services/TranslationSession.swift:51  await deliver { onNotice(L10n.f("输入过长，已截断到 %@ 字符", String(maxInputCharacters))) }
+  ! Sources/WhyText/Services/TranslationSession.swift:53  await deliver { onNotice(L10n.f("输入过长，已分 %@ 段处理", String(chunking.chunks.count))) }
+  ! Sources/WhyText/Services/UpdateInstaller.swift:31  status.map { L10n.f("下载失败（HTTP %@）", String($0)) } ?? L10n.t("下载失败，请检查网络后重试。")
+
+Hard violations: 17
