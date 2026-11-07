@@ -51,6 +51,7 @@ Use this checklist before replacing the local app in `/Applications`.
 
 ## Selection Bubble
 
+- The bubble and the result panel are flat and opaque (warm gray, no translucency): move them over a colorful window and confirm nothing shows through.
 - Select text: the bubble is a rounded rectangle with labeled 翻译 and 解释 actions (gray outline icons) and sizes to the localized labels in every interface language.
 - Confirm the bubble appears near the selection when the app provides selection bounds, and still appears near the mouse as fallback. It auto-dismisses, and hovering pauses dismissal.
 - Click 翻译 and confirm the panel opens in translate mode; click 解释 and confirm explain mode and the explain prompt are used.

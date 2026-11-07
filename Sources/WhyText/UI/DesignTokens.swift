@@ -72,6 +72,10 @@ enum AstryxColor {
     /// Settings sidebar: a step warmer and darker than the window, flat (no material).
     static let sidebarBackground = Color.dynamic(light: "#EFECE7", dark: "#262421")
 
+    /// Floating panel and selection bubble: flat and opaque, a touch lighter than the
+    /// settings sidebar so content cards still read as wells.
+    static let floatingBackground = Color.dynamic(light: "#F4F1EC", dark: "#2A2724")
+
     // Borders
     static let border = Color.dynamic(light: "#E8E4DE", dark: "#FFFFFF1A")
     static let borderEmphasized = Color.dynamic(light: "#D3CEC6", dark: "#57534D")

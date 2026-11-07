@@ -218,7 +218,7 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
 /// Compact dual-action bar near the selected text: translate + explain.
 /// Translucent material chrome with the result panel's quiet icon buttons, so it
 /// reads as WhyText without stealing focus from the selection.
-private struct SelectionBubbleBar: View {
+struct SelectionBubbleBar: View {
     var onTranslate: () -> Void
     var onExplain: () -> Void
     var onHoverChange: (Bool) -> Void
@@ -269,25 +269,13 @@ private struct SelectionBubbleBar: View {
         .accessibilityLabel(L10n.t("WhyText 操作"))
     }
 
+    /// Flat, opaque surface; the panel's window shadow lifts it off the page.
     private var bubbleMaterial: some View {
-        ZStack {
-            if MotionPreference.reduceTransparency {
-                Color(nsColor: .windowBackgroundColor)
-            } else {
-                // cornerStyle masks at CALayer — SwiftUI clipShape alone does not clip materials.
-                VisualEffectView(
-                    material: .popover,
-                    blendingMode: .behindWindow,
-                    state: .active,
-                    cornerStyle: .continuous(Metrics.radius)
-                )
-                Color(nsColor: .windowBackgroundColor).opacity(colorScheme == .dark ? 0.2 : 0.45)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: Metrics.radius, style: .continuous))
+        RoundedRectangle(cornerRadius: Metrics.radius, style: .continuous)
+            .fill(AstryxColor.floatingBackground)
     }
 
-    /// Bright rim — materials read as thicker when lit at the edge.
+    /// Hairline edge so the bubble holds its shape on pages of a similar color.
     private var materialEdgeHighlight: Color {
         colorScheme == .dark
             ? Color.white.opacity(0.16)

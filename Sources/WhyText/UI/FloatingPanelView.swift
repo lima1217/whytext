@@ -40,20 +40,11 @@ struct FloatingPanelView: View {
 
     var body: some View {
         ZStack {
-            VisualEffectView(material: .popover, blendingMode: .behindWindow, state: .active)
+            // Flat, opaque surface: no material, so text reads the same over any window behind.
+            // The window's own shadow is what lifts the panel.
+            AstryxColor.floatingBackground
                 .ignoresSafeArea()
-
-            // Material weight: soft fill keeps vibrancy text legible without stacking glass on glass.
-            // Reduce Transparency → frostier/solid surface.
-            Group {
-                if MotionPreference.reduceTransparency {
-                    Color(nsColor: .windowBackgroundColor)
-                } else {
-                    Color(nsColor: .windowBackgroundColor).opacity(0.18)
-                }
-            }
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
+                .allowsHitTesting(false)
 
             VStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: Spacing.x2) {

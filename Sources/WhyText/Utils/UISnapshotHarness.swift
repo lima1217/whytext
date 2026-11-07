@@ -61,6 +61,12 @@ enum UISnapshotHarness {
                                 to: out.appendingPathComponent("settings-\(pane.rawValue)-\(tag)-\(appearance)-\(Int(size.width))x\(Int(size.height)).png"))
                     }
                 }
+                let bubble = SelectionBubbleBar(onTranslate: {}, onExplain: {}, onHoverChange: { _ in })
+                    .padding(Spacing.x6)
+                    .background(Color(nsColor: .textBackgroundColor))
+                capture(bubble, size: nil, appearance: nsAppearance,
+                        to: out.appendingPathComponent("bubble-\(tag)-\(appearance).png"))
+
                 for (name, state) in panelStates() {
                     model.panelState = state
                     let view = VStack(spacing: 0) {
