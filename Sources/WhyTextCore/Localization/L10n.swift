@@ -67,8 +67,26 @@ public enum L10n {
         }
     }
 
+    /// Layout testing only: stretches English text by about 40% and brackets it,
+    /// so truncation and overlap show up before real translations do.
+    nonisolated(unsafe) public static var pseudoLocalize = false
+
     public static func t(_ key: String) -> String {
-        lookup(key, in: language)
+        let text = lookup(key, in: language)
+        return pseudoLocalize ? pseudo(text) : text
+    }
+
+    static func pseudo(_ text: String) -> String {
+        let accented: [Character: Character] = ["a": "á", "e": "é", "i": "í", "o": "ö", "u": "ü", "A": "Å", "E": "É", "O": "Ö", "c": "ç", "n": "ñ"]
+        var out = ""
+        var inPlaceholder = false
+        for ch in text {
+            if ch == "%" { inPlaceholder = true }
+            out.append(inPlaceholder ? ch : (accented[ch] ?? ch))
+            if inPlaceholder, ch == "@" { inPlaceholder = false }
+        }
+        let padding = String(repeating: "~", count: max(2, text.count * 2 / 5))
+        return "[" + out + padding + "]"
     }
 
     /// Formats a key containing `%@` / `%1$@` placeholders with string arguments.

@@ -7,6 +7,11 @@ struct WhyTextApp: App {
 
     init() {
         NSApplication.shared.setActivationPolicy(.accessory)
+        if UISnapshotHarness.isActive {
+            let model = UISnapshotHarness.makeModel()
+            _appModel = StateObject(wrappedValue: model)
+            DispatchQueue.main.async { UISnapshotHarness.run(model: model) }
+        }
     }
 
     var body: some Scene {

@@ -161,7 +161,7 @@ final class AppModel: ObservableObject {
         // A menu bar app shows nothing when opened. Until setup is done, open
         // Settings on launch so a first-time user sees what to do next.
         DispatchQueue.main.async { [weak self] in
-            guard let self, !self.isSetupComplete else { return }
+            guard let self, !self.isSetupComplete, !UISnapshotHarness.isActive else { return }
             self.openSettingsWindow(pane: .general)
         }
     }
