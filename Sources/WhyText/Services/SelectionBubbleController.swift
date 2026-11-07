@@ -244,7 +244,7 @@ struct SelectionBubbleBar: View {
             )
         }
         .padding(Metrics.padding)
-        .background(bubbleMaterial)
+        .background(bubbleSurface)
         .overlay(
             RoundedRectangle(cornerRadius: Metrics.radius, style: .continuous)
                 .strokeBorder(materialEdgeHighlight, lineWidth: 0.5)
@@ -270,7 +270,7 @@ struct SelectionBubbleBar: View {
     }
 
     /// Flat, opaque surface; the panel's window shadow lifts it off the page.
-    private var bubbleMaterial: some View {
+    private var bubbleSurface: some View {
         RoundedRectangle(cornerRadius: Metrics.radius, style: .continuous)
             .fill(AstryxColor.floatingBackground)
     }

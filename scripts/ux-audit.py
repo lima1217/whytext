@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """UI audit for WhyText: font sizes per view, styling that needs a reason,
-color contrast of the design tokens, and number formatting smells.
+color contrast of the design tokens, number formatting smells, and APIs the
+design rules ban (system accent and hues, translucent materials).
+Rules and reasons: docs/design/guidelines.md.
 
 Run from the repo root:  python3 scripts/ux-audit.py
 Exit code is the number of hard violations (0 = clean).
@@ -176,6 +178,25 @@ def main():
             if num.search(line) and "HTTP" not in line and "DebugLog" not in path.read_text().splitlines()[max(0, i - 3)] and "mouseUp" not in line:
                 print(f"  ! {path.relative_to(ROOT)}:{i}  {line.strip()[:100]}")
                 violations += 1
+    print()
+
+    print("## Banned APIs (guidelines §4 one accent, §5 flat surfaces)\n")
+    banned = {
+        "system accent / hue (use AstryxColor.accent or a token)": re.compile(
+            r"Color\.accentColor|controlAccentColor|\.system(Blue|Orange|Pink|Purple|Teal|Indigo|Green|Yellow|Brown|Mint|Cyan)\b"),
+        "translucent material (surfaces are flat and opaque)": re.compile(
+            r"NSVisualEffectView|VisualEffectView|\.(ultraThin|thin|regular|thick|ultraThick)Material\b"),
+    }
+    for label, pat in banned.items():
+        hits = []
+        for path in UI.rglob("*.swift"):
+            for i, line in enumerate(path.read_text().splitlines(), 1):
+                if not line.strip().startswith("//") and pat.search(line):
+                    hits.append(f"{path.relative_to(ROOT)}:{i}  {line.strip()[:90]}")
+        violations += len(hits)
+        print(f"- {label}: {len(hits)}")
+        for h in hits:
+            print(f"  ! {h}")
     print()
     print(f"Hard violations: {violations}")
     return violations

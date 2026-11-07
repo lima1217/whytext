@@ -20,3 +20,6 @@ jobs:
         run: |
           CLANG_MODULE_CACHE_PATH=/tmp/clang-module-cache \
             swift run WhyTextCoreSmokeTests --cache-path /tmp/swiftpm-cache
+
+      - name: UI audit
+        run: python3 scripts/ux-audit.py
