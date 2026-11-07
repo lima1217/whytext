@@ -83,6 +83,25 @@ def contrast(c1, c2):
     return (l1 + 0.05) / (l2 + 0.05)
 
 
+DECL = re.compile(r"\s*(@\w+(\([^)]*\))?\s+)*((public|private|fileprivate|internal|static|final|override|mutating|nonisolated)\s+)*(func|var|let|struct|enum|class|extension|init)\b")
+
+
+def reason_scope(lines, idx):
+    """Lines that may carry a "<Kind>: reason" comment for the hit at lines[idx]: the hit
+    line itself (trailing comment), the enclosing declaration down to the hit, and the
+    comments directly above that declaration."""
+    indent = len(lines[idx]) - len(lines[idx].lstrip())
+    start = max(0, idx - 80)
+    for j in range(idx - 1, start - 1, -1):
+        line = lines[j]
+        if line.strip() and len(line) - len(line.lstrip()) < indent and DECL.match(line):
+            start = j
+            while start > 0 and lines[start - 1].strip().startswith("//"):
+                start -= 1
+            break
+    return lines[start: idx + 1]
+
+
 def main():
     violations = 0
     print("# WhyText UI audit\n")
@@ -116,15 +135,16 @@ def main():
         for path in list(UI.rglob("*.swift")) + list(CORE.rglob("*.swift")):
             if "Localization" in str(path) and name == "middle dot":
                 continue
-            for i, line in enumerate(path.read_text().splitlines(), 1):
+            lines = path.read_text().splitlines()
+            for i, line in enumerate(lines, 1):
                 if line.strip().startswith("//"):
                     continue
                 if re.search(pat, line):
-                    ctx = path.read_text().splitlines()[max(0, i - 8): i]
+                    ctx = reason_scope(lines, i - 1)
                     reason = {"monospaced": "Monospaced:", "italic": "Italic:", "middle dot": "Middle dot:", "uppercase": "Uppercase:"}[name]
                     justified = any(reason in c for c in ctx) or (name == "monospaced" and any(allowed_mono.search(c) for c in ctx))
                     hits.append((path.relative_to(ROOT), i, justified, line.strip()[:90]))
-        unjustified = [h for h in hits if not h[2]]  # a "<Kind>: reason" comment within 8 lines justifies a hit
+        unjustified = [h for h in hits if not h[2]]  # a "<Kind>: reason" comment in reason_scope justifies a hit
         violations += len(unjustified)
         print(f"- {name}: {len(hits)} hits, {len(unjustified)} without an obvious reason")
         for p, i, ok, text in hits:
@@ -160,13 +180,15 @@ def main():
         print(f"- {t}: " + ", ".join(row))
     # Warm-gray check: neutral grays should lean warm (R >= B).
     print()
-    print("## Gray temperature (R-B > 0 is warm)\n")
-    for t in ("textPrimary", "textSecondary", "textDisabled", "borderEmphasized", "border"):
+    print("## Gray temperature (R-B > 0 is warm; COOL is a violation)\n")
+    for t in ("textPrimary", "textSecondary", "textDisabled", "borderEmphasized", "border", "sidebarBackground", "floatingBackground"):
         for mode, table in (("light", colors), ("dark", dark)):
             if t in table:
                 (r, g, b), _ = srgb_lum(table[t])
                 d = round((r - b) * 255)
                 tag = "warm" if d > 0 else ("neutral" if d == 0 else "COOL")
+                if d < 0:
+                    violations += 1
                 print(f"- {t} {mode} {table[t]}: R-B={d} {tag}")
     print()
 

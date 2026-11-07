@@ -397,7 +397,6 @@ private struct ProviderDetailView: View {
             TextField(title, text: text, prompt: Text(placeholder))
                 .labelsHidden()
                 .multilineTextAlignment(.trailing)
-                // Monospaced: see the doc comment above.
                 .font(monospaced ? .system(.body, design: .monospaced) : .body)
         }
     }
