@@ -5,7 +5,9 @@ import AppKit
 /// into a thinning tail, and a single curl turns inside the largest lobe.
 enum MenuBarIcon {
     static let image: NSImage = {
-        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
+        // Wider than tall: the cloud is a wide shape, and an 18pt square left it
+        // only ~8pt high next to other menu bar icons.
+        let image = NSImage(size: canvas, flipped: false) { rect in
             draw(in: rect)
             return true
         }
@@ -19,15 +21,25 @@ enum MenuBarIcon {
     private static let left: Lobe = (NSPoint(x: 6.6, y: 9.0), 2.4)
     private static let middle: Lobe = (NSPoint(x: 10.6, y: 10.7), 3.4)
     private static let right: Lobe = (NSPoint(x: 14.4, y: 8.6), 2.0)
-    private static let lineWidth: CGFloat = 1.2
 
-    /// Coordinates are authored on an 18×18 grid (y-up) and scaled to `rect`.
+    private static let canvas = NSSize(width: 22, height: 18)
+    /// The artwork's bounds on its authoring grid (tail tip to right lobe, base to top).
+    private static let artwork = NSRect(x: 1.0, y: 6.0, width: 16.0, height: 8.7)
+    /// Grid units → points: the cloud fills the canvas width (~21pt × 11.6pt).
+    private static let zoom: CGFloat = 1.33
+    /// Stroke widths in final points, so enlarging the cloud doesn't thicken its lines.
+    private static let lineWidth: CGFloat = 1.4 / zoom
+    private static let curlWidth: CGFloat = 1.3 / zoom
+
+    /// Coordinates are authored on a y-up grid; `artwork` is centered in `rect` at `zoom`.
     private static func draw(in rect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.saveGState()
         defer { context.restoreGState() }
-        context.translateBy(x: rect.minX, y: rect.minY)
-        context.scaleBy(x: rect.width / 18, y: rect.height / 18)
+        let scale = zoom * rect.height / canvas.height
+        context.translateBy(x: rect.midX, y: rect.midY)
+        context.scaleBy(x: scale, y: scale)
+        context.translateBy(x: -artwork.midX, y: -artwork.midY)
         NSColor.black.setFill()
         NSColor.black.setStroke()
 
@@ -43,12 +55,12 @@ enum MenuBarIcon {
         stroke(outline, width: lineWidth)
 
         // Curl inside the middle lobe, spiraling inward clockwise.
-        stroke(polyline(spiral(center: NSPoint(x: 10.6, y: 10.5), from: 1.8, to: 0.35, startAngle: 210, sweep: -300)), width: 1.1)
+        stroke(polyline(spiral(center: NSPoint(x: 10.6, y: 10.5), from: 1.8, to: 0.35, startAngle: 210, sweep: -300)), width: curlWidth)
 
         // Tail: the base line continues left, thinning, and lifts at the end.
         tapered(
             bezier(NSPoint(x: 7.2, y: 6.6), NSPoint(x: 4.6, y: 6.6), NSPoint(x: 2.8, y: 6.6), NSPoint(x: 1.2, y: 8.2)),
-            from: lineWidth, to: 0.35
+            from: lineWidth, to: 0.3
         ).fill()
     }
 
