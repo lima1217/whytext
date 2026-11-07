@@ -9,7 +9,9 @@ import WhyTextCore
 ///     WHYTEXT_SNAPSHOT_DIR=/tmp/shots .build/debug/WhyText
 ///
 /// Optional: `WHYTEXT_SNAPSHOT_LANGS=zh-Hans,en`, `WHYTEXT_SNAPSHOT_SIZES=760x520,820x600`,
-/// `WHYTEXT_SNAPSHOT_APPEARANCES=light,dark`, `WHYTEXT_SNAPSHOT_PSEUDO=1` (stretched English).
+/// `WHYTEXT_SNAPSHOT_APPEARANCES=light,dark`, `WHYTEXT_SNAPSHOT_PSEUDO=1` (stretched English),
+/// `WHYTEXT_SNAPSHOT_PANES=providers,panel,bubble` (settings pane raw values, plus `panel`
+/// for the result panel states and `bubble`; unset captures everything).
 @MainActor
 enum UISnapshotHarness {
     static var outputDirectory: URL? {
@@ -43,6 +45,8 @@ enum UISnapshotHarness {
             }
         let appearances = (env["WHYTEXT_SNAPSHOT_APPEARANCES"] ?? "light,dark").split(separator: ",").map(String.init)
         let pseudo = env["WHYTEXT_SNAPSHOT_PSEUDO"] == "1"
+        let only = Set((env["WHYTEXT_SNAPSHOT_PANES"] ?? "").split(separator: ",").map(String.init))
+        func wanted(_ name: String) -> Bool { only.isEmpty || only.contains(name) }
 
         var runs: [(InterfaceLanguage, String)] = languages.map { ($0, $0.rawValue) }
         if pseudo { runs.append((.english, "pseudo")) }
@@ -54,20 +58,22 @@ enum UISnapshotHarness {
             for appearance in appearances {
                 let nsAppearance = NSAppearance(named: appearance == "dark" ? .darkAqua : .aqua)
                 for size in sizes {
-                    for pane in SettingsPane.allCases {
+                    for pane in SettingsPane.allCases where wanted(pane.rawValue) {
                         UISnapshotHooks.select(pane, in: model)
                         let view = SettingsView().environmentObject(model)
                         capture(view, size: size, appearance: nsAppearance,
                                 to: out.appendingPathComponent("settings-\(pane.rawValue)-\(tag)-\(appearance)-\(Int(size.width))x\(Int(size.height)).png"))
                     }
                 }
+                if wanted("bubble") {
                 let bubble = SelectionBubbleBar(onTranslate: {}, onExplain: {}, onHoverChange: { _ in })
                     .padding(Spacing.x6)
                     .background(Color(nsColor: .textBackgroundColor))
                 capture(bubble, size: nil, appearance: nsAppearance,
                         to: out.appendingPathComponent("bubble-\(tag)-\(appearance).png"))
+                }
 
-                for (name, state) in panelStates() {
+                for (name, state) in panelStates() where wanted("panel") {
                     model.panelState = state
                     let view = VStack(spacing: 0) {
                         FloatingPanelTitlebarView().padding(.leading, 76)
