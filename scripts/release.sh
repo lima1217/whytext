@@ -76,8 +76,16 @@ else
     sleep 5
   done
   [[ -n "$RUN_ID" ]] || fail "no CI run appeared for $SHA"
-  gh run watch "$RUN_ID" --exit-status --interval 20 >/dev/null \
-    || fail "CI did not pass: $(gh run view "$RUN_ID" --json url --jq .url). VERSION is committed and pushed; fix CI, then rerun from the build step by hand."
+  if ! gh run watch "$RUN_ID" --exit-status --interval 20 >/dev/null; then
+    # A job that never starts (e.g. an unavailable runner image) leaves no log;
+    # the reason is only in its check-run annotations.
+    echo "CI annotations:" >&2
+    for JOB in $(gh run view "$RUN_ID" --json jobs --jq '.jobs[].databaseId'); do
+      gh api "repos/{owner}/{repo}/check-runs/$JOB/annotations" \
+        --jq '.[] | "  [\(.annotation_level)] \(.message)"' >&2 || true
+    done
+    fail "CI did not pass: $(gh run view "$RUN_ID" --json url --jq .url). VERSION is committed and pushed; fix CI, then rerun from the build step by hand."
+  fi
   echo "CI passed: run $RUN_ID"
 fi
 
