@@ -14,9 +14,12 @@ macOS menu bar app (SwiftUI + AppKit, SwiftPM). `Sources/WhyTextCore` holds pure
 - **Strings**: the key is the Simplified Chinese text itself (`L10n.t("…")`); add the same key to all four tables in `Sources/WhyTextCore/Localization/`.
 - **Seeing the UI**: snapshot mode renders every settings page, the result panel states and the bubble, then quits. It uses throwaway settings, never the user's.
   `WHYTEXT_SNAPSHOT_DIR=/tmp/shots .build/debug/WhyText` — filters and the pseudo-language are in the header of `Sources/WhyText/Utils/UISnapshotHarness.swift`.
-- **Before/after for the user**: capture the old commit (snapshot mode exists from `32e4e95` on) and the new one into two folders, then `uv run scripts/compare-report.py spec.json out.pdf` (spec format in its header).
+- **Before/after for the user**: `scripts/snapshot-at.sh <git-ref> <dir>` captures any commit, even ones older than snapshot mode; capture old and new, then `uv run scripts/compare-report.py spec.json out.pdf` (spec format in its header).
 - **Menu bar icon**: `scripts/menubar-icon-preview.sh out.png [git-ref]` shows it at real size beside system icons.
-- After a UI change, update `docs/manual-checklist.md` where it names the changed controls or copy.
+
+## Reviewing
+
+Apply `CODING_STANDARDS.md` to the diff.
 
 ## Releasing
 
