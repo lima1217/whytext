@@ -82,7 +82,8 @@ private struct SettingsSidebar: View {
 
             Spacer()
         }
-        .background(VisualEffectView(material: .sidebar, blendingMode: .behindWindow))
+        // Flat warm surface: no material, so the sidebar reads the same over any wallpaper.
+        .background(AstryxColor.sidebarBackground)
     }
 
     /// Panes that need the user's attention get a dot in the sidebar.
@@ -120,7 +121,7 @@ private struct SidebarRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: Spacing.x2) {
-                PaneIcon(pane: pane)
+                PaneIcon(pane: pane, isSelected: isSelected)
                 Text(pane.title)
                     .font(AstryxFont.body)
                     .foregroundStyle(isSelected ? Color.white : AstryxColor.textPrimary)

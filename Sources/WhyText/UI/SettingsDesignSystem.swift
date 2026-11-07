@@ -48,35 +48,20 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .updates: "arrow.down.circle.fill"
         }
     }
-
-    var tint: Color {
-        switch self {
-        case .general: Color(nsColor: .systemGray)
-        case .shortcuts: Color(nsColor: .systemBlue)
-        case .translation: Color(nsColor: .systemGreen)
-        case .providers: Color(nsColor: .systemPurple)
-        case .prompts: Color(nsColor: .systemOrange)
-        case .memory: Color(nsColor: .systemTeal)
-        case .permissions: Color(nsColor: .systemIndigo)
-        case .updates: Color(nsColor: .systemPink)
-        }
-    }
 }
 
-/// Rounded-square glyph tile in the style of System Settings.
+/// A bare glyph in a fixed-width slot, so row titles line up. No colored tile:
+/// the page keeps a single accent, which is the selected row itself.
 struct PaneIcon: View {
     var pane: SettingsPane
     var size: CGFloat = 22
+    var isSelected = false
 
     var body: some View {
-        RoundedRectangle(cornerRadius: size * 0.27, style: .continuous)
-            .fill(pane.tint.gradient)
+        Image(systemName: pane.symbol)
+            .font(.system(size: size * 0.62, weight: .medium))
+            .foregroundStyle(isSelected ? Color.white : AstryxColor.textSecondary)
             .frame(width: size, height: size)
-            .overlay(
-                Image(systemName: pane.symbol)
-                    .font(.system(size: size * 0.5, weight: .semibold))
-                    .foregroundStyle(.white)
-            )
             .accessibilityHidden(true)
     }
 }

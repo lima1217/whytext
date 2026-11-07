@@ -12,7 +12,7 @@ Use this checklist before replacing the local app in `/Applications`.
 
 - Open Settings: WhyText appears in the Dock and ⌘Tab. Click another app so it covers Settings, then click the Dock icon or ⌘Tab back: Settings returns on the same page. Close Settings: the Dock icon goes away.
 - Open `WhyText -> 设置…`. The window opens at about 820×600, can't shrink below 760×520, and has a transparent title bar.
-- The sidebar lists 通用, 快捷键, 翻译, 服务商, 提示词, 阅读记忆, 权限, 更新, each with a tinted glyph tile. Selecting a row switches the pane.
+- The sidebar lists 通用, 快捷键, 翻译, 服务商, 提示词, 阅读记忆, 权限, 更新. Icons are bare glyphs in the secondary text color on a flat warm sidebar (no translucency); the selected row is the accent color with a white icon and title. Selecting a row switches the pane.
 - Sidebar dots are one color (the accent): 快捷键 when a shortcut is missing, unavailable or may conflict; 服务商 when the current provider has no API key; 提示词 when a template is missing `{{text}}`; 权限 without Accessibility; 更新 when an update is available. VoiceOver reads 需要处理 on those rows.
 - First launch with no API key or no Accessibility: Settings opens by itself on 通用. The first group lists 权限, 服务商, 快捷键 in that order; each row jumps to its page. With all three ready, a line below says 在任意应用里选中文字，按 ⌥Space 翻译。
 - Change the macOS language to Japanese and delete the settings (`defaults delete <bundle id>`): on first launch 母语 is 日本語 and 第二语言 is English.

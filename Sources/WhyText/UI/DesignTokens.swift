@@ -69,6 +69,9 @@ enum AstryxColor {
     /// where 铜绿 drops to 4.2. Same hue family, so it still reads as one color.
     static let accentText = Color.dynamic(light: "#426666", dark: "#5AA4AE")
 
+    /// Settings sidebar: a step warmer and darker than the window, flat (no material).
+    static let sidebarBackground = Color.dynamic(light: "#EFECE7", dark: "#262421")
+
     // Borders
     static let border = Color.dynamic(light: "#E8E4DE", dark: "#FFFFFF1A")
     static let borderEmphasized = Color.dynamic(light: "#D3CEC6", dark: "#57534D")
