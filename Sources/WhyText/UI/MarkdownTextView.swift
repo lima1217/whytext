@@ -336,6 +336,7 @@ enum MarkdownRenderer {
         headerLevel: Int?,
         isCodeBlock: Bool
     ) -> NSFont {
+        // Monospaced: code spans and blocks in the model's output.
         if isCodeBlock || isCode(inlineIntent) {
             let size = bodySize * 0.94
             return NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
@@ -367,6 +368,7 @@ enum MarkdownRenderer {
         }
 
         let base = NSFont.systemFont(ofSize: size, weight: weight)
+        // Italic: the model's own Markdown *emphasis*; interface text never uses it.
         if isEmphasis(inlineIntent) {
             let italic = base.fontDescriptor.withSymbolicTraits(.italic)
             return NSFont(descriptor: italic, size: size) ?? base

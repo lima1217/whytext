@@ -12,6 +12,8 @@ final class AppModel: ObservableObject {
     @Published var selectionDiagnosticsPending: Bool = false
     /// Pinned panels ignore clicks outside them; persists across panel openings.
     @Published var isPanelPinned: Bool = false
+    /// The page the settings window shows; set before opening it to land on a page.
+    @Published var settingsPane: SettingsPane = .general
     /// Why a shortcut isn't active, if it isn't. Kept as state, not text, so the
     /// message follows the interface language.
     @Published private(set) var hotKeyIssue: HotKeyIssue?
@@ -95,12 +97,6 @@ final class AppModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        settingsStore.$saveHistory
-            .sink { [weak historyStore] enabled in
-                if !enabled { historyStore?.clear() }
-            }
-            .store(in: &cancellables)
-
         // `@Published` sinks emit the current value on subscribe — that installs monitors once.
         settingsStore.$autoPopupOnSelection
             .sink { [weak self] enabled in
@@ -161,13 +157,31 @@ final class AppModel: ObservableObject {
                 self?.selectionAutoPopup.handlePanelDidClose()
             }
         }
+
+        // A menu bar app shows nothing when opened. Until setup is done, open
+        // Settings on launch so a first-time user sees what to do next.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.isSetupComplete else { return }
+            self.openSettingsWindow(pane: .general)
+        }
+    }
+
+    /// The current provider exists and has an API key — the one step a lookup can't succeed without.
+    var hasUsableProvider: Bool {
+        guard let provider = settingsStore.selectedProvider else { return false }
+        return !settingsStore.apiKey(for: provider.id).isEmpty
+    }
+
+    var isSetupComplete: Bool {
+        hasUsableProvider && accessibilityStatus() == .trusted
     }
 
     func openPanelFromMenu() {
         openPanelFromHotKey()
     }
 
-    func openSettingsWindow() {
+    func openSettingsWindow(pane: SettingsPane? = nil) {
+        if let pane { settingsPane = pane }
         // System shortcuts may have changed since launch.
         registerHotKeys(main: settingsStore.hotKeyShortcut, ocr: settingsStore.ocrHotKeyShortcut)
         settingsWindowController.show {
@@ -513,6 +527,13 @@ final class AppModel: ObservableObject {
                 case .failure(let error):
                     self.panelState.errorMessage = TranslationErrorPresenter.userFacingMessage(for: error)
                     self.panelState.errorNeedsSettings = TranslationErrorPresenter.needsSettings(for: error)
+                    if self.panelState.errorNeedsSettings {
+                        if case SelectionError.notTrusted = error {
+                            self.settingsPane = .permissions
+                        } else {
+                            self.settingsPane = .providers
+                        }
+                    }
                 }
             }
         )
@@ -547,7 +568,7 @@ final class AppModel: ObservableObject {
               panelState.noticeMessage == nil else { return }
         let count = readingMemory.count(for: termKey)
         if count >= 2 {
-            panelState.noticeMessage = L10n.f("第 %@ 次查这个词", String(count))
+            panelState.noticeMessage = L10n.f("第 %@ 次查这个词", count.formatted())
         }
     }
 
@@ -750,6 +771,7 @@ final class AppModel: ObservableObject {
         guard let provider = settingsStore.selectedProvider else {
             panelState.errorMessage = L10n.t("请先在设置中添加服务商")
             panelState.errorNeedsSettings = true
+            settingsPane = .providers
             return nil
         }
 
@@ -757,6 +779,7 @@ final class AppModel: ObservableObject {
         guard !apiKey.isEmpty else {
             panelState.errorMessage = L10n.t("请先在设置中填写 API Key")
             panelState.errorNeedsSettings = true
+            settingsPane = .providers
             return nil
         }
 
@@ -784,7 +807,7 @@ final class AppModel: ObservableObject {
 
     func runSelectionDiagnosticsWithDelay(seconds: Double = 2.0) {
         selectionDiagnosticsPending = true
-        selectionDiagnosticsReport = L10n.f("等待 %@ 秒后采样，请切回目标应用并选中文本…", String(format: "%.1f", seconds))
+        selectionDiagnosticsReport = L10n.f("%@ 秒后读取。请切回那个应用，选中文字…", seconds.formatted(.number.precision(.fractionLength(0...1))))
         selectionDiagnosticsTextPreview = ""
 
         Task { @MainActor [weak self] in

@@ -52,23 +52,30 @@ extension Color {
 }
 
 // MARK: - Semantic colors
-// Values transplanted from `@astryxdesign/theme-neutral/dist/theme.css`.
+// Grays lean warm (R > G > B); see docs/design/guidelines.md §4 for contrast figures.
 // Windows and controls keep macOS semantic backgrounds (windowBackgroundColor etc.)
 // because those carry vibrancy and automatic light/dark adaptation the hex values can't.
 
 enum AstryxColor {
     // Text
-    static let textPrimary = Color.dynamic(light: "#171717", dark: "#fafafa")
-    static let textSecondary = Color.dynamic(light: "#737373", dark: "#a3a3a3")
-    static let textDisabled = Color.dynamic(light: "#a3a3a3", dark: "#525252")
+    static let textPrimary = Color.dynamic(light: "#1D1B18", dark: "#F4F1EC")
+    static let textSecondary = Color.dynamic(light: "#66625C", dark: "#ADA79F")
+    static let textDisabled = Color.dynamic(light: "#A39E96", dark: "#5A5650")
+
+    /// The one emphasis color: 黛绿 (light) / 铜绿 (dark), from the Chinese traditional palette.
+    /// Selection, switches, primary buttons, attention dots, active star/pin.
+    static let accent = Color.dynamic(light: "#426666", dark: "#549688")
+    /// Accent as text on a surface: 天水碧 in dark mode keeps 4.5:1 on form rows,
+    /// where 铜绿 drops to 4.2. Same hue family, so it still reads as one color.
+    static let accentText = Color.dynamic(light: "#426666", dark: "#5AA4AE")
 
     // Borders
-    static let border = Color.dynamic(light: "#ebebeb", dark: "#FFFFFF1A")
-    static let borderEmphasized = Color.dynamic(light: "#d4d4d4", dark: "#525252")
+    static let border = Color.dynamic(light: "#E8E4DE", dark: "#FFFFFF1A")
+    static let borderEmphasized = Color.dynamic(light: "#D3CEC6", dark: "#57534D")
 
     // Overlays / fills
-    static let overlayHover = Color.dynamic(light: "#0000000D", dark: "#FFFFFF0D")
-    static let overlayPressed = Color.dynamic(light: "#0000001A", dark: "#FFFFFF1A")
+    static let overlayHover = Color.dynamic(light: "#3C28140D", dark: "#FFF5E60D")
+    static let overlayPressed = Color.dynamic(light: "#3C28141A", dark: "#FFF5E61A")
 
     // Status
     static let success = Color.dynamic(light: "#007004", dark: "#9fe59b")

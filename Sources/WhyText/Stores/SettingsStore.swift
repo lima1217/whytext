@@ -273,8 +273,9 @@ final class SettingsStore: ObservableObject {
             self.splitLongInput = true
             self.autoPopupOnSelection = true
             self.translationFontSize = 16
-            self.primaryLanguage = .simplifiedChinese
-            self.secondaryLanguage = .english
+            let languages = TranslationLanguage.defaultPair(preferredLanguages: Locale.preferredLanguages)
+            self.primaryLanguage = languages.primary
+            self.secondaryLanguage = languages.secondary
             self.saveHistory = true
             self.saveReadingMemory = true
             self.autoCheckForUpdates = true

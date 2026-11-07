@@ -273,6 +273,17 @@ enum WhyTextCoreSmokeTests {
         expect(target("Bonjour tout le monde, comment allez-vous ?", .english, .french) == .english, "French goes to English primary")
         expect(target("Hello there, how are you doing today?", .english, .japanese) == .japanese, "English primary goes to secondary")
         expect(target("Hello there, how are you doing today?", .english, .english) == .english, "same languages stay primary")
+
+        func pair(_ ids: [String]) -> (TranslationLanguage, TranslationLanguage) {
+            let p = TranslationLanguage.defaultPair(preferredLanguages: ids)
+            return (p.primary, p.secondary)
+        }
+        expect(pair(["ja-JP", "en-US"]) == (.japanese, .english), "Japanese system defaults to Japanese → English")
+        expect(pair(["en-US"]) == (.english, .simplifiedChinese), "English system pairs with Simplified Chinese")
+        expect(pair(["zh-Hant-TW"]) == (.traditionalChinese, .english), "Traditional Chinese system")
+        expect(pair(["zh-Hans-CN"]) == (.simplifiedChinese, .english), "Simplified Chinese system")
+        expect(pair(["pt-BR", "de-DE"]) == (.german, .english), "first supported language wins")
+        expect(pair(["pt-BR"]) == (.english, .simplifiedChinese), "unsupported falls back to English")
     }
 
     private static func testChunkAssembly() {

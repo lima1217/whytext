@@ -16,6 +16,23 @@ public enum TranslationLanguage: String, Codable, CaseIterable, Identifiable, Se
 
     public var id: String { rawValue }
 
+    /// First-launch defaults: the reader's own language from macOS, and English as the
+    /// second one (Simplified Chinese when the system itself is English).
+    public static func defaultPair(preferredLanguages: [String]) -> (primary: TranslationLanguage, secondary: TranslationLanguage) {
+        let primary = preferredLanguages.lazy.compactMap(Self.match).first ?? .english
+        return (primary, primary == .english ? .simplifiedChinese : .english)
+    }
+
+    static func match(_ identifier: String) -> TranslationLanguage? {
+        let lowered = identifier.lowercased()
+        if lowered.hasPrefix("zh") {
+            let traditional = ["hant", "-tw", "-hk", "-mo"].contains { lowered.contains($0) }
+            return traditional ? .traditionalChinese : .simplifiedChinese
+        }
+        let base = String(lowered.prefix { $0 != "-" && $0 != "_" })
+        return allCases.first { $0.rawValue == base }
+    }
+
     public var displayName: String {
         switch self {
         case .simplifiedChinese: "简体中文"

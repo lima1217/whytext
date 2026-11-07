@@ -3,11 +3,10 @@ import WhyTextCore
 
 struct SettingsView: View {
     @EnvironmentObject private var appModel: AppModel
-    @State private var selection: SettingsPane = .general
 
     var body: some View {
         HStack(spacing: 0) {
-            SettingsSidebar(selection: $selection)
+            SettingsSidebar(selection: $appModel.settingsPane)
                 .frame(width: SettingsUI.sidebarWidth)
 
             Divider()
@@ -20,13 +19,14 @@ struct SettingsView: View {
         .id(appModel.settingsStore.interfaceLanguage)
         .frame(minWidth: 760, idealWidth: 820, minHeight: 520, idealHeight: 600)
         .ignoresSafeArea()
+        .tint(AstryxColor.accent)
         .environmentObject(appModel)
     }
 
     @ViewBuilder
     private var detail: some View {
-        switch selection {
-        case .general: GeneralSettingsView(selection: $selection)
+        switch appModel.settingsPane {
+        case .general: GeneralSettingsView(selection: $appModel.settingsPane)
         case .shortcuts: ShortcutsSettingsView()
         case .translation: TranslationSettingsView()
         case .providers: ProvidersSettingsView()
@@ -93,7 +93,7 @@ private struct SettingsSidebar: View {
             if appModel.settingsStore.hotKeyShortcut == nil || appModel.hotKeyIssue != nil || appModel.ocrHotKeyIssue != nil { return .warning }
             return nil
         case .providers:
-            return appModel.settingsStore.providers.isEmpty ? .warning : nil
+            return appModel.hasUsableProvider ? nil : .warning
         case .prompts:
             let store = appModel.settingsStore
             let valid = store.translatePromptTemplate.contains("{{text}}") && store.explainPromptTemplate.contains("{{text}}")
@@ -116,15 +116,6 @@ private struct SidebarRow: View {
 
     @State private var isHovered = false
 
-    /// Saturated system colors read better as small dots than the muted text tones.
-    private static func dotColor(_ tone: Tone) -> Color {
-        switch tone {
-        case .danger: Color(nsColor: .systemRed)
-        case .warning: Color(nsColor: .systemOrange)
-        case .success: Color(nsColor: .systemBlue)
-        case .neutral: Color(nsColor: .systemGray)
-        }
-    }
 
     var body: some View {
         Button(action: action) {
@@ -133,11 +124,11 @@ private struct SidebarRow: View {
                 Text(pane.title)
                     .font(AstryxFont.body)
                     .foregroundStyle(isSelected ? Color.white : AstryxColor.textPrimary)
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
                 if let attention {
                     Circle()
-                        .fill(isSelected ? Color.white : Self.dotColor(attention))
+                        .fill(isSelected ? Color.white : AstryxColor.accent)
                         .frame(width: 7, height: 7)
                         .accessibilityHidden(true)
                 }
@@ -147,12 +138,13 @@ private struct SidebarRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: Radius.element - 2, style: .continuous)
-                    .fill(isSelected ? Color.accentColor : (isHovered ? AstryxColor.overlayHover : Color.clear))
+                    .fill(isSelected ? AstryxColor.accent : (isHovered ? AstryxColor.overlayHover : Color.clear))
             )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityValue(attention == nil ? "" : L10n.t("需要处理"))
     }
 }

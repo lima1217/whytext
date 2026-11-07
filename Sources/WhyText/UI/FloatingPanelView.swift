@@ -108,6 +108,7 @@ struct FloatingPanelView: View {
             .animation(AstryxMotion.smooth, value: noticeText)
         }
         .offset(x: shakeOffset)
+        .tint(AstryxColor.accent)
         .onExitCommand { appModel.closePanel() }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityLabel)
@@ -404,7 +405,7 @@ struct FloatingPanelTitlebarView: View {
                 Button(action: { appModel.toggleResultStarred() }) {
                     Image(systemName: starred ? "star.fill" : "star")
                         .font(.system(size: PanelTokens.iconSize, weight: .medium))
-                        .foregroundStyle(starred ? Color.accentColor : AstryxColor.textSecondary)
+                        .foregroundStyle(starred ? AstryxColor.accent : AstryxColor.textSecondary)
                         .panelIconButton()
                 }
                 .buttonStyle(.quietIcon)
@@ -417,7 +418,7 @@ struct FloatingPanelTitlebarView: View {
                 Image(systemName: appModel.isPanelPinned ? "pin.fill" : "pin")
                     .font(.system(size: PanelTokens.iconSize, weight: .medium))
                     .rotationEffect(.degrees(45))
-                    .foregroundStyle(appModel.isPanelPinned ? Color.accentColor : AstryxColor.textSecondary)
+                    .foregroundStyle(appModel.isPanelPinned ? AstryxColor.accent : AstryxColor.textSecondary)
                     .panelIconButton()
             }
             .buttonStyle(.quietIcon)
@@ -442,6 +443,7 @@ struct FloatingPanelTitlebarView: View {
         }
         .frame(height: 32)
         .padding(.trailing, PanelTokens.horizontalPadding)
+        .tint(AstryxColor.accent)
         .animation(AstryxMotion.smooth, value: shouldShowStatus)
         .accessibilityElement(children: .contain)
         .onDisappear { copyResetTask?.cancel() }
@@ -654,6 +656,7 @@ private struct TargetLanguageMenu: View {
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.visible)
+        .tint(AstryxColor.textSecondary)
         .controlSize(.small)
         .foregroundStyle(AstryxColor.textSecondary)
         .padding(.horizontal, Spacing.x2)
@@ -747,7 +750,10 @@ private struct ManualInputView: View {
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                     if appModel.panelState.inputNeedsAccessibility {
-                        Button(L10n.t("授权")) { appModel.openAccessibilitySettings() }
+                        Button(L10n.t("打开系统设置")) {
+                            appModel.requestAccessibilityPermissionPrompt()
+                            appModel.openAccessibilitySettings()
+                        }
                             .controlSize(.small)
                     }
                 }
@@ -940,7 +946,7 @@ private struct FollowUpTurnView: View {
                     .fixedSize(horizontal: false, vertical: true)
             } icon: {
                 Image(systemName: "arrow.turn.down.right")
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(AstryxColor.accent)
             }
             .font(.system(size: PanelTokens.bodyFontSize, weight: .medium))
             .foregroundStyle(AstryxColor.textSecondary)
@@ -1000,7 +1006,7 @@ private struct FollowUpInputBar: View {
                 Button(action: submit) {
                     Image(systemName: "arrow.up")
                         .font(.system(size: PanelTokens.iconSize, weight: .semibold))
-                        .foregroundStyle(canSend ? Color.accentColor : AstryxColor.textDisabled)
+                        .foregroundStyle(canSend ? AstryxColor.accent : AstryxColor.textDisabled)
                         .panelIconButton()
                 }
                 .buttonStyle(.quietIcon)

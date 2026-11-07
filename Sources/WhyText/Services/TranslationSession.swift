@@ -48,9 +48,9 @@ final class TranslationSession {
             )
 
             if chunking.wasTruncated {
-                await deliver { onNotice(L10n.f("输入过长，已截断到 %@ 字符", String(maxInputCharacters))) }
+                await deliver { onNotice(L10n.f("输入过长，已截断到 %@ 字符", maxInputCharacters.formatted())) }
             } else if selectedText.count > maxInputCharacters && chunking.chunks.count > 1 {
-                await deliver { onNotice(L10n.f("输入过长，已分 %@ 段处理", String(chunking.chunks.count))) }
+                await deliver { onNotice(L10n.f("输入过长，已分 %@ 段处理", chunking.chunks.count.formatted())) }
             }
 
             // Matched per chunk, so a long text doesn't send every term with every chunk.

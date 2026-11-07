@@ -18,9 +18,9 @@ struct MenuBarView: View {
 
         if appModel.hotKeyIssue != nil || appModel.ocrHotKeyIssue != nil {
             Button {
-                appModel.openSettingsWindow()
+                appModel.openSettingsWindow(pane: .shortcuts)
             } label: {
-                Label(L10n.t("快捷键需要处理，点此查看…"), systemImage: "exclamationmark.triangle.fill")
+                Label(L10n.t("快捷键有冲突…"), systemImage: "exclamationmark.triangle")
             }
         }
 
@@ -60,14 +60,22 @@ struct MenuBarView: View {
 
         Divider()
 
-        Label(L10n.f("服务商：%@", providerName), systemImage: "network")
+        if appModel.hasUsableProvider {
+            Label(L10n.f("服务商：%@", providerName), systemImage: "network")
+        } else {
+            Button {
+                appModel.openSettingsWindow(pane: .providers)
+            } label: {
+                Label(L10n.t("需要 API Key…"), systemImage: "key")
+            }
+        }
         if accessibilityReady {
             Label(L10n.t("辅助功能已授权"), systemImage: "checkmark.shield")
         } else {
             Button {
-                appModel.openSettingsWindow()
+                appModel.openSettingsWindow(pane: .permissions)
             } label: {
-                Label(L10n.t("需要辅助功能权限"), systemImage: "exclamationmark.shield")
+                Label(L10n.t("需要辅助功能权限…"), systemImage: "exclamationmark.shield")
             }
         }
 
@@ -98,7 +106,7 @@ struct MenuBarView: View {
         switch checker.installState {
         case .downloading(let fraction):
             Button {} label: {
-                Label(L10n.f("正在下载更新（%@）…", "\(Int(fraction * 100))%"), systemImage: "arrow.down.circle")
+                Label(L10n.f("正在下载更新（%@）…", fraction.formatted(.percent.precision(.fractionLength(0)))), systemImage: "arrow.down.circle")
             }
                 .disabled(true)
         case .installing:
@@ -110,20 +118,20 @@ struct MenuBarView: View {
             Button {
                 checker.openDownloadPage()
             } label: {
-                Label(L10n.t("更新失败，前往下载页…"), systemImage: "exclamationmark.arrow.circlepath")
+                Label(L10n.t("更新失败，打开下载页…"), systemImage: "exclamationmark.arrow.circlepath")
             }
         case .idle:
             if checker.canInstallUpdate {
                 Button {
                     checker.installUpdate()
                 } label: {
-                    Label(L10n.f("更新到 %@…", update.version.description), systemImage: "sparkles")
+                    Label(L10n.f("安装更新 %@…", update.version.description), systemImage: "sparkles")
                 }
             } else {
                 Button {
                     checker.openDownloadPage()
                 } label: {
-                    Label(L10n.f("有新版本 %@，前往下载…", update.version.description), systemImage: "sparkles")
+                    Label(L10n.f("下载新版本 %@…", update.version.description), systemImage: "sparkles")
                 }
             }
         }

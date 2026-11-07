@@ -20,7 +20,7 @@ struct HotKeyRecorderView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: Radius.element - 2, style: .continuous)
-                        .strokeBorder(isRecording ? Color.accentColor : AstryxColor.border, lineWidth: isRecording ? 1.5 : 0.5)
+                        .strokeBorder(isRecording ? AstryxColor.accent : AstryxColor.border, lineWidth: isRecording ? 1.5 : 0.5)
                 )
                 .animation(.easeOut(duration: 0.15), value: isRecording)
                 .accessibilityLabel(L10n.t("当前快捷键"))

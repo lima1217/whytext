@@ -53,7 +53,7 @@ struct MemorySettingsView: View {
         Section {
             Toggle(L10n.t("记录查过的词和段落"), isOn: $appModel.settingsStore.saveReadingMemory)
                 .toggleStyle(.switch)
-            CaptionText(text: L10n.f("已记录 %@ 条，只保存在这台 Mac 上。", String(appModel.readingMemory.recordCount)))
+            CaptionText(text: L10n.f("已记录 %@ 条，只保存在这台 Mac 上。", appModel.readingMemory.recordCount.formatted()))
         }
     }
 
@@ -70,7 +70,7 @@ struct MemorySettingsView: View {
 
                 Spacer()
 
-                Button(L10n.t("清空阅读记忆…")) {
+                Button(L10n.t("清除阅读记忆…")) {
                     confirmingClear = true
                 }
                 .disabled(!hasData)
@@ -81,14 +81,14 @@ struct MemorySettingsView: View {
             }
         }
         .confirmationDialog(
-            L10n.t("清空全部阅读记忆？"),
+            L10n.f("清除全部 %@ 条阅读记忆？", appModel.readingMemory.recordCount.formatted()),
             isPresented: $confirmingClear
         ) {
-            Button(L10n.t("清空"), role: .destructive) {
+            Button(L10n.t("清除"), role: .destructive) {
                 appModel.clearReadingMemory()
             }
         } message: {
-            Text(L10n.t("已导出的文件不受影响。"))
+            Text(L10n.t("清除后无法恢复。已导出的文件不受影响。"))
         }
     }
 }
@@ -100,10 +100,8 @@ private struct GlossaryRow: View {
     var body: some View {
         HStack(spacing: Spacing.x2) {
             Text(entry.term)
-                .lineLimit(1)
-                .truncationMode(.tail)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(width: 150, alignment: .leading)
-                .help(entry.term)
 
             TextField(L10n.t("译法"), text: renderingBinding)
                 .textFieldStyle(.roundedBorder)

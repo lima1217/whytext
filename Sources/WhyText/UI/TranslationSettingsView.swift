@@ -9,6 +9,13 @@ struct TranslationSettingsView: View {
             Section {
                 languagePicker(L10n.t("母语"), selection: $appModel.settingsStore.primaryLanguage)
                 languagePicker(L10n.t("第二语言"), selection: $appModel.settingsStore.secondaryLanguage)
+            } footer: {
+                CaptionText(text: L10n.f(
+                    "「%1$@」的文字译成「%2$@」，其他语言都译成「%1$@」。",
+                    appModel.settingsStore.primaryLanguage.displayName,
+                    appModel.settingsStore.secondaryLanguage.displayName
+                ))
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             Section {
@@ -22,7 +29,7 @@ struct TranslationSettingsView: View {
                         Image(systemName: "textformat.size.larger")
                             .foregroundStyle(AstryxColor.textSecondary)
                             .accessibilityHidden(true)
-                        Text("\(Int(appModel.settingsStore.translationFontSize)) pt")
+                        Text(appModel.settingsStore.translationFontSize.formatted(.number.precision(.fractionLength(0))) + " pt")
                             .font(AstryxFont.captionM)
                             .monospacedDigit()
                             .foregroundStyle(AstryxColor.textSecondary)

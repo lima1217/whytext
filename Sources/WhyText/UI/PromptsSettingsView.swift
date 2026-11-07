@@ -36,6 +36,7 @@ private struct PromptTemplateCard: View {
     @Binding var template: String
     let defaultTemplate: String
     let onReset: () -> Void
+    @State private var confirmingReset = false
 
     var body: some View {
         Section {
@@ -54,10 +55,15 @@ private struct PromptTemplateCard: View {
                     }
                 }
 
-                Button(L10n.t("恢复默认")) {
-                    onReset()
+                Button(L10n.t("恢复默认…")) {
+                    confirmingReset = true
                 }
                 .disabled(isDefaultTemplate)
+                .confirmationDialog(L10n.f("恢复默认的%@？", title), isPresented: $confirmingReset) {
+                    Button(L10n.t("恢复")) { onReset() }
+                } message: {
+                    Text(L10n.t("你改过的内容会被替换，无法撤销。"))
+                }
             }
         } header: {
             Text(title)

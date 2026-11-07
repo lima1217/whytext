@@ -5,6 +5,7 @@ import WhyTextCore
 struct ProvidersSettingsView: View {
     @EnvironmentObject private var appModel: AppModel
     @State private var showAddTemplate = false
+    @State private var confirmingRemoval = false
 
     var body: some View {
         SettingsPage(.providers) {
@@ -64,12 +65,22 @@ struct ProvidersSettingsView: View {
 
                     if appModel.settingsStore.providers.count > 1, let id = appModel.settingsStore.selectedProviderID {
                         Button {
-                            appModel.settingsStore.removeProviders(withIDs: [id])
+                            confirmingRemoval = true
                         } label: {
                             Image(systemName: "minus")
                         }
                         .help(L10n.t("移除当前服务商"))
                         .accessibilityLabel(L10n.t("移除当前服务商"))
+                        .confirmationDialog(
+                            L10n.f("移除「%@」？", appModel.settingsStore.selectedProvider?.name ?? ""),
+                            isPresented: $confirmingRemoval
+                        ) {
+                            Button(L10n.t("移除"), role: .destructive) {
+                                appModel.settingsStore.removeProviders(withIDs: [id])
+                            }
+                        } message: {
+                            Text(L10n.t("它的 API Key 会从钥匙串中一起删除。"))
+                        }
                     }
                 }
             }
@@ -212,15 +223,14 @@ private struct ProviderDetailView: View {
     @State private var showAPIKey: Bool = false
     @State private var isTestingConnectivity = false
     @State private var connectivityReport: ProviderConnectivityReport?
-    @State private var keychainRepairMessage: String?
     @State private var autoSaveTask: Task<Void, Never>?
 
     var body: some View {
         Group {
             Section {
-                labeledField(title: L10n.t("名称"), placeholder: "My Provider", text: $provider.name)
-                labeledField(title: "Base URL", placeholder: "https://api.deepseek.com", text: $provider.baseURL, monospaced: true)
-                labeledField(title: "Model", placeholder: "deepseek-chat", text: $provider.model, monospaced: true)
+                labeledField(title: L10n.t("名称"), placeholder: "DeepSeek", text: $provider.name)
+                labeledField(title: L10n.t("接口地址"), placeholder: "https://api.deepseek.com", text: $provider.baseURL, monospaced: true)
+                labeledField(title: L10n.t("模型"), placeholder: "deepseek-chat", text: $provider.model, monospaced: true)
 
                 Picker(L10n.t("API 格式"), selection: $provider.apiMode) {
                     ForEach(LLMAPIMode.allCases) { mode in
@@ -230,7 +240,7 @@ private struct ProviderDetailView: View {
             }
 
             Section {
-                LabeledContent("API Key") {
+                LabeledContent(L10n.t("API Key")) {
                     HStack(spacing: Spacing.x1_5) {
                         Group {
                             if showAPIKey {
@@ -280,9 +290,9 @@ private struct ProviderDetailView: View {
                 }
 
                 if let report = connectivityReport {
-                    statusRow(title: "Base URL", state: report.baseURL)
-                    statusRow(title: "API Key", state: report.apiKey)
-                    statusRow(title: "Model", state: report.model)
+                    statusRow(title: L10n.t("接口地址"), state: report.baseURL)
+                    statusRow(title: L10n.t("API Key"), state: report.apiKey)
+                    statusRow(title: L10n.t("模型"), state: report.model)
 
                     if !report.message.isEmpty {
                         Text(report.message)
@@ -297,11 +307,9 @@ private struct ProviderDetailView: View {
         .onAppear {
             apiKeyDraft = loadAPIKey()
             connectivityReport = nil
-            keychainRepairMessage = nil
         }
         .onChange(of: apiKeyDraft) { newValue in
             connectivityReport = nil
-            keychainRepairMessage = nil
             // Auto-save with debounce
             autoSaveTask?.cancel()
             autoSaveTask = Task {
@@ -333,16 +341,25 @@ private struct ProviderDetailView: View {
     // MARK: - API Key row
 
     private var apiKeyStatus: some View {
-        HStack(spacing: Spacing.x2) {
-            StatusBadge(
-                text: apiKeyIsEmpty ? L10n.t("未填写") : L10n.t("已保存到 Keychain"),
-                tone: apiKeyIsEmpty ? .warning : .success
+        HStack(spacing: Spacing.x3) {
+            SetupStatus(
+                text: apiKeyIsEmpty ? L10n.t("未填写") : L10n.t("已保存到钥匙串"),
+                ready: !apiKeyIsEmpty
             )
-
-            if let keychainRepairMessage, !keychainRepairMessage.isEmpty {
-                CaptionText(text: keychainRepairMessage)
+            if apiKeyIsEmpty, let url = apiKeyPageURL {
+                Link(L10n.t("获取 API Key"), destination: url)
+                    .font(AstryxFont.captionM)
+                    .foregroundStyle(AstryxColor.accentText)
             }
         }
+    }
+
+    /// Where the known providers hand out keys; nil for custom endpoints.
+    private var apiKeyPageURL: URL? {
+        let host = URL(string: provider.baseURL)?.host?.lowercased() ?? ""
+        if host.hasSuffix("deepseek.com") { return URL(string: "https://platform.deepseek.com/api_keys") }
+        if host.hasSuffix("openai.com") { return URL(string: "https://platform.openai.com/api-keys") }
+        return nil
     }
 
     @ViewBuilder
@@ -351,11 +368,6 @@ private struct ProviderDetailView: View {
             apiKeyDraft = NSPasteboard.general.string(forType: .string) ?? ""
         }
         .accessibilityLabel(L10n.t("粘贴 API Key"))
-
-        Button(L10n.t("修复钥匙串")) {
-            repairKeychainEntry()
-        }
-        .help(L10n.t("重新写入当前 API Key 到钥匙串"))
 
         Button(L10n.t("清除")) {
             apiKeyDraft = ""
@@ -366,7 +378,7 @@ private struct ProviderDetailView: View {
             ProgressView()
                 .controlSize(.small)
         }
-        Button(isTestingConnectivity ? L10n.t("测试中…") : L10n.t("测试连通性")) {
+        Button(isTestingConnectivity ? L10n.t("测试中…") : L10n.t("测试连接")) {
             runConnectivityTest()
         }
         .disabled(isTestingConnectivity)
@@ -374,6 +386,7 @@ private struct ProviderDetailView: View {
 
     // MARK: - Helpers
 
+    /// Monospaced: endpoint URLs and model IDs are code; fixed-width makes typos visible.
     private func labeledField(
         title: String,
         placeholder: String,
@@ -384,19 +397,9 @@ private struct ProviderDetailView: View {
             TextField(title, text: text, prompt: Text(placeholder))
                 .labelsHidden()
                 .multilineTextAlignment(.trailing)
+                // Monospaced: see the doc comment above.
                 .font(monospaced ? .system(.body, design: .monospaced) : .body)
         }
-    }
-
-    private func repairKeychainEntry() {
-        let trimmed = apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            keychainRepairMessage = L10n.t("请先填写 API Key，再执行修复。")
-            return
-        }
-
-        saveAPIKey(trimmed)
-        keychainRepairMessage = L10n.t("已重新保存到钥匙串。")
     }
 
     private func runConnectivityTest() {

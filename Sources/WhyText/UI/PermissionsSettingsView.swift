@@ -11,24 +11,23 @@ struct PermissionsSettingsView: View {
                 // Poll: macOS doesn't notify us when the user flips the switch.
                 TimelineView(.periodic(from: .now, by: 1.5)) { _ in
                     let trusted = appModel.accessibilityStatus() == .trusted
-                    LabeledContent(L10n.t("辅助功能权限")) {
-                        StatusBadge(
-                            text: trusted ? L10n.t("已授权") : L10n.t("未授权"),
-                            tone: trusted ? .success : .warning
+                    LabeledContent {
+                        if trusted {
+                            SetupStatus(text: L10n.t("已授权"), ready: true)
+                        } else {
+                            Button(L10n.t("打开系统设置")) {
+                                appModel.requestAccessibilityPermissionPrompt()
+                                appModel.openAccessibilitySettings()
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                    } label: {
+                        SettingsRowLabel(
+                            L10n.t("辅助功能"),
+                            subtitle: trusted
+                                ? L10n.t("用来读取你在其他应用里选中的文字。")
+                                : L10n.t("用来读取你在其他应用里选中的文字。在「辅助功能」列表里打开 WhyText 的开关即可。")
                         )
-                    }
-                }
-
-                HStack(spacing: Spacing.x2) {
-                    Spacer()
-                    Button(L10n.t("请求授权")) {
-                        appModel.requestAccessibilityPermissionPrompt()
-                    }
-                    Button(L10n.t("打开系统设置")) {
-                        appModel.openAccessibilitySettings()
-                    }
-                    Button(L10n.t("重启 WhyText")) {
-                        appModel.relaunchApp()
                     }
                 }
             }
@@ -37,8 +36,29 @@ struct PermissionsSettingsView: View {
         }
     }
 
+    @State private var showsTroubleshooting = false
+
     private var diagnosticsSection: some View {
         Section {
+            DisclosureGroup(L10n.t("故障排查"), isExpanded: $showsTroubleshooting) {
+                troubleshootingContent
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var troubleshootingContent: some View {
+            LabeledContent {
+                Button(L10n.t("重新打开 WhyText")) {
+                    appModel.relaunchApp()
+                }
+            } label: {
+                SettingsRowLabel(
+                    L10n.t("开关已打开，这里仍显示未授权"),
+                    subtitle: L10n.t("重新打开 WhyText 让授权生效。")
+                )
+            }
+
             LabeledContent("Bundle ID") {
                 Text(Bundle.main.bundleIdentifier ?? "(unknown)")
                     .textSelection(.enabled)
@@ -67,14 +87,12 @@ struct PermissionsSettingsView: View {
                         .controlSize(.small)
                 }
 
-                Button(L10n.t("2秒后诊断")) {
+                // Clicking here makes WhyText frontmost, so sampling waits for the user
+                // to switch back to the app whose selection fails.
+                Button(L10n.t("2 秒后读取选中文字")) {
                     appModel.runSelectionDiagnosticsWithDelay(seconds: 2.0)
                 }
                 .disabled(appModel.selectionDiagnosticsPending)
-
-                Button(L10n.t("立即诊断")) {
-                    appModel.runSelectionDiagnostics()
-                }
             }
 
             if hasDiagnosticsOutput {
@@ -98,9 +116,6 @@ struct PermissionsSettingsView: View {
                     }
                 }
             }
-        } header: {
-            Text(L10n.t("诊断"))
-        }
     }
 
     private var hasDiagnosticsOutput: Bool {

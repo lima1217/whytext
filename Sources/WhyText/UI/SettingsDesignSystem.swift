@@ -27,7 +27,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         switch self {
         case .general: L10n.t("通用")
         case .shortcuts: L10n.t("快捷键")
-        case .translation: L10n.t("翻译方向")
+        case .translation: L10n.t("翻译")
         case .providers: L10n.t("服务商")
         case .prompts: L10n.t("提示词")
         case .memory: L10n.t("阅读记忆")
@@ -138,6 +138,32 @@ struct SettingsRowLabel: View {
 }
 
 // MARK: - Shared pieces
+
+/// Setup status: quiet text with a check when done, the accent color when it needs doing.
+/// One emphasis color per page, so "ready" never competes with "needs you".
+struct SetupStatus: View {
+    var text: String
+    var ready: Bool
+
+    var body: some View {
+        HStack(spacing: Spacing.x1) {
+            if ready {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .accessibilityHidden(true)
+            } else {
+                Circle()
+                    .fill(AstryxColor.accent)
+                    .frame(width: 7, height: 7)
+                    .accessibilityHidden(true)
+            }
+            Text(text)
+                .font(AstryxFont.captionM)
+        }
+        .foregroundStyle(ready ? AstryxColor.textSecondary : AstryxColor.accentText)
+        .fixedSize()
+    }
+}
 
 struct StatusBadge: View {
     var text: String

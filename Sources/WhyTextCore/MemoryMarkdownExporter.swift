@@ -166,6 +166,8 @@ public enum MemoryMarkdownExporter {
     private static func headingParts(_ record: LookupRecord, date: String) -> String {
         var parts = [date, record.action == "explain" ? L10n.t("解释") : L10n.t("翻译")]
         if let app = nonEmpty(record.source.appName) { parts.append(app) }
+        // Middle dot: a heading in the exported Markdown files, not interface text; earlier
+        // exports use the same form and re-exports should keep file contents stable.
         return parts.joined(separator: " · ")
     }
 

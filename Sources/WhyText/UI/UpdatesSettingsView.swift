@@ -15,7 +15,7 @@ struct UpdatesSettingsView: View {
                             ProgressView()
                                 .controlSize(.small)
                         }
-                        Button(checker.status == .checking ? L10n.t("检查中…") : L10n.t("立即检查")) {
+                        Button(checker.status == .checking ? L10n.t("检查中…") : L10n.t("检查更新")) {
                             Task { await checker.check() }
                         }
                         .disabled(checker.status == .checking)
@@ -34,7 +34,7 @@ struct UpdatesSettingsView: View {
                                 checker.openDownloadPage()
                             }
                             if checker.canInstallUpdate {
-                                Button(L10n.t("立即更新")) {
+                                Button(L10n.t("安装更新")) {
                                     checker.installUpdate()
                                 }
                                 .buttonStyle(.borderedProminent)
@@ -47,7 +47,7 @@ struct UpdatesSettingsView: View {
                                 .font(AstryxFont.bodyMedium)
                         } icon: {
                             Image(systemName: "sparkles")
-                                .foregroundStyle(Color.accentColor)
+                                .foregroundStyle(AstryxColor.accent)
                         }
                     }
                 }
@@ -61,7 +61,7 @@ struct UpdatesSettingsView: View {
     private func updateStatusText(_ checker: UpdateChecker) -> String? {
         switch checker.installState {
         case .downloading(let fraction):
-            return L10n.f("正在下载更新（%@）…", "\(Int(fraction * 100))%")
+            return L10n.f("正在下载更新（%@）…", fraction.formatted(.percent.precision(.fractionLength(0))))
         case .installing:
             return L10n.t("正在安装更新…")
         case .failed(let message):
