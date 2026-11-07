@@ -614,15 +614,16 @@ enum WhyTextCoreSmokeTests {
         // tree, so this runs from the package root (as `swift run` and CI do).
         let usedKeys = try localizationKeysInSources()
         expect(!usedKeys.isEmpty, "found localization keys in Sources/")
+        // Collect every problem before failing, so one run lists all the strings to fix.
+        var problems: [String] = []
         for (language, table) in tables {
-            for key in usedKeys {
-                expect(table[key] != nil, "\(language.rawValue) is missing \"\(key)\"")
-            }
-            for (key, value) in table {
-                expect(usedKeys.contains(key), "\(language.rawValue) has unused key \"\(key)\"")
-                expect(tokens(key) == tokens(value), "\(language.rawValue) placeholders differ for \"\(key)\"")
-            }
+            let lang = language.rawValue
+            problems += usedKeys.filter { table[$0] == nil }.sorted().map { "\(lang) missing: \"\($0)\"" }
+            problems += table.keys.filter { !usedKeys.contains($0) }.sorted().map { "\(lang) unused: \"\($0)\"" }
+            problems += table.filter { tokens($0.key) != tokens($0.value) }.keys.sorted()
+                .map { "\(lang) placeholders differ: \"\($0)\"" }
         }
+        expect(problems.isEmpty, "\(problems.count) translation problem(s):\n  " + problems.joined(separator: "\n  "))
 
         L10n.language = .english
         expect(L10n.t("翻译") == "Translate", "lookup uses the current language")
