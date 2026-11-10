@@ -152,6 +152,7 @@ struct FloatingPanelView: View {
                         .id(Self.scrollBottomID)
                 }
                 .padding(PanelTokens.cardPadding)
+                .thinScroller()
             }
             .background(
                 RoundedRectangle(cornerRadius: PanelTokens.cardRadius, style: .continuous)
@@ -704,6 +705,7 @@ private struct SourceTextDisclosure: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(PanelTokens.cardPadding)
+                        .thinScroller()
                 }
                 .frame(maxHeight: PanelTokens.sourceMaxHeight)
                 .fixedSize(horizontal: false, vertical: true)
@@ -833,6 +835,7 @@ private struct ManualInputTextView: NSViewRepresentable {
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
         scrollView.documentView = textView
+        scrollView.useThinScroller()
 
         // Typing should work as soon as the panel appears.
         DispatchQueue.main.async {

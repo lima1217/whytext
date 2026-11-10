@@ -83,6 +83,8 @@ enum AstryxColor {
     // Overlays / fills
     static let overlayHover = Color.dynamic(light: "#3C28140D", dark: "#FFF5E60D")
     static let overlayPressed = Color.dynamic(light: "#3C28141A", dark: "#FFF5E61A")
+    /// Scroll indicator knob in the result panel (`ThinScroller`).
+    static let scrollerKnob = Color.dynamic(light: "#3C281452", dark: "#FFF5E647")
 
     // Status
     static let success = Color.dynamic(light: "#007004", dark: "#9fe59b")
