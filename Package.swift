@@ -10,20 +10,36 @@ let package = Package(
     ],
     products: [
         .library(name: "WhyTextCore", targets: ["WhyTextCore"]),
+        .library(name: "WhyTextApp", targets: ["WhyTextApp"]),
         .executable(name: "WhyText", targets: ["WhyText"]),
         .executable(name: "WhyTextCoreSmokeTests", targets: ["WhyTextCoreSmokeTests"]),
+        .executable(name: "WhyTextStateMachineTests", targets: ["WhyTextStateMachineTests"]),
     ],
     targets: [
         .target(
             name: "WhyTextCore",
-            path: "Sources/WhyTextCore"
+            path: "Sources/WhyTextCore",
+            swiftSettings: [
+                .enableUpcomingFeature("StrictConcurrency"),
+            ]
+        ),
+        .target(
+            name: "WhyTextApp",
+            dependencies: ["WhyTextCore"],
+            path: "Sources/WhyText",
+            swiftSettings: [
+                .enableUpcomingFeature("StrictConcurrency"),
+            ],
+            linkerSettings: [
+                .linkedFramework("Security"),
+            ]
         ),
         .executableTarget(
             name: "WhyText",
-            dependencies: ["WhyTextCore"],
-            path: "Sources/WhyText",
-            linkerSettings: [
-                .linkedFramework("Security"),
+            dependencies: ["WhyTextApp"],
+            path: "Sources/WhyTextMain",
+            swiftSettings: [
+                .enableUpcomingFeature("StrictConcurrency"),
             ]
         ),
         // Executable smoke tests stay portable for Command Line Tools–only setups.
@@ -31,7 +47,18 @@ let package = Package(
         .executableTarget(
             name: "WhyTextCoreSmokeTests",
             dependencies: ["WhyTextCore"],
-            path: "Sources/WhyTextCoreSmokeTests"
+            path: "Sources/WhyTextCoreSmokeTests",
+            swiftSettings: [
+                .enableUpcomingFeature("StrictConcurrency"),
+            ]
+        ),
+        .executableTarget(
+            name: "WhyTextStateMachineTests",
+            dependencies: ["WhyTextApp", "WhyTextCore"],
+            path: "Sources/WhyTextStateMachineTests",
+            swiftSettings: [
+                .enableUpcomingFeature("StrictConcurrency"),
+            ]
         ),
     ]
 )

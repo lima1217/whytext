@@ -43,7 +43,7 @@ final class UpdateChecker: ObservableObject {
 
     private let session: URLSession
     private let installer = UpdateInstaller()
-    private var timer: Timer?
+    private nonisolated(unsafe) var timer: Timer?
     private var initialCheckTask: Task<Void, Never>?
 
     init(session: URLSession = .shared) {

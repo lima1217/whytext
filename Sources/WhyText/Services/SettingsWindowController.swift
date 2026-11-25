@@ -5,7 +5,7 @@ import WhyTextCore
 @MainActor
 final class SettingsWindowController {
     private var window: NSWindow?
-    private var closeObserver: NSObjectProtocol?
+    private nonisolated(unsafe) var closeObserver: NSObjectProtocol?
 
     deinit {
         if let closeObserver {

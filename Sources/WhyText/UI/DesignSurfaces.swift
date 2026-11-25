@@ -137,6 +137,7 @@ extension Animation {
 // changes (a streaming answer) get the same short curve, so the edge glides instead
 // of jumping. Every animation can be retargeted or cancelled mid-flight.
 
+@MainActor
 enum PanelChromeMotion {
     static let presentDuration: TimeInterval = 0.24
     static let dismissDuration: TimeInterval = 0.16
@@ -145,8 +146,12 @@ enum PanelChromeMotion {
     static let slideDistance: CGFloat = 6
 
     /// Fast out, settles without overshoot (a critically damped spring's shape).
-    private static let settleCurve = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.2, 1.0)
-    private static let leaveCurve = CAMediaTimingFunction(controlPoints: 0.4, 0.0, 1.0, 1.0)
+    private static var settleCurve: CAMediaTimingFunction {
+        CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.2, 1.0)
+    }
+    private static var leaveCurve: CAMediaTimingFunction {
+        CAMediaTimingFunction(controlPoints: 0.4, 0.0, 1.0, 1.0)
+    }
 
     /// Fades in at `finalFrame`'s size, moving from `startOrigin` (default: in place).
     /// Starting it on a half-dismissed window picks up from where that window is.
@@ -154,7 +159,7 @@ enum PanelChromeMotion {
         panel: NSPanel,
         to finalFrame: NSRect,
         from startOrigin: NSPoint? = nil,
-        completion: @escaping () -> Void = {}
+        completion: @escaping @MainActor @Sendable () -> Void = {}
     ) {
         let reduceMotion = MotionPreference.reduceMotion
         if !panel.isVisible {
@@ -170,11 +175,13 @@ enum PanelChromeMotion {
             ctx.allowsImplicitAnimation = true
             panel.animator().setFrame(finalFrame, display: true)
             panel.animator().alphaValue = 1
-        }, completionHandler: completion)
+        }, completionHandler: {
+            MainActor.assumeIsolated { completion() }
+        })
     }
 
     /// Fades out while sliding by `offset`, at a constant size.
-    static func dismiss(panel: NSPanel, offset: CGVector = .zero, completion: @escaping () -> Void) {
+    static func dismiss(panel: NSPanel, offset: CGVector = .zero, completion: @escaping @MainActor @Sendable () -> Void) {
         let reduceMotion = MotionPreference.reduceMotion
         var frame = panel.frame
         if !reduceMotion {
@@ -186,7 +193,9 @@ enum PanelChromeMotion {
             ctx.timingFunction = leaveCurve
             panel.animator().setFrame(frame, display: true)
             panel.animator().alphaValue = 0
-        }, completionHandler: completion)
+        }, completionHandler: {
+            MainActor.assumeIsolated { completion() }
+        })
     }
 
     /// Glides to a new frame; a new call retargets from wherever the last one is.

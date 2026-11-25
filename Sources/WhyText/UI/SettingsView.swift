@@ -127,7 +127,7 @@ private struct SidebarRow: View {
                     .foregroundStyle(isSelected ? Color.white : AstryxColor.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
-                if let attention {
+                if attention != nil {
                     Circle()
                         .fill(isSelected ? Color.white : AstryxColor.accent)
                         .frame(width: 7, height: 7)

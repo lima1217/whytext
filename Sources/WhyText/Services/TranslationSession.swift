@@ -39,10 +39,10 @@ final class TranslationSession {
         enableStreaming: Bool,
         glossary: [GlossaryEntry],
         contextHint: String?,
-        onNotice: @escaping (String?) -> Void,
-        onActivity: @escaping (LLMActivity) -> Void,
-        onPartialResult: @escaping (String) -> Void,
-        onFinished: @escaping (Result<[ConversationMessage], Error>) -> Void
+        onNotice: @escaping @MainActor @Sendable (String?) -> Void,
+        onActivity: @escaping @MainActor @Sendable (LLMActivity) -> Void,
+        onPartialResult: @escaping @MainActor @Sendable (String) -> Void,
+        onFinished: @escaping @MainActor @Sendable (Result<[ConversationMessage], Error>) -> Void
     ) {
         launch(onFinished: onFinished, cancelledValue: []) { [promptRunner] deliver in
             // Explanations summarize the whole passage; per-chunk runs would
@@ -108,9 +108,9 @@ final class TranslationSession {
         provider: LLMProvider,
         apiKey: String,
         enableStreaming: Bool,
-        onActivity: @escaping (LLMActivity) -> Void,
-        onPartialResult: @escaping (String) -> Void,
-        onFinished: @escaping (Result<String, Error>) -> Void
+        onActivity: @escaping @MainActor @Sendable (LLMActivity) -> Void,
+        onPartialResult: @escaping @MainActor @Sendable (String) -> Void,
+        onFinished: @escaping @MainActor @Sendable (Result<String, Error>) -> Void
     ) {
         launch(onFinished: onFinished, cancelledValue: "") { [promptRunner] deliver in
             try await promptRunner.run(
@@ -127,14 +127,14 @@ final class TranslationSession {
         }
     }
 
-    typealias Deliver = (@MainActor () -> Void) async -> Void
+    typealias Deliver = @Sendable (@MainActor @Sendable () -> Void) async -> Void
 
     /// Starts `body` as the only running request. Callbacks from a superseded
     /// request are dropped, so a stale stream never writes into the new run's UI.
-    private func launch<Value>(
-        onFinished: @escaping (Result<Value, Error>) -> Void,
+    private func launch<Value: Sendable>(
+        onFinished: @escaping @MainActor @Sendable (Result<Value, Error>) -> Void,
         cancelledValue: Value,
-        _ body: @escaping (_ deliver: @escaping Deliver) async throws -> Value
+        _ body: @escaping @Sendable (_ deliver: @escaping Deliver) async throws -> Value
     ) {
         runGeneration += 1
         let generation = runGeneration
@@ -148,8 +148,8 @@ final class TranslationSession {
                 }
             }
 
-            let deliver: Deliver = { update in
-                await self.deliver(generation: generation, update)
+            let deliver: Deliver = { [weak self] update in
+                await self?.deliver(generation: generation, update)
             }
 
             do {
@@ -163,10 +163,8 @@ final class TranslationSession {
         }
     }
 
-    private func deliver(generation: Int, _ body: @MainActor () -> Void) async {
-        await MainActor.run {
-            guard runGeneration == generation else { return }
-            body()
-        }
+    private func deliver(generation: Int, _ body: @MainActor @Sendable () -> Void) async {
+        guard runGeneration == generation else { return }
+        body()
     }
 }

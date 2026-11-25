@@ -1,7 +1,7 @@
 import Foundation
 
 public enum TextChunker {
-    public struct Result: Equatable {
+    public struct Result: Equatable, Sendable {
         public var chunks: [String]
         public var wasTruncated: Bool
 

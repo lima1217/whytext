@@ -51,7 +51,7 @@ public enum InterfaceLanguage: String, Codable, CaseIterable, Identifiable, Send
 /// up in their table and fall back to the key when an entry is missing.
 public enum L10n {
     private static let lock = NSLock()
-    private static var _language: InterfaceLanguage = InterfaceLanguage.system.resolved()
+    private nonisolated(unsafe) static var _language: InterfaceLanguage = InterfaceLanguage.system.resolved()
 
     /// Always a concrete language (never `.system`).
     public static var language: InterfaceLanguage {

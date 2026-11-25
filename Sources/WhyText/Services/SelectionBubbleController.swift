@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import WhyTextCore
 
+@MainActor
 final class SelectionBubbleController: NSObject, NSWindowDelegate {
     /// Receive the bubble's frame, so the panel can grow out of where it was.
     var onTranslate: ((NSRect?) -> Void)?
@@ -198,7 +199,7 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
             matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown, .keyDown]
         ) { [weak self] _ in
             let point = NSEvent.mouseLocation
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 guard let self, let panel = self.panel, !self.isDismissing else { return }
                 if panel.frame.insetBy(dx: -6, dy: -6).contains(point) {
                     return

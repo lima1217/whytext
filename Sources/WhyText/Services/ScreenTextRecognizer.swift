@@ -9,7 +9,7 @@ import WhyTextCore
 /// Region selection is macOS's own `screencapture -i` (crosshair, Space for window
 /// mode, Esc to cancel), so there's no custom overlay to maintain. Recognition uses
 /// Vision; nothing leaves the Mac until the text is translated.
-final class ScreenTextRecognizer {
+final class ScreenTextRecognizer: Sendable {
     enum RecognitionError: LocalizedError {
         case permissionDenied
         case captureFailed

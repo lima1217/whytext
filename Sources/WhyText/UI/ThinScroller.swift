@@ -48,7 +48,7 @@ private struct ThinScrollerInstaller: NSViewRepresentable {
     func updateNSView(_ nsView: Probe, context: Context) {}
 
     final class Probe: NSView {
-        private var styleObserver: NSObjectProtocol?
+        private nonisolated(unsafe) var styleObserver: NSObjectProtocol?
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
@@ -61,7 +61,7 @@ private struct ThinScrollerInstaller: NSViewRepresentable {
                 queue: .main
             ) { [weak scrollView] _ in
                 // NSScrollView resets its own style on this notification; apply ours after it.
-                DispatchQueue.main.async { scrollView?.useThinScroller() }
+                Task { @MainActor [weak scrollView] in scrollView?.useThinScroller() }
             }
         }
 

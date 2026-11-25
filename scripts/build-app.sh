@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
+# Build dist/WhyText.app (universal arm64 + x86_64, signed with a stable identity).
+#   scripts/build-app.sh            build only
+#   scripts/build-app.sh --install  build, replace /Applications/WhyText.app, and relaunch
 set -euo pipefail
+
+INSTALL=false
+for arg in "$@"; do
+  case "$arg" in
+    --install) INSTALL=true ;;
+    *) echo "Usage: $0 [--install]" >&2; exit 1 ;;
+  esac
+done
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
@@ -205,4 +216,19 @@ codesign --force --deep --timestamp=none --sign "$SIGNING_IDENTITY" "$APP_DIR"
 echo "Built: $APP_DIR"
 echo "Architectures: $(lipo -archs "$MACOS_DIR/$APP_NAME")"
 echo "Signed with: $SIGNING_IDENTITY"
-echo "Run: open \"$APP_DIR\""
+
+if $INSTALL; then
+  TARGET_APP="/Applications/$APP_NAME.app"
+  pkill -x "$APP_NAME" 2>/dev/null || true
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    pgrep -x "$APP_NAME" >/dev/null || break
+    sleep 0.2
+  done
+  rm -rf "$TARGET_APP"
+  ditto "$APP_DIR" "$TARGET_APP"
+  codesign --verify --deep --strict "$TARGET_APP"
+  open "$TARGET_APP"
+  echo "Installed and launched: $TARGET_APP"
+else
+  echo "Run: open \"$APP_DIR\""
+fi

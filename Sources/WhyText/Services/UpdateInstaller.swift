@@ -10,7 +10,7 @@ import WhyTextCore
 /// the update must pass the checks Gatekeeper would otherwise stand in for: same
 /// bundle ID, the advertised version, and a signature that satisfies the running
 /// app's designated requirement — i.e. signed with the same certificate.
-final class UpdateInstaller {
+final class UpdateInstaller: Sendable {
     enum InstallError: LocalizedError {
         case notInstallableInPlace
         case unstableSignature
@@ -183,7 +183,7 @@ final class UpdateInstaller {
     }
 }
 
-private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
+private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     let destination: URL
     let onProgress: @Sendable (Double) -> Void
     private let lock = NSLock()

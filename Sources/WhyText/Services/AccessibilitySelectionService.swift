@@ -1,5 +1,5 @@
 import AppKit
-import ApplicationServices
+@preconcurrency import ApplicationServices
 import Foundation
 import WhyTextCore
 
@@ -49,6 +49,7 @@ final class AccessibilitySelectionService {
         return AXIsProcessTrustedWithOptions(options)
     }
 
+    @MainActor
     func requestPermissionPrompt() {
         let now = Date()
         if let last = Self.lastPromptAt, now.timeIntervalSince(last) < 30 {
@@ -59,6 +60,7 @@ final class AccessibilitySelectionService {
         _ = isTrusted(prompt: true)
     }
 
+    @MainActor
     private static var lastPromptAt: Date?
 
     func openAccessibilitySettings() {

@@ -3,7 +3,7 @@ import Carbon
 import Foundation
 import WhyTextCore
 
-final class HotKeyManager {
+final class HotKeyManager: @unchecked Sendable {
     var onPressed: (() -> Void)?
 
     private let hotKeyID: EventHotKeyID

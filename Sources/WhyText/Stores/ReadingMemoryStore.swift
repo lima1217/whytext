@@ -4,6 +4,7 @@ import WhyTextCore
 /// Every finished lookup, kept so reading leaves something behind. Unlike
 /// `HistoryStore` (a 50-entry cache), this only grows until the user clears it.
 /// Used from the main thread; file IO runs on a serial background queue.
+@MainActor
 final class ReadingMemoryStore: ObservableObject {
     @Published private(set) var recordCount = 0
     /// Terms the user starred, with the renderings translations must use.
@@ -32,7 +33,7 @@ final class ReadingMemoryStore: ObservableObject {
         // Read off the main thread: a year of lookups is megabytes of JSON.
         queue.async { [weak self] in
             let loaded = (try? Data(contentsOf: fileURL)).map(LookupLog.decode) ?? []
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 guard let self, !self.clearedWhileLoading else { return }
                 // Lookups appended while loading are newer than anything on disk.
                 self.records = loaded + self.records
@@ -102,7 +103,7 @@ final class ReadingMemoryStore: ObservableObject {
                     at: glossaryURL.deletingLastPathComponent(),
                     withIntermediateDirectories: true
                 )
-                let data = try Self.glossaryEncoder.encode(snapshot)
+                let data = try Self.makeGlossaryEncoder().encode(snapshot)
                 try data.write(to: glossaryURL, options: [.atomic, .completeFileProtection])
             } catch {
                 // Best-effort, like lookups; the in-memory glossary still applies.
@@ -110,12 +111,12 @@ final class ReadingMemoryStore: ObservableObject {
         }
     }
 
-    private static let glossaryEncoder: JSONEncoder = {
+    private nonisolated static func makeGlossaryEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         return encoder
-    }()
+    }
 
     private static let glossaryDecoder: JSONDecoder = {
         let decoder = JSONDecoder()
@@ -136,12 +137,12 @@ final class ReadingMemoryStore: ObservableObject {
 
     /// Writes the Markdown export into `parent`, replacing an earlier WhyText export
     /// there but never a folder WhyText didn't create. Returns the export folder.
-    func export(into parent: URL, completion: @escaping (Result<URL, Error>) -> Void) {
+    func export(into parent: URL, completion: @escaping @MainActor @Sendable (Result<URL, Error>) -> Void) {
         let files = MemoryMarkdownExporter.render(records: records, glossary: glossary, exportedAt: Date())
         let folderName = MemoryMarkdownExporter.folderName
         queue.async {
             let result = Result { try Self.write(files, folderName: folderName, into: parent) }
-            DispatchQueue.main.async { completion(result) }
+            Task { @MainActor in completion(result) }
         }
     }
 
@@ -152,7 +153,7 @@ final class ReadingMemoryStore: ObservableObject {
         termSessions[key, default: []].insert(record.sessionID)
     }
 
-    private static func appendLine(_ line: Data, to fileURL: URL) {
+    private nonisolated static func appendLine(_ line: Data, to fileURL: URL) {
         let manager = FileManager.default
         do {
             if manager.fileExists(atPath: fileURL.path) {
@@ -174,7 +175,7 @@ final class ReadingMemoryStore: ObservableObject {
 
     /// Builds the export next to its destination, then swaps it in whole, so a
     /// failure never leaves a half-written folder.
-    private static func write(_ files: [String: String], folderName: String, into parent: URL) throws -> URL {
+    private nonisolated static func write(_ files: [String: String], folderName: String, into parent: URL) throws -> URL {
         let manager = FileManager.default
         let destination = parent.appendingPathComponent(folderName, isDirectory: true)
         let marker = destination.appendingPathComponent(MemoryMarkdownExporter.markerFileName)

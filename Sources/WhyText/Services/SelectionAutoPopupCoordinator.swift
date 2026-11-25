@@ -7,9 +7,9 @@ final class SelectionAutoPopupCoordinator {
     private let selectionReader: SelectionReader
     private let selectionBubbleController: SelectionBubbleController
 
-    private var selectionMonitor: Any?
-    private var mouseDownMonitor: Any?
-    private var mouseDraggedMonitor: Any?
+    private nonisolated(unsafe) var selectionMonitor: Any?
+    private nonisolated(unsafe) var mouseDownMonitor: Any?
+    private nonisolated(unsafe) var mouseDraggedMonitor: Any?
     /// Off-main global monitors must not touch MainActor state; this box is the seam.
     private let gestureTracker = GestureTracker()
     private var lastAutoPopupText: String = ""

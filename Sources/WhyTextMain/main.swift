@@ -1,0 +1,3 @@
+import WhyTextApp
+
+WhyTextAppLauncher.run()

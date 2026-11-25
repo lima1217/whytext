@@ -164,6 +164,7 @@ final class SettingsStore: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var persistWorkItem: DispatchWorkItem?
     private let userDefaultsKey = "WhyText.Settings.v1"
+    private let userDefaults: UserDefaults
     private let apiKeychainStore: APIKeychainStore
 
     private static let persistDebounceInterval: TimeInterval = 0.35
@@ -182,12 +183,16 @@ final class SettingsStore: ObservableObject {
         return providers.first(where: { $0.id == selectedProviderID })
     }
 
-    init(apiKeychainStore: APIKeychainStore = APIKeychainStore()) {
+    init(
+        apiKeychainStore: APIKeychainStore = APIKeychainStore(),
+        userDefaults: UserDefaults = .standard
+    ) {
         self.apiKeychainStore = apiKeychainStore
+        self.userDefaults = userDefaults
 
         var didMigratePlaintextAPIKey = false
 
-        if let data = UserDefaults.standard.data(forKey: userDefaultsKey),
+        if let data = userDefaults.data(forKey: userDefaultsKey),
            let decoded = try? JSONDecoder().decode(PersistedSettings.self, from: data) {
             self.providers = decoded.providers
             self.selectedProviderID = decoded.selectedProviderID
@@ -454,7 +459,7 @@ final class SettingsStore: ObservableObject {
             interfaceLanguage: interfaceLanguage
         )
         guard let data = try? JSONEncoder().encode(settings) else { return }
-        UserDefaults.standard.set(data, forKey: userDefaultsKey)
+        userDefaults.set(data, forKey: userDefaultsKey)
     }
 
     private func migratePlaintextAPIKeysIfNeeded() -> Bool {

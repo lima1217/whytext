@@ -1,7 +1,13 @@
 import AppKit
 import SwiftUI
 
-@main
+@MainActor
+public enum WhyTextAppLauncher {
+    public static func run() {
+        WhyTextApp.main()
+    }
+}
+
 struct WhyTextApp: App {
     @StateObject private var appModel = AppModel()
 

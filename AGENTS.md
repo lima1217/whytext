@@ -6,7 +6,9 @@ macOS menu bar app (SwiftUI + AppKit, SwiftPM). `Sources/WhyTextCore` holds pure
 
 - `swift build --cache-path /tmp/swiftpm-cache`
 - `swift run --cache-path /tmp/swiftpm-cache WhyTextCoreSmokeTests` — includes translation coverage: every key in every language, no unused keys, matching placeholders.
-- `python3 scripts/ux-audit.py` — exit code is the violation count. CI runs all three.
+- `swift run --cache-path /tmp/swiftpm-cache WhyTextStateMachineTests` — deterministic state-machine and cancellation tests for `Sources/WhyText`.
+- `python3 scripts/ux-audit.py` — exit code is the violation count.
+- `bash -n scripts/*.sh && shellcheck -S warning scripts/*.sh` — CI runs all five.
 
 ## Interface work
 
@@ -23,4 +25,5 @@ Apply `CODING_STANDARDS.md` to the diff.
 
 ## Releasing
 
-`scripts/release.sh <version> <build> <changes.md>` — bumps VERSION, waits for green CI, builds, verifies the zip against the previous release, publishes. Try `--dry-run` first.
+- Local build & replace `/Applications/WhyText.app`: `scripts/build-app.sh --install` (keeps the stable `WhyText Local Code Signing` identity so TCC grants survive).
+- GitHub release: `scripts/release.sh <version> <build> <changes.md>` — bumps VERSION, waits for green CI, builds, verifies the zip against the previous release, publishes. Try `--dry-run` first.

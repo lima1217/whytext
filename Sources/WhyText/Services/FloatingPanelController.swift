@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import WhyTextCore
 
+@MainActor
 final class FloatingPanelController: NSObject, NSWindowDelegate {
     var onDidClose: (() -> Void)?
     /// Called for a mouse-down in another app while the panel is open.
@@ -136,7 +137,7 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
             matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
         ) { [weak self] _ in
             let point = NSEvent.mouseLocation
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 guard let self, let panel = self.panel, panel.isVisible,
                       !self.isClosingProgrammatically,
                       !panel.frame.contains(point),

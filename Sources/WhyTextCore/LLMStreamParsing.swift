@@ -1,7 +1,7 @@
 import Foundation
 
 /// What the model is doing before (or between) visible text.
-public enum LLMActivity: Equatable {
+public enum LLMActivity: Equatable, Sendable {
     case thinking
     case searching
 }

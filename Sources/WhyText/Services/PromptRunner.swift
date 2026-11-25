@@ -1,7 +1,7 @@
 import Foundation
 import WhyTextCore
 
-final class PromptRunner {
+final class PromptRunner: Sendable {
     private let llmClient: LLMClient
 
     init(llmClient: LLMClient) {
@@ -20,8 +20,8 @@ final class PromptRunner {
         /// One per chunk; nil (or missing) where a chunk uses no glossary term.
         glossaryHints: [String?] = [],
         contextHint: String? = nil,
-        onActivity: @escaping (LLMActivity) async -> Void = { _ in },
-        onUpdate: @escaping (String) async -> Void
+        onActivity: @escaping @Sendable (LLMActivity) async -> Void = { _ in },
+        onUpdate: @escaping @Sendable (String) async -> Void
     ) async throws -> String {
         let progress = ChunkProgress(
             count: chunks.count,
@@ -183,13 +183,13 @@ private actor ChunkProgress {
     private var hasVisibleText = false
     /// Serializes async UI deliveries so actor reentrancy never reorders callbacks.
     private var deliveryTask: Task<Void, Never>?
-    private let onActivity: (LLMActivity) async -> Void
-    private let onUpdate: (String) async -> Void
+    private let onActivity: @Sendable (LLMActivity) async -> Void
+    private let onUpdate: @Sendable (String) async -> Void
 
     init(
         count: Int,
-        onActivity: @escaping (LLMActivity) async -> Void,
-        onUpdate: @escaping (String) async -> Void
+        onActivity: @escaping @Sendable (LLMActivity) async -> Void,
+        onUpdate: @escaping @Sendable (String) async -> Void
     ) {
         self.assembly = ChunkAssembly(count: count)
         self.onActivity = onActivity
@@ -236,7 +236,7 @@ private actor ChunkProgress {
         enqueue { [onUpdate] in await onUpdate(text) }
     }
 
-    private func enqueue(_ work: @escaping () async -> Void) {
+    private func enqueue(_ work: @escaping @Sendable () async -> Void) {
         let previous = deliveryTask
         deliveryTask = Task {
             await previous?.value

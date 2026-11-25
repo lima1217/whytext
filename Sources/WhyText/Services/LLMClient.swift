@@ -106,7 +106,7 @@ struct UnifiedTranslationResponse {
     var errorCode: TranslationErrorCode?
 }
 
-final class LLMClient {
+final class LLMClient: @unchecked Sendable {
     private let session: URLSession
     private let allowsTransientRetry: Bool
     /// Provider/model pairs that rejected optional parameters with HTTP 400.
