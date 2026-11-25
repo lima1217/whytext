@@ -32,6 +32,8 @@ final class AppModel: ObservableObject {
     private let ocrHotKeyManager = HotKeyManager(id: 2)
     private let screenTextRecognizer = ScreenTextRecognizer()
     private var isCapturingScreenText = false
+    private var openPanelTask: Task<Void, Never>?
+    private var diagnosticsTask: Task<Void, Never>?
     private let settingsWindowController: SettingsWindowController
     private let connectivityProbe: ProviderConnectivityProbe
     private let translationSession: TranslationSession
@@ -154,6 +156,9 @@ final class AppModel: ObservableObject {
 
         panelController.onDidClose = { [weak self] in
             Task { @MainActor in
+                self?.openPanelTask?.cancel()
+                self?.openPanelTask = nil
+                self?.translationSession.cancel(discardCallbacks: true)
                 self?.selectionAutoPopup.handlePanelDidClose()
             }
         }
@@ -206,8 +211,9 @@ final class AppModel: ObservableObject {
     }
 
     func openPanelFromHotKey() {
-        Task { @MainActor in
-            await openPanelFlow()
+        openPanelTask?.cancel()
+        openPanelTask = Task { @MainActor [weak self] in
+            await self?.openPanelFlow()
         }
     }
 
@@ -231,19 +237,23 @@ final class AppModel: ObservableObject {
         var selectionRect: CGRect?
         do {
             let selection = try await selectionReader.readSelectedText()
+            guard !Task.isCancelled else { return }
             selectedText = AccessibilitySelectionHelpers.sanitizeSelectedText(selection.text)
             source = selection.source
             selectionRect = selection.anchorRect
         } catch SelectionError.notTrusted {
+            guard !Task.isCancelled else { return }
             openManualInput(
                 hint: L10n.t("未授权辅助功能，读不到选中文本。可以直接输入或粘贴："),
                 needsAccessibility: true
             )
             return
         } catch {
+            guard !Task.isCancelled else { return }
             selectedText = ""
         }
 
+        guard !Task.isCancelled else { return }
         guard !selectedText.isEmpty else {
             openManualInput()
             return
@@ -282,6 +292,8 @@ final class AppModel: ObservableObject {
         isCapturingScreenText = true
 
         // Keep our own windows out of the shot.
+        openPanelTask?.cancel()
+        openPanelTask = nil
         closePanel()
         selectionAutoPopup.hideBubble()
 
@@ -319,8 +331,10 @@ final class AppModel: ObservableObject {
         selectionRect: CGRect? = nil,
         emergingFrom bubbleFrame: NSRect? = nil
     ) {
+        openPanelTask?.cancel()
+        openPanelTask = nil
         selectionAutoPopup.hideBubble()
-        translationSession.cancel()
+        translationSession.cancel(discardCallbacks: true)
 
         panelState = PanelState()
         panelState.phase = .choose
@@ -340,7 +354,9 @@ final class AppModel: ObservableObject {
     }
 
     func closePanel() {
-        translationSession.cancel()
+        openPanelTask?.cancel()
+        openPanelTask = nil
+        translationSession.cancel(discardCallbacks: true)
         panelController.close()
     }
 
@@ -393,6 +409,9 @@ final class AppModel: ObservableObject {
     /// requests are served from history unless `bypassHistory` is set.
     func run(action: PanelAction, target: TranslationLanguage? = nil, bypassHistory: Bool = false) {
         guard let preflight = preflightForTranslation() else {
+            translationSession.cancel(discardCallbacks: true)
+            panelState.isLoading = false
+            panelState.activity = nil
             return
         }
 
@@ -467,7 +486,7 @@ final class AppModel: ObservableObject {
 
         if settingsStore.saveHistory, !bypassHistory,
            let entry = historyStore.lookup(key: historyKey, sourceText: preflight.selectedText) {
-            translationSession.cancel()
+            translationSession.cancel(discardCallbacks: true)
             apply(entry)
             var refreshed = entry
             refreshed.date = Date()
@@ -694,14 +713,15 @@ final class AppModel: ObservableObject {
         run(action: .translate, target: target)
     }
 
-    func askFollowUp(_ rawQuestion: String) {
+    @discardableResult
+    func askFollowUp(_ rawQuestion: String) -> Bool {
         let question = rawQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty, panelState.canAskFollowUp,
-              let action = panelState.lastAction else { return }
+              let action = panelState.lastAction else { return false }
 
-        guard let provider = settingsStore.selectedProvider else { return }
+        guard let provider = settingsStore.selectedProvider else { return false }
         let apiKey = settingsStore.apiKey(for: provider.id).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !apiKey.isEmpty else { return }
+        guard !apiKey.isEmpty else { return false }
 
         let history = panelState.conversation
         let turn = FollowUpTurn(question: question)
@@ -710,11 +730,6 @@ final class AppModel: ObservableObject {
         panelState.isLoading = true
         panelState.activity = nil
         refitPanel()
-
-        func update(_ body: (inout FollowUpTurn) -> Void) {
-            guard let index = panelState.followUps.firstIndex(where: { $0.id == turnID }) else { return }
-            body(&panelState.followUps[index])
-        }
 
         translationSession.runFollowUp(
             question: question,
@@ -729,7 +744,7 @@ final class AppModel: ObservableObject {
             onPartialResult: { [weak self] partial in
                 guard let self else { return }
                 self.panelState.activity = nil
-                update { $0.answer = partial }
+                self.updateFollowUp(id: turnID) { $0.answer = partial }
                 self.panelController.refit()
             },
             onFinished: { [weak self] result in
@@ -738,25 +753,37 @@ final class AppModel: ObservableObject {
                 self.panelState.activity = nil
                 switch result {
                 case .success(let answer):
-                    // A cancelled question leaves no answer and stays out of the context.
-                    guard !answer.isEmpty else { return }
-                    update { $0.answer = answer }
+                    // A cancelled question leaves no answer and stays out of the context;
+                    // drop an empty turn so it doesn't stay stuck on a loading spinner.
+                    guard !answer.isEmpty else {
+                        self.panelState.followUps.removeAll { $0.id == turnID && $0.answer.isEmpty }
+                        self.panelController.refit()
+                        return
+                    }
+                    self.updateFollowUp(id: turnID) { $0.answer = answer }
                     self.panelState.conversation = history + [
                         ConversationMessage(role: .user, content: question),
                         ConversationMessage(role: .assistant, content: answer),
                     ]
                 case .failure(let error):
-                    update { $0.errorMessage = TranslationErrorPresenter.userFacingMessage(for: error) }
+                    self.updateFollowUp(id: turnID) { $0.errorMessage = TranslationErrorPresenter.userFacingMessage(for: error) }
                 }
                 self.panelController.refit()
             }
         )
+        return true
+    }
+
+    private func updateFollowUp(id: FollowUpTurn.ID, _ body: (inout FollowUpTurn) -> Void) {
+        guard let index = panelState.followUps.firstIndex(where: { $0.id == id }) else { return }
+        body(&panelState.followUps[index])
     }
 
     func retryFollowUp(id: FollowUpTurn.ID) {
         guard let index = panelState.followUps.firstIndex(where: { $0.id == id }) else { return }
-        let question = panelState.followUps.remove(at: index).question
-        askFollowUp(question)
+        let removed = panelState.followUps[index]
+        guard askFollowUp(removed.question) else { return }
+        panelState.followUps.removeAll { $0.id == id }
     }
 
     func cancelCurrentRequest() {
@@ -798,6 +825,8 @@ final class AppModel: ObservableObject {
     }
 
     func runSelectionDiagnostics() {
+        diagnosticsTask?.cancel()
+        diagnosticsTask = nil
         let diagnostics = selectionService.collectDiagnostics()
         selectionDiagnosticsReport = diagnostics.report
         selectionDiagnosticsTextPreview = diagnostics.selectedText ?? ""
@@ -806,12 +835,14 @@ final class AppModel: ObservableObject {
     }
 
     func runSelectionDiagnosticsWithDelay(seconds: Double = 2.0) {
+        diagnosticsTask?.cancel()
         selectionDiagnosticsPending = true
         selectionDiagnosticsReport = L10n.f("%@ 秒后读取。请切回那个应用，选中文字…", seconds.formatted(.number.precision(.fractionLength(0...1))))
         selectionDiagnosticsTextPreview = ""
 
-        Task { @MainActor [weak self] in
+        diagnosticsTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            guard !Task.isCancelled else { return }
             self?.runSelectionDiagnostics()
         }
     }

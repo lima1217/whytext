@@ -19,6 +19,7 @@ final class SelectionAutoPopupCoordinator {
     private var pendingSelectionSource: LookupSource?
     private var suppressAutoPopupUntil = Date.distantPast
     private var autoPopupTask: Task<Void, Never>?
+    private var isEnabled = false
 
     private static let autoPopupDragThreshold: CGFloat = 4
     private static let autoPopupAnchorTolerance: CGFloat = 80
@@ -78,6 +79,7 @@ final class SelectionAutoPopupCoordinator {
         autoPopupTask?.cancel()
         autoPopupTask = nil
         gestureTracker.clear()
+        isEnabled = enabled
 
         BubbleDebugLog.log("setEnabled(\(enabled))")
 
@@ -115,7 +117,7 @@ final class SelectionAutoPopupCoordinator {
             )
 
             DispatchQueue.main.async {
-                guard let self else { return }
+                guard let self, self.isEnabled else { return }
                 self.autoPopupTask?.cancel()
                 self.autoPopupTask = Task { @MainActor in
                     await self.autoPopupOnSelectionIfNeeded(
@@ -181,11 +183,12 @@ final class SelectionAutoPopupCoordinator {
             near: mouseUpLocation,
             allowMissingAnchor: allowMissingAnchor
         )
-        guard !Task.isCancelled else {
-            BubbleDebugLog.log("gate: task cancelled after read")
+        guard isEnabled, !Task.isCancelled else {
+            BubbleDebugLog.log("gate: task cancelled or disabled after read")
             return
         }
-        if isPanelVisible() || Date() < suppressAutoPopupUntil {
+        let completedAt = Date()
+        if isPanelVisible() || completedAt < suppressAutoPopupUntil {
             BubbleDebugLog.log("gate: panel visible or suppressed after read")
             return
         }
@@ -199,13 +202,13 @@ final class SelectionAutoPopupCoordinator {
             return
         }
 
-        if trimmed == lastAutoPopupText, now.timeIntervalSince(lastAutoPopupAt) < 0.6 {
+        if trimmed == lastAutoPopupText, completedAt.timeIntervalSince(lastAutoPopupAt) < 0.6 {
             BubbleDebugLog.log("gate: dedupe same text within 0.6s")
             return
         }
 
         lastAutoPopupText = trimmed
-        lastAutoPopupAt = now
+        lastAutoPopupAt = completedAt
 
         pendingSelectionText = trimmed
         pendingSelectionAnchorRect = selection.anchorRect

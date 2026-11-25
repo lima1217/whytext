@@ -44,20 +44,29 @@ final class UpdateChecker: ObservableObject {
     private let session: URLSession
     private let installer = UpdateInstaller()
     private var timer: Timer?
+    private var initialCheckTask: Task<Void, Never>?
 
     init(session: URLSession = .shared) {
         self.session = session
+    }
+
+    deinit {
+        timer?.invalidate()
+        initialCheckTask?.cancel()
     }
 
     /// Checks shortly after launch, then once a day while the app runs.
     func setAutomaticChecks(enabled: Bool) {
         timer?.invalidate()
         timer = nil
+        initialCheckTask?.cancel()
+        initialCheckTask = nil
         guard enabled, currentVersion != nil else { return }
 
         // Don't compete with launch work or a first translation.
-        Task { [weak self] in
+        initialCheckTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 10_000_000_000)
+            guard !Task.isCancelled else { return }
             await self?.check()
         }
         timer = Timer.scheduledTimer(withTimeInterval: Self.automaticInterval, repeats: true) { [weak self] _ in
@@ -66,7 +75,7 @@ final class UpdateChecker: ObservableObject {
     }
 
     func check() async {
-        guard status != .checking else { return }
+        guard status != .checking, !isInstalling else { return }
         guard let currentVersion else {
             status = .failed(L10n.t("开发版本没有版本号，无法比较"))
             return
@@ -75,21 +84,29 @@ final class UpdateChecker: ObservableObject {
         status = .checking
         do {
             let release = try await fetchLatestRelease()
+            guard !isInstalling else { return }
             lastCheckedAt = Date()
             if let latest = SemanticVersion(release.tag_name), latest > currentVersion {
                 let asset = release.assets.first { $0.name.hasPrefix("WhyText-") && $0.name.hasSuffix("-mac.zip") }
-                availableUpdate = AvailableUpdate(
+                let nextUpdate = AvailableUpdate(
                     version: latest,
                     pageURL: release.html_url,
                     downloadURL: asset?.browser_download_url
                 )
+                if availableUpdate != nextUpdate {
+                    installState = .idle
+                }
+                availableUpdate = nextUpdate
                 status = .updateAvailable
             } else {
                 availableUpdate = nil
+                installState = .idle
                 status = .upToDate
             }
         } catch {
-            status = .failed(error.localizedDescription)
+            if !isInstalling {
+                status = .failed(error.localizedDescription)
+            }
         }
     }
 
@@ -123,8 +140,12 @@ final class UpdateChecker: ObservableObject {
             do {
                 try await installer.install(version: update.version, from: downloadURL) { fraction in
                     Task { @MainActor [weak self] in
-                        guard let self, case .downloading = self.installState else { return }
-                        self.installState = fraction >= 1 ? .installing : .downloading(fraction)
+                        guard let self, case .downloading(let current) = self.installState else { return }
+                        if fraction >= 1 {
+                            self.installState = .installing
+                        } else if fraction > current {
+                            self.installState = .downloading(fraction)
+                        }
                     }
                 }
                 installState = .installing

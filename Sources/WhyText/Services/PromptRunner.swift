@@ -180,6 +180,9 @@ private actor ChunkProgress {
     private var lastActivity: LLMActivity?
     private var lastUpdate = Date.distantPast
     private var lastSent: String?
+    private var hasVisibleText = false
+    /// Serializes async UI deliveries so actor reentrancy never reorders callbacks.
+    private var deliveryTask: Task<Void, Never>?
     private let onActivity: (LLMActivity) async -> Void
     private let onUpdate: (String) async -> Void
 
@@ -193,30 +196,32 @@ private actor ChunkProgress {
         self.onUpdate = onUpdate
     }
 
-    func activity(_ activity: LLMActivity) async {
-        guard activity != lastActivity else { return }
+    func activity(_ activity: LLMActivity) {
+        guard !hasVisibleText, activity != lastActivity else { return }
         lastActivity = activity
-        await onActivity(activity)
+        enqueue { [onActivity] in await onActivity(activity) }
     }
 
-    func partial(_ text: String, at index: Int) async {
+    func partial(_ text: String, at index: Int) {
         lastActivity = nil
         assembly.setPartial(text, at: index)
-        await send(force: false)
+        enqueueSend(force: false)
     }
 
-    func finish(_ text: String, at index: Int) async {
+    func finish(_ text: String, at index: Int) {
         assembly.finish(text, at: index)
-        await send(force: true)
+        enqueueSend(force: true)
     }
 
-    /// Sends the final text if throttling held it back; returns the full output.
+    /// Sends the final text if throttling held it back; waits for all queued
+    /// deliveries to finish and returns the full output.
     func flush() async -> String {
-        await send(force: true)
+        enqueueSend(force: true)
+        await deliveryTask?.value
         return assembly.fullText
     }
 
-    private func send(force: Bool) async {
+    private func enqueueSend(force: Bool) {
         let text = assembly.visibleText
         guard text != lastSent else { return }
         let now = Date()
@@ -225,6 +230,18 @@ private actor ChunkProgress {
         guard force || now.timeIntervalSince(lastUpdate) >= 0.12 else { return }
         lastUpdate = now
         lastSent = text
-        await onUpdate(text)
+        if !text.isEmpty {
+            hasVisibleText = true
+        }
+        enqueue { [onUpdate] in await onUpdate(text) }
+    }
+
+    private func enqueue(_ work: @escaping () async -> Void) {
+        let previous = deliveryTask
+        deliveryTask = Task {
+            await previous?.value
+            guard !Task.isCancelled else { return }
+            await work()
+        }
     }
 }

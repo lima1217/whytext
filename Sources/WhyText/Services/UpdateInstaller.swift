@@ -173,10 +173,11 @@ final class UpdateInstaller {
 
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                delegate.continuation = continuation
+                guard delegate.start(continuation: continuation) else { return }
                 session.downloadTask(with: url).resume()
             }
         } onCancel: {
+            delegate.cancel()
             session.invalidateAndCancel()
         }
     }
@@ -185,12 +186,37 @@ final class UpdateInstaller {
 private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
     let destination: URL
     let onProgress: @Sendable (Double) -> Void
-    var continuation: CheckedContinuation<Void, Error>?
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Error>?
+    private var isCancelled = false
     private var failure: Error?
 
     init(destination: URL, onProgress: @escaping @Sendable (Double) -> Void) {
         self.destination = destination
         self.onProgress = onProgress
+    }
+
+    /// Registers `continuation` unless cancellation already fired; returns whether
+    /// the caller should start the download task.
+    func start(continuation: CheckedContinuation<Void, Error>) -> Bool {
+        lock.lock()
+        if isCancelled {
+            lock.unlock()
+            continuation.resume(throwing: CancellationError())
+            return false
+        }
+        self.continuation = continuation
+        lock.unlock()
+        return true
+    }
+
+    func cancel() {
+        lock.lock()
+        isCancelled = true
+        let pending = continuation
+        continuation = nil
+        lock.unlock()
+        pending?.resume(throwing: CancellationError())
     }
 
     func urlSession(
@@ -208,23 +234,40 @@ private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
         // The temporary file is deleted when this returns, so move it now.
         let status = (downloadTask.response as? HTTPURLResponse)?.statusCode
         guard status == 200 else {
+            lock.lock()
             failure = UpdateInstaller.InstallError.downloadFailed(status)
+            lock.unlock()
             return
         }
         do {
             try FileManager.default.moveItem(at: location, to: destination)
         } catch {
+            lock.lock()
             failure = error
+            lock.unlock()
         }
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        let result = error.map { _ in UpdateInstaller.InstallError.downloadFailed(nil) } ?? failure
-        if let result {
-            continuation?.resume(throwing: result)
-        } else {
-            continuation?.resume()
-        }
+        lock.lock()
+        let pending = continuation
         continuation = nil
+        let moveFailure = failure
+        let cancelled = isCancelled
+        lock.unlock()
+
+        guard let pending else { return }
+
+        if cancelled || (error as? URLError)?.code == .cancelled {
+            pending.resume(throwing: CancellationError())
+            return
+        }
+
+        let result = error.map { _ in UpdateInstaller.InstallError.downloadFailed(nil) } ?? moveFailure
+        if let result {
+            pending.resume(throwing: result)
+        } else {
+            pending.resume()
+        }
     }
 }

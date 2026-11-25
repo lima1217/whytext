@@ -15,8 +15,38 @@ final class ClipboardSelectionFallbackService {
     /// so restoring the user's clipboard does not add a duplicate history entry.
     private static let transientType = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
 
+    /// Serializes clipboard snapshot/copy/restore so concurrent callers never
+    /// snapshot another caller's temporary copy as the user's original clipboard.
+    @MainActor private var activeCopyTask: Task<String?, Never>?
+
     @MainActor
     func readSelectedTextViaCopy(timeout: TimeInterval = 0.35) async -> String? {
+        while let existing = activeCopyTask {
+            _ = await existing.value
+            guard !Task.isCancelled else { return nil }
+        }
+
+        let task = Task { @MainActor [weak self] () -> String? in
+            guard let self else { return nil }
+            return await self.performReadSelectedTextViaCopy(timeout: timeout)
+        }
+        activeCopyTask = task
+        defer {
+            if activeCopyTask == task {
+                activeCopyTask = nil
+            }
+        }
+        return await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    @MainActor
+    private func performReadSelectedTextViaCopy(timeout: TimeInterval) async -> String? {
+        guard !Task.isCancelled else { return nil }
+
         let pasteboard = NSPasteboard.general
         let snapshot = capturePasteboardSnapshot(from: pasteboard)
         let initialChangeCount = pasteboard.changeCount
@@ -42,10 +72,13 @@ final class ClipboardSelectionFallbackService {
                 didChange = true
                 break
             }
+            if Task.isCancelled {
+                return nil
+            }
             try? await Task.sleep(nanoseconds: 20_000_000)
         }
 
-        guard didChange else { return nil }
+        guard !Task.isCancelled, didChange else { return nil }
 
         let text = pasteboard.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines)
 

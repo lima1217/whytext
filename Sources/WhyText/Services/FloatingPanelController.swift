@@ -135,10 +135,14 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
         ) { [weak self] _ in
-            guard let self, let panel = self.panel, panel.isVisible,
-                  !panel.frame.contains(NSEvent.mouseLocation),
-                  self.shouldCloseOnOutsideClick() else { return }
-            self.onOutsideClick?()
+            let point = NSEvent.mouseLocation
+            DispatchQueue.main.async {
+                guard let self, let panel = self.panel, panel.isVisible,
+                      !self.isClosingProgrammatically,
+                      !panel.frame.contains(point),
+                      self.shouldCloseOnOutsideClick() else { return }
+                self.onOutsideClick?()
+            }
         }
     }
 
@@ -166,41 +170,43 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     }
 
     func close() {
-        let wasVisible = panel != nil
         removeOutsideClickMonitor()
+        guard let panel, !isClosingProgrammatically else { return }
 
-        if let panel {
-            presentationID += 1
-            let id = presentationID
-            isClosingProgrammatically = true
-            // Leave toward the text it came from, mirroring the way it arrived.
-            let toward: CGFloat = placement?.growth == .up ? -PanelChromeMotion.slideDistance : PanelChromeMotion.slideDistance
-            PanelChromeMotion.dismiss(panel: panel, offset: CGVector(dx: 0, dy: toward)) { [weak self] in
-                // Shown again before the dismiss finished: that panel stays.
-                guard let self, self.presentationID == id else { return }
-                self.panel?.close()
-                self.panel = nil
-                self.placement = nil
-                self.targetFrame = nil
-                self.isClosingProgrammatically = false
-            }
+        presentationID += 1
+        let id = presentationID
+        isClosingProgrammatically = true
+        // Leave toward the text it came from, mirroring the way it arrived.
+        let toward: CGFloat = placement?.growth == .up ? -PanelChromeMotion.slideDistance : PanelChromeMotion.slideDistance
+        PanelChromeMotion.dismiss(panel: panel, offset: CGVector(dx: 0, dy: toward)) { [weak self] in
+            // Shown again before the dismiss finished: that panel stays.
+            guard let self, self.presentationID == id else { return }
+            self.panel?.close()
+            self.panel = nil
+            self.titlebarAccessory = nil
+            self.titlebarHostingView = nil
+            self.placement = nil
+            self.targetFrame = nil
+            self.isClosingProgrammatically = false
         }
 
-        if wasVisible {
-            onDidClose?()
-        }
+        onDidClose?()
     }
 
     var isVisible: Bool {
-        panel?.isVisible == true
+        panel?.isVisible == true && !isClosingProgrammatically
     }
 
     func windowWillClose(_ notification: Notification) {
+        let wasClosingProgrammatically = isClosingProgrammatically
+        isClosingProgrammatically = false
         removeOutsideClickMonitor()
         panel = nil
+        titlebarAccessory = nil
+        titlebarHostingView = nil
         placement = nil
         targetFrame = nil
-        if !isClosingProgrammatically {
+        if !wasClosingProgrammatically {
             onDidClose?()
         }
     }

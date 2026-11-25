@@ -311,6 +311,9 @@ final class SettingsStore: ObservableObject {
     }
 
     func saveAPIKey(_ value: String, for providerID: UUID) {
+        // Never resurrect a key into Keychain after the provider was removed
+        // (e.g. from a debounced save or a SwiftUI `onDisappear` callback).
+        guard providers.contains(where: { $0.id == providerID }) else { return }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             clearAPIKey(for: providerID)

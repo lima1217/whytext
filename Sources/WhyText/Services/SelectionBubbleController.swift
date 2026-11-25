@@ -14,10 +14,12 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
     private var outsideEventMonitor: Any?
     private var autoDismissTask: Task<Void, Never>?
     private var isHoverPaused = false
+    private var isDismissing = false
 
     func show(at mouseLocation: NSPoint, anchorRect: CGRect? = nil) {
         autoDismissTask?.cancel()
         isHoverPaused = false
+        isDismissing = false
         presentationID += 1
 
         let hostingView = NSHostingView(rootView: SelectionBubbleBar(
@@ -83,25 +85,28 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
         isHoverPaused = false
         stopOutsideEventMonitor()
 
-        guard let panel else { return }
+        guard let panel, !isDismissing else { return }
 
+        isDismissing = true
         presentationID += 1
         let id = presentationID
         PanelChromeMotion.dismiss(panel: panel) { [weak self] in
             guard let self, self.presentationID == id else { return }
             self.panel?.close()
             self.panel = nil
+            self.isDismissing = false
         }
     }
 
     var isVisible: Bool {
-        panel?.isVisible == true
+        panel?.isVisible == true && !isDismissing
     }
 
     func windowWillClose(_ notification: Notification) {
         autoDismissTask?.cancel()
         stopOutsideEventMonitor()
         panel = nil
+        isDismissing = false
     }
 
     /// The bubble fades where it is while the panel grows out of its frame.
@@ -176,6 +181,7 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
     }
 
     private func setHoverPaused(_ hovering: Bool) {
+        guard !isDismissing else { return }
         isHoverPaused = hovering
         if hovering {
             autoDismissTask?.cancel()
@@ -191,12 +197,14 @@ final class SelectionBubbleController: NSObject, NSWindowDelegate {
         outsideEventMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown, .keyDown]
         ) { [weak self] _ in
-            guard let self, let panel = self.panel else { return }
             let point = NSEvent.mouseLocation
-            if panel.frame.insetBy(dx: -6, dy: -6).contains(point) {
-                return
+            DispatchQueue.main.async {
+                guard let self, let panel = self.panel, !self.isDismissing else { return }
+                if panel.frame.insetBy(dx: -6, dy: -6).contains(point) {
+                    return
+                }
+                self.hide()
             }
-            self.hide()
         }
     }
 

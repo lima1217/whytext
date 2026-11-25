@@ -11,10 +11,16 @@ final class TranslationSession {
         self.promptRunner = promptRunner
     }
 
-    func cancel() {
+    func cancel(discardCallbacks: Bool = false) {
+        if discardCallbacks {
+            runGeneration += 1
+            runningTask?.cancel()
+            runningTask = nil
+            return
+        }
         // Keep the current generation so the cancelled task can still deliver
-        // onFinished(.success) and clear UI loading state. A newer run() bumps
-        // generation and ignores that stale completion.
+        // onFinished(.success) and clear UI loading state. A newer run() or
+        // cancel(discardCallbacks: true) bumps generation and ignores that stale completion.
         runningTask?.cancel()
     }
 

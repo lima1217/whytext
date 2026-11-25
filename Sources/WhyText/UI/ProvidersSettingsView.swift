@@ -224,6 +224,7 @@ private struct ProviderDetailView: View {
     @State private var isTestingConnectivity = false
     @State private var connectivityReport: ProviderConnectivityReport?
     @State private var autoSaveTask: Task<Void, Never>?
+    @State private var connectivityTestTask: Task<Void, Never>?
 
     var body: some View {
         Group {
@@ -309,7 +310,7 @@ private struct ProviderDetailView: View {
             connectivityReport = nil
         }
         .onChange(of: apiKeyDraft) { newValue in
-            connectivityReport = nil
+            resetConnectivityTest()
             // Auto-save with debounce
             autoSaveTask?.cancel()
             autoSaveTask = Task {
@@ -323,10 +324,11 @@ private struct ProviderDetailView: View {
                 }
             }
         }
-        .onChange(of: provider.baseURL) { _ in connectivityReport = nil }
-        .onChange(of: provider.model) { _ in connectivityReport = nil }
-        .onChange(of: provider.apiMode) { _ in connectivityReport = nil }
+        .onChange(of: provider.baseURL) { _ in resetConnectivityTest() }
+        .onChange(of: provider.model) { _ in resetConnectivityTest() }
+        .onChange(of: provider.apiMode) { _ in resetConnectivityTest() }
         .onDisappear {
+            resetConnectivityTest()
             autoSaveTask?.cancel()
             // Final save on disappear
             let trimmed = apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -401,16 +403,26 @@ private struct ProviderDetailView: View {
         }
     }
 
+    private func resetConnectivityTest() {
+        connectivityTestTask?.cancel()
+        connectivityTestTask = nil
+        isTestingConnectivity = false
+        connectivityReport = nil
+    }
+
     private func runConnectivityTest() {
         guard !isTestingConnectivity else { return }
         isTestingConnectivity = true
         let snapshot = provider
         let key = apiKeyDraft
-        Task {
+        connectivityTestTask?.cancel()
+        connectivityTestTask = Task {
             let report = await testConnectivity(snapshot, key)
+            guard !Task.isCancelled else { return }
             await MainActor.run {
                 self.connectivityReport = report
                 self.isTestingConnectivity = false
+                self.connectivityTestTask = nil
             }
         }
     }

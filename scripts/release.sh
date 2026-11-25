@@ -137,7 +137,7 @@ NOTES="$WORK/notes.md"
 SHA-256 of \`WhyText-$VERSION-mac.zip\`: \`$SHA256\`
 
 ## Install
-**From 0.4.1 or later:** use **Install Update $VERSION…** in the menu bar (versions before 0.7.0 show **Update to $VERSION…**), or **Install Update** in Settings. WhyText downloads, checks, replaces itself, and relaunches.
+**From 0.4.1 or later:** use **Install Update ${VERSION}…** in the menu bar (versions before 0.7.0 show **Update to ${VERSION}…**), or **Install Update** in Settings. WhyText downloads, checks, replaces itself, and relaunches.
 
 **New install:** download \`WhyText-$VERSION-mac.zip\`, unzip, and move \`WhyText.app\` to Applications. macOS 13+ required.
 

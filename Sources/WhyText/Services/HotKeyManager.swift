@@ -15,6 +15,10 @@ final class HotKeyManager {
         hotKeyID = EventHotKeyID(signature: 0x57485458, id: id) // "WHTX"
     }
 
+    deinit {
+        unregister()
+    }
+
     func register(shortcut: KeyboardShortcut) throws {
         unregister()
 
@@ -68,6 +72,7 @@ final class HotKeyManager {
             &ref
         )
         guard registerStatus == noErr, let ref else {
+            unregister()
             throw HotKeyError.failedToRegister
         }
 

@@ -195,9 +195,14 @@ final class LLMClient {
             )
         } catch is CancellationError {
             throw CancellationError()
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            throw CancellationError()
         } catch let error as LLMError {
             throw error
         } catch {
+            if Task.isCancelled {
+                throw CancellationError()
+            }
             throw mapTransportError(error)
         }
     }
@@ -306,10 +311,16 @@ final class LLMClient {
                     continuation.finish()
                 } catch is CancellationError {
                     continuation.finish()
+                } catch let urlError as URLError where urlError.code == .cancelled {
+                    continuation.finish()
                 } catch let error as LLMError {
                     continuation.finish(throwing: error)
                 } catch {
-                    continuation.finish(throwing: mapTransportError(error))
+                    if Task.isCancelled {
+                        continuation.finish()
+                    } else {
+                        continuation.finish(throwing: mapTransportError(error))
+                    }
                 }
             }
 
@@ -355,7 +366,8 @@ final class LLMClient {
             return (data, response)
         }
 
-        try? await Task.sleep(nanoseconds: 250_000_000)
+        try await Task.sleep(nanoseconds: 250_000_000)
+        try Task.checkCancellation()
         return try await session.data(for: request)
     }
 
